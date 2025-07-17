@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://127.0.0.1:8830';
+const API_BASE_URL = 'http://185.191.141.79:8830';
 
 // Public API (auth oldidan ishlatiladigan)
 const publicApi = axios.create({
