@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, User, Mail, Lock, Phone, ArrowRight, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { authAPI } from '../../utils/api';
-import SocialAuth from '../SocialAuth';
 
 interface Country {
   id: number;
@@ -209,19 +208,7 @@ const RegisterPage: React.FC = () => {
     }));
   };
 
-  const handleSocialLogin = async (provider: string, data: any) => {
-    setLoading(true);
-    setError('');
 
-    try {
-      await socialLogin(provider, data);
-      navigate('/');
-    } catch (err: any) {
-      setError(`${provider} orqali ro'yxatdan o'tishda xatolik yuz berdi`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Step 1: Email sent confirmation
   if (step === 1 && emailSent) {
@@ -602,14 +589,7 @@ const RegisterPage: React.FC = () => {
           </form>
 
           {/* Social Login - only show on first step */}
-          {step === 1 && (
-            <SocialAuth
-              onGoogleLogin={(data) => handleSocialLogin('google', data)}
-              onFacebookLogin={(data) => handleSocialLogin('facebook', data)}
-              onTelegramLogin={(data) => handleSocialLogin('telegram', data)}
-              loading={loading}
-            />
-          )}
+          
 
           {/* Login Link */}
           <div className="mt-8 text-center">

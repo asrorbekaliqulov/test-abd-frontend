@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import SocialAuth from '../SocialAuth';
+
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -38,19 +38,7 @@ const LoginPage: React.FC = () => {
     }));
   };
 
-  const handleSocialLogin = async (provider: string, data: any) => {
-    setLoading(true);
-    setError('');
 
-    try {
-      await socialLogin(provider, data);
-      navigate('/');
-    } catch (err: any) {
-      setError(`${provider} orqali kirishda xatolik yuz berdi`);
-    } finally {
-      setLoading(false);
-    }
-  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -153,11 +141,6 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Social Login */}
-          <SocialAuth
-            onGoogleLogin={(data) => handleSocialLogin('google-oauth2', data)}
-            loading={loading}
-          />
           {/* Register Link */}
           <div className="mt-8 text-center">
             <p className="text-gray-600">
