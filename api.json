@@ -1,0 +1,5947 @@
+{
+    "swagger": "2.0",
+    "info": {
+      "title": "Test Platform API",
+      "description": "User and Quiz APIs",
+      "version": "v1"
+    },
+    "host": "127.0.0.1:8000",
+    "schemes": [
+      "http"
+    ],
+    "basePath": "/",
+    "consumes": [
+      "application/json"
+    ],
+    "produces": [
+      "application/json"
+    ],
+    "securityDefinitions": {
+      "Basic": {
+        "type": "basic"
+      }
+    },
+    "security": [
+      {
+        "Basic": []
+      }
+    ],
+    "paths": {
+      "/accounts/ad-pricing/": {
+        "get": {
+          "operationId": "accounts_ad-pricing_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/AdPricingConfig"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/ads/": {
+        "get": {
+          "operationId": "accounts_ads_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Advertisement"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "post": {
+          "operationId": "accounts_ads_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Advertisement"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Advertisement"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/ads/{id}/click/": {
+        "post": {
+          "operationId": "accounts_ads_click_create",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "201": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/accounts/ads/{id}/view/": {
+        "post": {
+          "operationId": "accounts_ads_view_create",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "201": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/accounts/countries/": {
+        "get": {
+          "operationId": "accounts_countries_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Country"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/districts/{region_id}/": {
+        "get": {
+          "operationId": "accounts_districts_read",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/District"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "region_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/accounts/followers/": {
+        "get": {
+          "operationId": "accounts_followers_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Follower"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "post": {
+          "operationId": "accounts_followers_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Follower"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Follower"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/followers/{user_id}/toggle/": {
+        "post": {
+          "operationId": "accounts_followers_toggle_create",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "201": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/accounts/leaderboard/": {
+        "get": {
+          "operationId": "accounts_leaderboard_list",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/login/": {
+        "post": {
+          "operationId": "accounts_login_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/TokenObtainPair"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/TokenObtainPair"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/logout/": {
+        "post": {
+          "operationId": "accounts_logout_create",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "201": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/me/": {
+        "get": {
+          "operationId": "accounts_me_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserSerializer"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/me/change-password/": {
+        "post": {
+          "operationId": "accounts_me_change-password_create",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "201": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/me/stats/": {
+        "get": {
+          "operationId": "accounts_me_stats_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserStatsSerializer"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/me/update/": {
+        "put": {
+          "operationId": "accounts_me_update_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/UserSerializer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserSerializer"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "patch": {
+          "operationId": "accounts_me_update_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/UserSerializer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserSerializer"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/my/ads/": {
+        "get": {
+          "operationId": "accounts_my_ads_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Advertisement"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/regions/{country_id}/": {
+        "get": {
+          "operationId": "accounts_regions_read",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Region"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "country_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/accounts/register/": {
+        "post": {
+          "operationId": "accounts_register_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/UserRegisterSerializer"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserRegisterSerializer"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/settlements/{district_id}/": {
+        "get": {
+          "operationId": "accounts_settlements_read",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Settlement"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "district_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/accounts/subscriptions/": {
+        "get": {
+          "operationId": "accounts_subscriptions_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Subscription"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "post": {
+          "operationId": "accounts_subscriptions_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Subscription"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Subscription"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/test-boosts/": {
+        "get": {
+          "operationId": "accounts_test-boosts_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/TestBoostConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/accounts/token/refresh/": {
+        "post": {
+          "operationId": "accounts_token_refresh_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/TokenRefresh"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/TokenRefresh"
+              }
+            }
+          },
+          "tags": [
+            "accounts"
+          ]
+        },
+        "parameters": []
+      },
+      "/chat/blocked/": {
+        "get": {
+          "operationId": "chat_blocked_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/BlockedUser"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "post": {
+          "operationId": "chat_blocked_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": []
+      },
+      "/chat/blocked/{id}/": {
+        "get": {
+          "operationId": "chat_blocked_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "put": {
+          "operationId": "chat_blocked_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "patch": {
+          "operationId": "chat_blocked_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/BlockedUser"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "delete": {
+          "operationId": "chat_blocked_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/chat/messages/": {
+        "get": {
+          "operationId": "chat_messages_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Message"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "post": {
+          "operationId": "chat_messages_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": []
+      },
+      "/chat/messages/{id}/": {
+        "get": {
+          "operationId": "chat_messages_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "put": {
+          "operationId": "chat_messages_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "patch": {
+          "operationId": "chat_messages_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Message"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "delete": {
+          "operationId": "chat_messages_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/chat/reactions/": {
+        "get": {
+          "operationId": "chat_reactions_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/MessageReaction"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "post": {
+          "operationId": "chat_reactions_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": []
+      },
+      "/chat/reactions/{id}/": {
+        "get": {
+          "operationId": "chat_reactions_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "put": {
+          "operationId": "chat_reactions_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "patch": {
+          "operationId": "chat_reactions_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/MessageReaction"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "delete": {
+          "operationId": "chat_reactions_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/chat/rooms/": {
+        "get": {
+          "operationId": "chat_rooms_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/ChatRoom"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "post": {
+          "operationId": "chat_rooms_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": []
+      },
+      "/chat/rooms/{id}/": {
+        "get": {
+          "operationId": "chat_rooms_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "put": {
+          "operationId": "chat_rooms_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "patch": {
+          "operationId": "chat_rooms_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "delete": {
+          "operationId": "chat_rooms_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/chat/rooms/{id}/add_user/": {
+        "post": {
+          "operationId": "chat_rooms_add_user",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ChatRoom"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/chat/statuses/": {
+        "get": {
+          "operationId": "chat_statuses_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/MessageStatus"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": []
+      },
+      "/chat/statuses/{id}/": {
+        "get": {
+          "operationId": "chat_statuses_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/MessageStatus"
+              }
+            }
+          },
+          "tags": [
+            "chat"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/quiz/answers/": {
+        "get": {
+          "operationId": "quiz_answers_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/QuestionAttempt"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_answers_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/answers/{id}/": {
+        "get": {
+          "operationId": "quiz_answers_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_answers_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_answers_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_answers_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this question attempt.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/bookmarks/": {
+        "get": {
+          "operationId": "quiz_bookmarks_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Bookmark"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_bookmarks_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/bookmarks/{id}/": {
+        "get": {
+          "operationId": "quiz_bookmarks_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_bookmarks_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_bookmarks_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Bookmark"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_bookmarks_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this bookmark.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/categories/": {
+        "get": {
+          "operationId": "quiz_categories_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Category"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/categories/{id}/": {
+        "get": {
+          "operationId": "quiz_categories_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Category"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this category.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/comments/": {
+        "get": {
+          "operationId": "quiz_comments_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Comment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_comments_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/comments/{id}/": {
+        "get": {
+          "operationId": "quiz_comments_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_comments_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_comments_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Comment"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_comments_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this comment.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/leaderboard/": {
+        "get": {
+          "operationId": "quiz_leaderboard_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/UserTestStats"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/likes/": {
+        "get": {
+          "operationId": "quiz_likes_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Like"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_likes_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/likes/{id}/": {
+        "get": {
+          "operationId": "quiz_likes_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_likes_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_likes_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Like"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_likes_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this like.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/notifications/": {
+        "get": {
+          "operationId": "quiz_notifications_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Notification"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_notifications_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/notifications/{id}/": {
+        "get": {
+          "operationId": "quiz_notifications_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_notifications_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_notifications_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Notification"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_notifications_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ]
+      },
+      "/quiz/question-attempts/": {
+        "get": {
+          "operationId": "quiz_question-attempts_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/QuestionAttempt"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_question-attempts_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/question-attempts/{id}/": {
+        "get": {
+          "operationId": "quiz_question-attempts_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_question-attempts_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_question-attempts_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/QuestionAttempt"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_question-attempts_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this question attempt.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/questions/": {
+        "get": {
+          "operationId": "quiz_questions_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "search",
+              "in": "query",
+              "description": "A search term.",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "name": "ordering",
+              "in": "query",
+              "description": "Which field to use when ordering the results.",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Question"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_questions_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/questions/{id}/": {
+        "get": {
+          "operationId": "quiz_questions_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_questions_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_questions_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Question"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_questions_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this question.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/recommended/": {
+        "get": {
+          "operationId": "quiz_recommended_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Test"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/submit-question-answer/": {
+        "post": {
+          "operationId": "quiz_submit-question-answer_create",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "201": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/tests/": {
+        "get": {
+          "operationId": "quiz_tests_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "search",
+              "in": "query",
+              "description": "A search term.",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "name": "ordering",
+              "in": "query",
+              "description": "Which field to use when ordering the results.",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Test"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_tests_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/tests/my_bookmarks/": {
+        "get": {
+          "operationId": "quiz_tests_my_bookmarks",
+          "description": "",
+          "parameters": [
+            {
+              "name": "search",
+              "in": "query",
+              "description": "A search term.",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "name": "ordering",
+              "in": "query",
+              "description": "Which field to use when ordering the results.",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Test"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/tests/{id}/": {
+        "get": {
+          "operationId": "quiz_tests_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_tests_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_tests_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/Test"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_tests_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this test.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/user-stats/{id}/": {
+        "get": {
+          "operationId": "quiz_user-stats_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserTestStats"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this user.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/quiz/views/": {
+        "get": {
+          "operationId": "quiz_views_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/View"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "post": {
+          "operationId": "quiz_views_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": []
+      },
+      "/quiz/views/{id}/": {
+        "get": {
+          "operationId": "quiz_views_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "put": {
+          "operationId": "quiz_views_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "patch": {
+          "operationId": "quiz_views_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/View"
+              }
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "delete": {
+          "operationId": "quiz_views_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "quiz"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this view.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/systemconfig/": {
+        "get": {
+          "operationId": "systemconfig_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/SystemConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "systemconfig"
+          ]
+        },
+        "post": {
+          "operationId": "systemconfig_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          },
+          "tags": [
+            "systemconfig"
+          ]
+        },
+        "parameters": []
+      },
+      "/systemconfig/{id}/": {
+        "get": {
+          "operationId": "systemconfig_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          },
+          "tags": [
+            "systemconfig"
+          ]
+        },
+        "put": {
+          "operationId": "systemconfig_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          },
+          "tags": [
+            "systemconfig"
+          ]
+        },
+        "patch": {
+          "operationId": "systemconfig_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/SystemConfig"
+              }
+            }
+          },
+          "tags": [
+            "systemconfig"
+          ]
+        },
+        "delete": {
+          "operationId": "systemconfig_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "systemconfig"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this system config.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/systemflags/": {
+        "get": {
+          "operationId": "systemflags_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/ModeratorFlag"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "systemflags"
+          ]
+        },
+        "post": {
+          "operationId": "systemflags_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          },
+          "tags": [
+            "systemflags"
+          ]
+        },
+        "parameters": []
+      },
+      "/systemflags/{id}/": {
+        "get": {
+          "operationId": "systemflags_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          },
+          "tags": [
+            "systemflags"
+          ]
+        },
+        "put": {
+          "operationId": "systemflags_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          },
+          "tags": [
+            "systemflags"
+          ]
+        },
+        "patch": {
+          "operationId": "systemflags_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ModeratorFlag"
+              }
+            }
+          },
+          "tags": [
+            "systemflags"
+          ]
+        },
+        "delete": {
+          "operationId": "systemflags_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "systemflags"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this moderator flag.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/systemlogs/": {
+        "get": {
+          "operationId": "systemlogs_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/ActionLog"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "systemlogs"
+          ]
+        },
+        "parameters": []
+      },
+      "/systemlogs/{id}/": {
+        "get": {
+          "operationId": "systemlogs_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/ActionLog"
+              }
+            }
+          },
+          "tags": [
+            "systemlogs"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this action log.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/systemnotifications/": {
+        "get": {
+          "operationId": "systemnotifications_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/NotificationTemplate"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "systemnotifications"
+          ]
+        },
+        "post": {
+          "operationId": "systemnotifications_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          },
+          "tags": [
+            "systemnotifications"
+          ]
+        },
+        "parameters": []
+      },
+      "/systemnotifications/{id}/": {
+        "get": {
+          "operationId": "systemnotifications_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          },
+          "tags": [
+            "systemnotifications"
+          ]
+        },
+        "put": {
+          "operationId": "systemnotifications_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          },
+          "tags": [
+            "systemnotifications"
+          ]
+        },
+        "patch": {
+          "operationId": "systemnotifications_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/NotificationTemplate"
+              }
+            }
+          },
+          "tags": [
+            "systemnotifications"
+          ]
+        },
+        "delete": {
+          "operationId": "systemnotifications_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "systemnotifications"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this notification template.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      },
+      "/systemroles/": {
+        "get": {
+          "operationId": "systemroles_list",
+          "description": "",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "description": "A page number within the paginated result set.",
+              "required": false,
+              "type": "integer"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "required": [
+                  "count",
+                  "results"
+                ],
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "previous": {
+                    "type": "string",
+                    "format": "uri",
+                    "x-nullable": true
+                  },
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/UserRole"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "systemroles"
+          ]
+        },
+        "post": {
+          "operationId": "systemroles_create",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          ],
+          "responses": {
+            "201": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          },
+          "tags": [
+            "systemroles"
+          ]
+        },
+        "parameters": []
+      },
+      "/systemroles/{id}/": {
+        "get": {
+          "operationId": "systemroles_read",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          },
+          "tags": [
+            "systemroles"
+          ]
+        },
+        "put": {
+          "operationId": "systemroles_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          },
+          "tags": [
+            "systemroles"
+          ]
+        },
+        "patch": {
+          "operationId": "systemroles_partial_update",
+          "description": "",
+          "parameters": [
+            {
+              "name": "data",
+              "in": "body",
+              "required": true,
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "",
+              "schema": {
+                "$ref": "#/definitions/UserRole"
+              }
+            }
+          },
+          "tags": [
+            "systemroles"
+          ]
+        },
+        "delete": {
+          "operationId": "systemroles_delete",
+          "description": "",
+          "parameters": [],
+          "responses": {
+            "204": {
+              "description": ""
+            }
+          },
+          "tags": [
+            "systemroles"
+          ]
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "A unique integer value identifying this user role.",
+            "required": true,
+            "type": "integer"
+          }
+        ]
+      }
+    },
+    "definitions": {
+      "AdPricingConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "base_price_per_view": {
+            "title": "Base price per view",
+            "type": "string",
+            "format": "decimal"
+          },
+          "base_price_per_click": {
+            "title": "Base price per click",
+            "type": "string",
+            "format": "decimal"
+          },
+          "premium_priority_multiplier": {
+            "title": "Premium priority multiplier",
+            "type": "number"
+          },
+          "verified_user_boost": {
+            "title": "Verified user boost",
+            "type": "number"
+          },
+          "last_updated": {
+            "title": "Last updated",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "Advertisement": {
+        "required": [
+          "title",
+          "link",
+          "cost_per_view",
+          "user"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "title": {
+            "title": "Title",
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "link": {
+            "title": "Link",
+            "type": "string",
+            "format": "uri",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "image": {
+            "title": "Image",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "video": {
+            "title": "Video",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "target_regions": {
+            "title": "Target regions",
+            "type": "object"
+          },
+          "max_views": {
+            "title": "Max views",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18
+          },
+          "cost_per_view": {
+            "title": "Cost per view",
+            "type": "string",
+            "format": "decimal"
+          },
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "is_active": {
+            "title": "Is active",
+            "type": "boolean"
+          },
+          "views": {
+            "title": "Views",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "clicks": {
+            "title": "Clicks",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "payment_id": {
+            "title": "Payment id",
+            "type": "string",
+            "maxLength": 100,
+            "x-nullable": true
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer"
+          },
+          "target_categories": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "Country": {
+        "required": [
+          "name",
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 1
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number",
+            "x-nullable": true
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number",
+            "x-nullable": true
+          }
+        }
+      },
+      "District": {
+        "required": [
+          "name",
+          "region"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number",
+            "x-nullable": true
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number",
+            "x-nullable": true
+          },
+          "region": {
+            "title": "Region",
+            "type": "integer"
+          }
+        }
+      },
+      "Follower": {
+        "required": [
+          "follower",
+          "following"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "follower": {
+            "title": "Follower",
+            "type": "integer"
+          },
+          "following": {
+            "title": "Following",
+            "type": "integer"
+          }
+        }
+      },
+      "TokenObtainPair": {
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "title": "Username",
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "title": "Password",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "UserSerializer": {
+        "required": [
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "last_login": {
+            "title": "Last login",
+            "type": "string",
+            "format": "date-time",
+            "x-nullable": true
+          },
+          "is_superuser": {
+            "title": "Superuser status",
+            "description": "Designates that this user has all permissions without explicitly assigning them.",
+            "type": "boolean"
+          },
+          "username": {
+            "title": "Username",
+            "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
+            "type": "string",
+            "pattern": "^[\\w.@+-]+$",
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "first_name": {
+            "title": "First name",
+            "type": "string",
+            "maxLength": 150
+          },
+          "last_name": {
+            "title": "Last name",
+            "type": "string",
+            "maxLength": 150
+          },
+          "email": {
+            "title": "Email address",
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "is_staff": {
+            "title": "Staff status",
+            "description": "Designates whether the user can log into this admin site.",
+            "type": "boolean"
+          },
+          "date_joined": {
+            "title": "Date joined",
+            "type": "string",
+            "format": "date-time"
+          },
+          "profile_image": {
+            "title": "Profile image",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "bio": {
+            "title": "Bio",
+            "type": "string"
+          },
+          "phone_number": {
+            "title": "Phone number",
+            "type": "string",
+            "maxLength": 20,
+            "x-nullable": true
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "is_active": {
+            "title": "Is active",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string",
+            "enum": [
+              "user",
+              "admin",
+              "moderator",
+              "developer",
+              "premium",
+              "badged"
+            ]
+          },
+          "is_premium": {
+            "title": "Is premium",
+            "type": "boolean"
+          },
+          "is_badged": {
+            "title": "Is badged",
+            "type": "boolean"
+          },
+          "join_date": {
+            "title": "Join date",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "level": {
+            "title": "Level",
+            "type": "string",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "expert"
+            ]
+          },
+          "tests_solved": {
+            "title": "Tests solved",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "correct_count": {
+            "title": "Correct count",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "wrong_count": {
+            "title": "Wrong count",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "average_time": {
+            "title": "Average time",
+            "type": "number"
+          },
+          "country": {
+            "title": "Country",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "region": {
+            "title": "Region",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "district": {
+            "title": "District",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "settlement": {
+            "title": "Settlement",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "groups": {
+            "description": "The groups this user belongs to. A user will get all permissions granted to each of their groups.",
+            "type": "array",
+            "items": {
+              "description": "The groups this user belongs to. A user will get all permissions granted to each of their groups.",
+              "type": "integer"
+            },
+            "uniqueItems": true
+          },
+          "user_permissions": {
+            "description": "Specific permissions for this user.",
+            "type": "array",
+            "items": {
+              "description": "Specific permissions for this user.",
+              "type": "integer"
+            },
+            "uniqueItems": true
+          },
+          "categories_of_interest": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "UserStatsSerializer": {
+        "type": "object",
+        "properties": {
+          "tests_solved": {
+            "title": "Tests solved",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "correct_count": {
+            "title": "Correct count",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "wrong_count": {
+            "title": "Wrong count",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "average_time": {
+            "title": "Average time",
+            "type": "number"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "expert"
+            ]
+          }
+        }
+      },
+      "Region": {
+        "required": [
+          "name",
+          "country"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number",
+            "x-nullable": true
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number",
+            "x-nullable": true
+          },
+          "country": {
+            "title": "Country",
+            "type": "integer"
+          }
+        }
+      },
+      "UserRegisterSerializer": {
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "username": {
+            "title": "Username",
+            "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
+            "type": "string",
+            "pattern": "^[\\w.@+-]+$",
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "email": {
+            "title": "Email address",
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "title": "Password",
+            "type": "string",
+            "minLength": 1
+          },
+          "first_name": {
+            "title": "First name",
+            "type": "string",
+            "maxLength": 150
+          },
+          "last_name": {
+            "title": "Last name",
+            "type": "string",
+            "maxLength": 150
+          },
+          "phone_number": {
+            "title": "Phone number",
+            "type": "string",
+            "maxLength": 20,
+            "x-nullable": true
+          },
+          "country": {
+            "title": "Country",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "region": {
+            "title": "Region",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "district": {
+            "title": "District",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "settlement": {
+            "title": "Settlement",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "token": {
+            "title": "Token",
+            "type": "string",
+            "readOnly": true
+          }
+        }
+      },
+      "Settlement": {
+        "required": [
+          "name",
+          "district"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number",
+            "x-nullable": true
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number",
+            "x-nullable": true
+          },
+          "district": {
+            "title": "District",
+            "type": "integer"
+          }
+        }
+      },
+      "Subscription": {
+        "required": [
+          "type",
+          "price",
+          "end_date",
+          "payment_id",
+          "user"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "type": {
+            "title": "Type",
+            "type": "string",
+            "enum": [
+              "premium",
+              "badge"
+            ]
+          },
+          "price": {
+            "title": "Price",
+            "type": "string",
+            "format": "decimal"
+          },
+          "start_date": {
+            "title": "Start date",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "end_date": {
+            "title": "End date",
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_active": {
+            "title": "Is active",
+            "type": "boolean"
+          },
+          "payment_id": {
+            "title": "Payment id",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "user": {
+            "title": "User",
+            "type": "integer"
+          }
+        }
+      },
+      "TestBoostConfig": {
+        "required": [
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "boosted_for_premium": {
+            "title": "Boosted for premium",
+            "type": "boolean"
+          },
+          "boosted_for_badged": {
+            "title": "Boosted for badged",
+            "type": "boolean"
+          },
+          "weight_multiplier": {
+            "title": "Weight multiplier",
+            "type": "number"
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          }
+        }
+      },
+      "TokenRefresh": {
+        "required": [
+          "refresh"
+        ],
+        "type": "object",
+        "properties": {
+          "refresh": {
+            "title": "Refresh",
+            "type": "string",
+            "minLength": 1
+          },
+          "access": {
+            "title": "Access",
+            "type": "string",
+            "readOnly": true,
+            "minLength": 1
+          }
+        }
+      },
+      "User": {
+        "required": [
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "username": {
+            "title": "Username",
+            "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
+            "type": "string",
+            "pattern": "^[\\w.@+-]+$",
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "profile_image": {
+            "title": "Profile image",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          }
+        }
+      },
+      "BlockedUser": {
+        "required": [
+          "blocked_by"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "blocked_by": {
+            "title": "Blocked by",
+            "type": "integer"
+          },
+          "blocked_user": {
+            "$ref": "#/definitions/User"
+          },
+          "blocked_at": {
+            "title": "Blocked at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "Message": {
+        "required": [
+          "room"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "room": {
+            "title": "Room",
+            "type": "integer"
+          },
+          "sender": {
+            "$ref": "#/definitions/User"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "file": {
+            "title": "File",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "font_style": {
+            "title": "Font style",
+            "type": "string",
+            "maxLength": 100
+          },
+          "text_color": {
+            "title": "Text color",
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1
+          },
+          "background_color": {
+            "title": "Background color",
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1
+          },
+          "reply_to": {
+            "title": "Reply to",
+            "type": "string",
+            "readOnly": true
+          },
+          "shared_test": {
+            "title": "Shared test",
+            "type": "string",
+            "readOnly": true
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "is_deleted": {
+            "title": "Is deleted",
+            "type": "boolean"
+          }
+        }
+      },
+      "MessageReaction": {
+        "required": [
+          "message",
+          "emoji"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "message": {
+            "title": "Message",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/definitions/User"
+          },
+          "emoji": {
+            "title": "Emoji",
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 1
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "ChatRoom": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "is_group": {
+            "title": "Is group",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 255,
+            "x-nullable": true
+          },
+          "avatar": {
+            "title": "Avatar",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/User"
+            },
+            "readOnly": true
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "MessageStatus": {
+        "required": [
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "message": {
+            "title": "Message",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/definitions/User"
+          },
+          "is_read": {
+            "title": "Is read",
+            "type": "boolean"
+          },
+          "seen_at": {
+            "title": "Seen at",
+            "type": "string",
+            "format": "date-time",
+            "x-nullable": true
+          }
+        }
+      },
+      "Answer": {
+        "required": [
+          "answer_text"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "letter": {
+            "title": "Letter",
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "x-nullable": true
+          },
+          "answer_text": {
+            "title": "Answer text",
+            "type": "string",
+            "minLength": 1
+          },
+          "is_correct": {
+            "title": "Is correct",
+            "type": "boolean"
+          }
+        }
+      },
+      "UserMini": {
+        "required": [
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "username": {
+            "title": "Username",
+            "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
+            "type": "string",
+            "pattern": "^[\\w.@+-]+$",
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "profile_image": {
+            "title": "Profile image",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "is_badged": {
+            "title": "Is badged",
+            "type": "boolean"
+          },
+          "is_premium": {
+            "title": "Is premium",
+            "type": "boolean"
+          }
+        }
+      },
+      "Question": {
+        "required": [
+          "test",
+          "question_text",
+          "question_type",
+          "order_index"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "test_title": {
+            "title": "Test title",
+            "type": "string",
+            "readOnly": true,
+            "minLength": 1
+          },
+          "question_text": {
+            "title": "Question text",
+            "type": "string",
+            "minLength": 1
+          },
+          "question_type": {
+            "title": "Question type",
+            "type": "string",
+            "enum": [
+              "single",
+              "multiple",
+              "true_false"
+            ]
+          },
+          "order_index": {
+            "title": "Order index",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0
+          },
+          "media": {
+            "title": "Media",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Answer"
+            },
+            "readOnly": true
+          },
+          "correct_count": {
+            "title": "Correct count",
+            "type": "string",
+            "readOnly": true
+          },
+          "wrong_count": {
+            "title": "Wrong count",
+            "type": "string",
+            "readOnly": true
+          },
+          "difficulty_percentage": {
+            "title": "Difficulty percentage",
+            "type": "number",
+            "readOnly": true
+          },
+          "user": {
+            "$ref": "#/definitions/UserMini"
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "QuestionAttempt": {
+        "required": [
+          "question_id",
+          "selected_answer_id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer",
+            "readOnly": true
+          },
+          "question": {
+            "$ref": "#/definitions/Question"
+          },
+          "question_id": {
+            "title": "Question id",
+            "type": "integer"
+          },
+          "selected_answer_id": {
+            "title": "Selected answer id",
+            "type": "integer"
+          },
+          "is_correct": {
+            "title": "Is correct",
+            "type": "boolean",
+            "readOnly": true
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "Bookmark": {
+        "required": [
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer",
+            "readOnly": true
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "saved_at": {
+            "title": "Saved at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "Category": {
+        "required": [
+          "name",
+          "slug"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string",
+            "format": "slug",
+            "pattern": "^[-a-zA-Z0-9_]+$",
+            "maxLength": 50,
+            "minLength": 1
+          }
+        }
+      },
+      "Comment": {
+        "required": [
+          "test",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "user": {
+            "$ref": "#/definitions/UserMini"
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string",
+            "minLength": 1
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "UserTestStats": {
+        "required": [
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "username": {
+            "title": "Username",
+            "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
+            "type": "string",
+            "pattern": "^[\\w.@+-]+$",
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "profile_image": {
+            "title": "Profile image",
+            "type": "string",
+            "readOnly": true,
+            "x-nullable": true,
+            "format": "uri"
+          },
+          "total_tests": {
+            "title": "Total tests",
+            "type": "string",
+            "readOnly": true
+          },
+          "total_questions": {
+            "title": "Total questions",
+            "type": "string",
+            "readOnly": true
+          },
+          "total_attempts": {
+            "title": "Total attempts",
+            "type": "string",
+            "readOnly": true
+          },
+          "correct_count": {
+            "title": "Correct count",
+            "type": "string",
+            "readOnly": true
+          },
+          "wrong_count": {
+            "title": "Wrong count",
+            "type": "string",
+            "readOnly": true
+          }
+        }
+      },
+      "Like": {
+        "required": [
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer",
+            "readOnly": true
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "Notification": {
+        "required": [
+          "user",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "minLength": 1
+          },
+          "is_read": {
+            "title": "Is read",
+            "type": "boolean"
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "Test": {
+        "required": [
+          "title",
+          "description",
+          "category_id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "user": {
+            "$ref": "#/definitions/UserMini"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "$ref": "#/definitions/Category"
+          },
+          "category_id": {
+            "title": "Category id",
+            "type": "integer"
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string",
+            "enum": [
+              "public",
+              "private",
+              "unlisted"
+            ]
+          },
+          "difficulty_percentage": {
+            "title": "Difficulty percentage",
+            "type": "number",
+            "readOnly": true
+          },
+          "calculated_difficulty": {
+            "title": "Calculated difficulty",
+            "type": "string",
+            "readOnly": true
+          },
+          "total_questions": {
+            "title": "Total questions",
+            "type": "string",
+            "readOnly": true
+          }
+        }
+      },
+      "View": {
+        "required": [
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "user": {
+            "title": "User",
+            "type": "integer",
+            "x-nullable": true
+          },
+          "viewed_at": {
+            "title": "Viewed at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "SystemConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "enable_chat": {
+            "title": "Enable chat",
+            "type": "boolean"
+          },
+          "enable_ads": {
+            "title": "Enable ads",
+            "type": "boolean"
+          },
+          "enable_test_creation": {
+            "title": "Enable test creation",
+            "type": "boolean"
+          },
+          "enable_map_view": {
+            "title": "Enable map view",
+            "type": "boolean"
+          },
+          "enable_realtime_notifications": {
+            "title": "Enable realtime notifications",
+            "type": "boolean"
+          },
+          "enable_monetization": {
+            "title": "Enable monetization",
+            "type": "boolean"
+          },
+          "maintenance_mode": {
+            "title": "Maintenance mode",
+            "type": "boolean"
+          },
+          "allow_registration": {
+            "title": "Allow registration",
+            "type": "boolean"
+          },
+          "max_test_attempts_per_user": {
+            "title": "Max test attempts per user",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18
+          },
+          "min_days_between_attempts": {
+            "title": "Min days between attempts",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18
+          },
+          "min_tests_required_for_creation": {
+            "title": "Min tests required for creation",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18
+          },
+          "require_premium_for_ad_free": {
+            "title": "Require premium for ad free",
+            "type": "boolean"
+          },
+          "require_verification_for_boosted_tests": {
+            "title": "Require verification for boosted tests",
+            "type": "boolean"
+          },
+          "default_feed_page_size": {
+            "title": "Default feed page size",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18
+          },
+          "default_language": {
+            "title": "Default language",
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 1
+          },
+          "updated_at": {
+            "title": "Updated at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "ModeratorFlag": {
+        "required": [
+          "reason",
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string",
+            "minLength": 1
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "flagged_by": {
+            "title": "Flagged by",
+            "type": "integer",
+            "x-nullable": true
+          }
+        }
+      },
+      "ActionLog": {
+        "required": [
+          "action_type",
+          "endpoint",
+          "status_code",
+          "ip_address"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "action_type": {
+            "title": "Action type",
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1
+          },
+          "status_code": {
+            "title": "Status code",
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18
+          },
+          "ip_address": {
+            "title": "Ip address",
+            "type": "string",
+            "minLength": 1
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer",
+            "x-nullable": true
+          }
+        }
+      },
+      "NotificationTemplate": {
+        "required": [
+          "key",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "key": {
+            "title": "Key",
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "content": {
+            "title": "Content",
+            "type": "string",
+            "minLength": 1
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 1
+          },
+          "created_at": {
+            "title": "Created at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "updated_at": {
+            "title": "Updated at",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          }
+        }
+      },
+      "UserRole": {
+        "required": [
+          "user"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "ID",
+            "type": "integer",
+            "readOnly": true
+          },
+          "is_admin": {
+            "title": "Is admin",
+            "type": "boolean"
+          },
+          "is_moderator": {
+            "title": "Is moderator",
+            "type": "boolean"
+          },
+          "is_developer": {
+            "title": "Is developer",
+            "type": "boolean"
+          },
+          "is_verified": {
+            "title": "Is verified",
+            "type": "boolean"
+          },
+          "is_premium": {
+            "title": "Is premium",
+            "type": "boolean"
+          },
+          "badge_label": {
+            "title": "Badge label",
+            "type": "string",
+            "maxLength": 50,
+            "x-nullable": true
+          },
+          "user": {
+            "title": "User",
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
