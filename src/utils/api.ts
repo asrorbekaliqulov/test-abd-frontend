@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://backend.testabd.uz';
+const API_BASE_URL = 'https://backend.testabd.uz';
 
 // Public API (auth oldidan ishlatiladigan)
 const publicApi = axios.create({
