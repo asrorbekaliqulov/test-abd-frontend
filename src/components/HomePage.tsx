@@ -230,7 +230,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
             >
               <StoryRing
                 username={story.username}
-                avatar={`http://127.0.0.1:8000${story.user_profile_image}`}
+                avatar={`https://backend.testabd.uz${story.user_profile_image}`}
                 hasNewStory={true}
               />
             </div>
