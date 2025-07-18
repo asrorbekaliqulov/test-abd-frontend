@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText, HelpCircle, ArrowLeft } from 'lucide-react';
 import { quizAPI } from '../utils/api';
+import ProfilePage from './ProfilePage'
 
 interface CreatePageProps {
   onNavigate: (page: string) => void;
@@ -8,6 +9,8 @@ interface CreatePageProps {
 interface Category {
   id: number;
   name: string;
+  slug: string;
+  emoji: string;
 }
 
 
@@ -32,6 +35,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
+  // const navigate = useNavigate();
+
 
   // console.log(categories);
   useEffect(() => {
@@ -63,14 +68,16 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
     };
 
     try {
+      console.log(payload);
       const response = await quizAPI.createTest(payload);
-      console.log('Test yaratildi:', response.data);
+      // console.log('Test yaratildi:', response.data);
       alert('Test muvaffaqiyatli yaratildi!');
     } catch (error: any) {
       console.error('Xatolik:', error.response?.data || error.message);
       alert('Xatolik yuz berdi!');
     }
   };
+  
 
   const addQuestion = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -149,8 +156,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
         <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Plus className="w-10 h-10 text-white" />
         </div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Content</h1>
-        <p className="text-gray-600">Choose what you'd like to create</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Kontent yaratish</h1>
+        <p className="text-gray-600">Nima yaratmoqchi bo'lganingizni tanlang</p>
       </div>
 
       {/* Creation Options */}
@@ -163,13 +170,13 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           <div className="w-16 h-16 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
             <FileText className="w-8 h-8 text-indigo-600" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-3">Create Test</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-3">Blok Yaratish</h3>
           <p className="text-gray-600 mb-4">
-            Create a new test with multiple questions. Set up the basic information, 
-            category, and visibility settings.
+            Yangi blok yarating va unga bir nechta savollar qo‘shing.<b> Blok nomi, asosiy ma'lumotlari,
+            kategoriya va ko‘rinish <i>(visibility)</i></b> sozlamalarini belgilang.
           </p>
           <div className="flex items-center text-indigo-600 font-medium">
-            <span>Get Started</span>
+            <span>Boshlash</span>
             <Plus className="w-4 h-4 ml-2" />
           </div>
         </div>
@@ -182,13 +189,14 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-purple-200 transition-colors">
             <HelpCircle className="w-8 h-8 text-purple-600" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-3">Add Questions</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-3">Savol Qo‘shish</h3>
           <p className="text-gray-600 mb-4">
-            Add questions to existing tests. Create single choice, multiple choice, 
-            or true/false questions with detailed explanations.
+            Blok ichiga savol qo‘shing.
+            <b>Bitta javobli</b> yoki <b>to‘g‘ri/yolg‘on</b> turdagi savollar yaratishingiz mumkin.
+            Kerak bo‘lsa, har bir savolga tushuntirish ham yozing.
           </p>
           <div className="flex items-center text-purple-600 font-medium">
-            <span>Get Started</span>
+            <span>Boshlash</span>
             <Plus className="w-4 h-4 ml-2" />
           </div>
         </div>
@@ -198,15 +206,15 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 text-center">
           <div className="text-2xl font-bold text-blue-600 mb-2">0</div>
-          <div className="text-sm text-blue-700">Tests Created</div>
+          <div className="text-sm text-blue-700">Blok yaratildi</div>
         </div>
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 text-center">
           <div className="text-2xl font-bold text-green-600 mb-2">0</div>
-          <div className="text-sm text-green-700">Questions Added</div>
+          <div className="text-sm text-green-700">Test qo'shildi</div>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 text-center">
           <div className="text-2xl font-bold text-purple-600 mb-2">0</div>
-          <div className="text-sm text-purple-700">Total Attempts</div>
+          <div className="text-sm text-purple-700">Barcha urinishlar</div>
         </div>
       </div>
     </div>
@@ -225,8 +233,9 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Create New Test</h1>
-          <p className="text-gray-600">Set up your test details and configuration</p>
+          <h1 className="text-2xl font-bold text-gray-900">Yangi blok yaratish</h1>
+          <p className="text-gray-600">Sinov tafsilotlari va konfiguratsiyasini sozlang
+          </p>
         </div>
       </div>
 
@@ -236,7 +245,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Test Title */}
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-              Test Title *
+              Blok nomi *
             </label>
             <input
               id="title"
@@ -251,7 +260,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Description */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
+              Tavsif *
             </label>
             <textarea
               id="description"
@@ -266,19 +275,20 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Category */}
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-              Category
+              Turkum *
             </label>
             <select
               id="category"
               name="category"
+              required
               className="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
             >
-              <option value="">Select a category</option>
+              <option value="">Turkumni tanlang</option>
               
               {Array.isArray(categories) &&
                 categories.map((category: any) => (
                   <option key={category.id} value={category.id}>
-                    {category.name}
+                   {category.emoji} {category.title}
                   </option>
               ))}
 
@@ -288,7 +298,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Visibility */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Visibility
+              Ko'rinish
             </label>
             <div className="space-y-3">
               <label className="flex items-center">
@@ -300,8 +310,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                 />
                 <span className="ml-3">
-                  <span className="block text-sm font-medium text-gray-700">Public</span>
-                  <span className="block text-sm text-gray-500">Anyone can find and take this test</span>
+                  <span className="block text-sm font-medium text-gray-700">Ommaviy</span>
+                  <span className="block text-sm text-gray-500">Har kim bu testni topishi va topshirishi mumkin</span>
                 </span>
               </label>
               <label className="flex items-center">
@@ -312,8 +322,9 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                 />
                 <span className="ml-3">
-                  <span className="block text-sm font-medium text-gray-700">Unlisted</span>
-                  <span className="block text-sm text-gray-500">Only people with the link can access</span>
+                  <span className="block text-sm font-medium text-gray-700">Roʻyxatga kiritilmagan</span>
+                  <span className="block text-sm text-gray-500">Faqat havolaga ega odamlar kirishi mumkin
+                  </span>
                 </span>
               </label>
               <label className="flex items-center">
@@ -324,8 +335,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                 />
                 <span className="ml-3">
-                  <span className="block text-sm font-medium text-gray-700">Private</span>
-                  <span className="block text-sm text-gray-500">Only you can access this test</span>
+                  <span className="block text-sm font-medium text-gray-700">Shaxsiy</span>
+                  <span className="block text-sm text-gray-500">Bu blokga faqat siz kirishingiz mumkin</span>
                 </span>
               </label>
             </div>
@@ -338,14 +349,14 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
               onClick={() => setActiveTab('overview')}
               className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              Bekor qilish
             </button>
               
               <button
                 type="submit"
                 className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-200"
               >
-                Create Test
+                Blok yaratish
               </button>
 
 
@@ -365,8 +376,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add Questions</h1>
-          <p className="text-gray-600">Create questions for your tests</p>
+          <h1 className="text-2xl font-bold text-gray-900">Savol qo'shish</h1>
+          <p className="text-gray-600">Blokingiz uchun savollar yarating</p>
         </div>
       </div>
 
@@ -375,7 +386,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Select Test */}
           <div>
             <label htmlFor="test" className="block text-sm font-medium text-gray-700 mb-2">
-              Select Test *
+              Blockni tanlang *
             </label>
             <select
               id="test"
@@ -383,7 +394,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
               required
               className="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
             >
-              <option value="">Choose a test</option>
+              <option value="">Blockni tanlang</option>
               {tests.map((test) => (
                 <option key={test.id} value={test.id}>
                   {test.title}
@@ -395,7 +406,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Question Text */}
           <div>
             <label htmlFor="question_text" className="block text-sm font-medium text-gray-700 mb-2">
-              Question *
+              Savol *
             </label>
             <textarea
               id="question_text"
@@ -410,7 +421,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Question Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Question Type *
+              Savol turi *
             </label>
             <div className="space-y-3">
               <label className="flex items-center">
@@ -422,8 +433,9 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                 />
                 <span className="ml-3">
-                  <span className="block text-sm font-medium text-gray-700">Single Choice</span>
-                  <span className="block text-sm text-gray-500">Only one correct answer</span>
+                  <span className="block text-sm font-medium text-gray-700">Yagona tanlov</span>
+                  <span className="block text-sm text-gray-500">Faqat bitta to'g'ri javob
+                  </span>
                 </span>
               </label>
               <label className="flex items-center">
@@ -434,8 +446,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                 />
                 <span className="ml-3">
-                  <span className="block text-sm font-medium text-gray-700">Multiple Choice</span>
-                  <span className="block text-sm text-gray-500">Multiple correct answers</span>
+                  <span className="block text-sm font-medium text-gray-700">Ko'p tanlov</span>
+                  <span className="block text-sm text-gray-500">Bir nechta to'g'ri javoblar</span>
                 </span>
               </label>
               <label className="flex items-center">
@@ -446,8 +458,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                 />
                 <span className="ml-3">
-                  <span className="block text-sm font-medium text-gray-700">True/False</span>
-                  <span className="block text-sm text-gray-500">Simple true or false question</span>
+                  <span className="block text-sm font-medium text-gray-700">Rost/Yolg'on</span>
+                  <span className="block text-sm text-gray-500">Oddiy to'g'ri yoki noto'g'ri savol</span>
                 </span>
               </label>
             </div>
@@ -456,7 +468,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           {/* Answer Options */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Answer Options *
+              Javob variantlari *
             </label>
             <div className="space-y-3">
               {[1, 2, 3].map((index) => (
@@ -467,14 +479,14 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
                   />
                   <input
                     type="text"
-                    placeholder={`Option ${index}`}
+                    placeholder={`variant ${index}`}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                   />
                 </div>
               ))}
             </div>
             <p className="text-sm text-gray-500 mt-2">
-              Check the box next to correct answers
+              To'g'ri javoblar yonidagi katakchani belgilang
             </p>
           </div>
 
@@ -485,13 +497,13 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
               onClick={() => setActiveTab('overview')}
               className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              Bekor qilish
             </button>
             <button
               type="submit"
               className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
             >
-              Add Question
+              Savolni qo'shish
             </button>
           </div>
         </form>

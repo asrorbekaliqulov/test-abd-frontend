@@ -112,6 +112,19 @@ export const passwordResetAPI = {
   }
 };
 
+export const checkUsername = async (username: string) => {
+  const response = await publicApi.get(`/accounts/check-username/?username=${username}`);
+  const data = await response.data;
+  return data.available;
+};
+
+export const userProfile = async (username: string) => {
+  const response = await publicApi.get(`/accounts/profile/${username}`);
+  const data = await response.data;
+  return data;
+};
+
+
 // Auth API
 export const authAPI = {
   login: (username: string, password: string) =>

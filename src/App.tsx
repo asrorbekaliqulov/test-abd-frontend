@@ -23,6 +23,7 @@ import ProfilePage from './components/ProfilePage';
 import QuestionPage from './components/QuestionPgaes';
 import EmailVerificationPage from './components/auth/EmailVerificationPgae';
 import CompleteProfilePage from './components/auth/CompleteProfilePgae';
+import {UserProfilePage} from './components/OtherProfile/OtherUserProfilePage'
 
 const AppContent: React.FC = () => {
   const { loading } = useAuth();
@@ -192,6 +193,7 @@ const App: React.FC = () => {
         path="/register"
         element={!isAuthenticated ? <RegisterPage /> : <Navigate to="/" replace />}
       />
+      <Route path="/profile/:username" element={<UserProfilePage />} />
       <Route path="/verify-email/:token" element={<EmailVerificationPage />} />
       <Route path="/complete-profile" element={<CompleteProfilePage />} />
       <Route path="/questions/:id" element={<QuestionPage />} />

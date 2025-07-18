@@ -72,10 +72,22 @@ interface UserData {
     region: number;
     district: number;
     settlement: number;
+    streak_day: number;
+    streak_days: number;
+
+    weekly_test_count: {
+      Dush: number;
+      Sesh: number;
+      Chor: number;
+      Pay: number;
+      Jum: number;
+      Shan: number;
+      Yak: number;
+      };
     groups: number[];
     user_permissions: number[];
     categories_of_interest: number[];
-    streak_days: number;
+
 }
 
 interface UserFollowData {
@@ -112,8 +124,9 @@ interface MyTests {
     status: 'published' | 'draft';
     category: {
         id: number;
-        name: string;
+        title: string;
         slug: string;
+        emoji: string;
     };
 }
 export interface RecentQuestion {
@@ -151,6 +164,7 @@ interface TestCardProps {
 
 const ProfilePage = () => {
   const [mestats, setMestats] = useState<UserData | null>(null);
+  console.log(mestats)
   const [myTests, setMyTests] = useState<MyTests[]>([]);
   const [recentQuestions, setRecentQuestions] = useState<RecentQuestion[]>([]);
   // const [countries, setCountries] = useState<Country[]>([]);
@@ -185,6 +199,7 @@ const ProfilePage = () => {
     const fetchProfile = async () => {
       try {
         const res = await authAPI.getMe();
+        console.log(res)
         setMestats(res.data);
       } catch (err) {
         console.error("Profil ma'lumotlarini olishda xatolik:", err);
@@ -224,7 +239,8 @@ const ProfilePage = () => {
   //   }
   // }, [showFollowers, showFollowing, mestats?.id]);
   
-  const activityData = [12, 8, 15, 10, 18, 6, 14];
+  const activityData: number[] = Object.values(mestats?.weekly_test_count || {}) as number[];
+
 
   const handleFollow = (userId: number) => {
     accountsAPI.toggleFollow(userId).then(() => {
@@ -412,7 +428,7 @@ const ProfilePage = () => {
   const TestCard: React.FC<TestCardProps> = ({ test }) => (
     <div className="test-card" data-status={test.status}>
       <div className="test-header">
-        <div className="test-category">{test.category?.name}</div> {/* ✅ .name bilan tuzatildi */}
+        <div className="test-category">{test.category?.emoji} {test.category?.title}</div>
         <div className={`test-status ${test.status}`}>{test.status}</div>
       </div>
       <h3 className="test-title">{test.title}</h3>
@@ -565,7 +581,7 @@ const ProfilePage = () => {
                 </div>
                 <div className="flex items-center text-orange-500 text-sm">
                   <Zap size={16} className="mr-1" />
-                  {mestats?.streak_days || 0} day streak
+                    {mestats?.streak_day || 0} day streak
                 </div>
               </div>
 
@@ -584,7 +600,7 @@ const ProfilePage = () => {
 
           {/* Enhanced Statistics Section */}
           <section className="enhanced-stats-section">
-            <h2 className="section-title">Performance Overview</h2>
+            <h2 className="section-title">Natijalar Paneli</h2>
             
             <div className="main-stats-grid">
               <StatCard
@@ -713,9 +729,9 @@ const ProfilePage = () => {
                   ))}
                 </div>
                 <div className="chart-labels">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                    <span key={day}>{day}</span>
-                  ))}
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                      <span key={day}>{day}</span>
+                    ))}
                 </div>
               </div>
             </div>
@@ -785,14 +801,14 @@ const ProfilePage = () => {
                 ].map(item => (
                   <div 
                     key={item.id}
-                    className={`nav-item ${activeTab === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
-                    onClick={() => !item.disabled && handleTabSwitch(item.id)}
+                    className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch(item.id)}
                   >
                     <div className="nav-icon">
                       <i className={item.icon}></i>
                     </div>
                     <span className="nav-text">{item.text}</span>
-                    {item.disabled && <span className="coming-soon">Coming Soon</span>}
+                    {/* {item.disabled && <span className="coming-soon">Coming Soon</span>} */}
                   </div>
                 ))}
               </nav>

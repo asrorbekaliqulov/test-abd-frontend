@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import { MapPin, Globe, Users, TrendingUp, Maximize2, X, Award, Target, Clock, ZoomIn, ZoomOut } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup,  useMapEvents } from 'react-leaflet';
+import { Globe, Users, TrendingUp, Maximize2, X, Award, Target, ZoomIn, ZoomOut } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
