@@ -6,10 +6,15 @@ import {
     Crown, 
     Calendar,
     UserPlus,
+    Cog,
     UserMinus,
+    User,
     X,
     Zap,
   } from 'lucide-react';
+import {
+  Edit, Target, DollarSign, Globe, LogOut
+} from 'lucide-react';
   import { quizAPI, authAPI, accountsAPI } from '../utils/api';
 
 // types.ts yoki ProfilePage.tsx ichida yuqoriga yozing
@@ -164,10 +169,8 @@ interface TestCardProps {
 
 const ProfilePage = () => {
   const [mestats, setMestats] = useState<UserData | null>(null);
-  console.log(mestats)
   const [myTests, setMyTests] = useState<MyTests[]>([]);
   const [recentQuestions, setRecentQuestions] = useState<RecentQuestion[]>([]);
-  // const [countries, setCountries] = useState<Country[]>([]);
   const [settings, setSettings] = useState<UserSettings>({
     country: '',
     region: '',
@@ -189,6 +192,8 @@ const ProfilePage = () => {
   const [follow, setFollow] = useState<UserFollowData | null>(null);
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  
   // const [loadingFollowData, setLoadingFollowData] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -199,7 +204,6 @@ const ProfilePage = () => {
     const fetchProfile = async () => {
       try {
         const res = await authAPI.getMe();
-        console.log(res)
         setMestats(res.data);
       } catch (err) {
         console.error("Profil ma'lumotlarini olishda xatolik:", err);
@@ -228,7 +232,6 @@ const ProfilePage = () => {
   //     setLoadingFollowData(true);
   //     accountsAPI.getUserFollowData(mestats.id)
   //       .then((res) => {
-  //         console.log("Follow data:", res.data);
   //         setFollow({
   //           followers: res.data.followers,
   //           following: res.data.following,
@@ -277,10 +280,10 @@ const ProfilePage = () => {
     test_title: q.test_title || 'No Test',
     difficulty:
       q.difficulty_percentage < 33
-        ? 'Easy'
+        ? 'Oson'
         : q.difficulty_percentage < 66
-          ? 'Medium'
-          : 'Hard',
+          ? "O'rtacha"
+          : 'Qiyin',
     category: null, // backendda yo‘q, agar bo‘lsa q.category.name ishlatiladi
     answers: q.answers?.length || 0,
     correctRate:
@@ -369,7 +372,7 @@ const ProfilePage = () => {
         username: mestats.username,
         bio: mestats.bio,
       });
-      alert('Profile updated successfully!');
+      alert('Profil muvaffaqiyatli saqlandi!');
     } catch (error) {
       console.error('Profile update error:', error);
       alert('Profile update failed.');
@@ -423,7 +426,12 @@ const ProfilePage = () => {
     </div>
   );
   
-
+  const handleLogout = () => {
+    // Implement logout logic here or remove this function if not needed
+    authAPI.logout().then(() => {
+      window.location.href = '/login';
+    });
+  };
 
   const TestCard: React.FC<TestCardProps> = ({ test }) => (
     <div className="test-card" data-status={test.status}>
@@ -436,12 +444,12 @@ const ProfilePage = () => {
       <div className="test-stats">
         <div className="stat">
           <i className="fas fa-question-circle"></i>
-          <span>{test.total_questions} questions</span>
+          <span>{test.total_questions} savollar</span>
         </div>
-        <div className="stat">
+        {/* <div className="stat">
           <i className="fas fa-users"></i>
           <span>{test.completions} completions</span>
-        </div>
+        </div> */}
         {test.rating > 0 && (
           <div className="stat">
             <i className="fas fa-star"></i>
@@ -452,11 +460,11 @@ const ProfilePage = () => {
       <div className="test-actions">
         <button className="btn btn-outline btn-sm">
           <i className="fas fa-edit"></i>
-          Edit
+          Tahrirlash
         </button>
         <button className="btn btn-primary btn-sm">
           <i className="fas fa-eye"></i>
-          View
+          Ko'rish
         </button>
       </div>
     </div>
@@ -478,21 +486,21 @@ const ProfilePage = () => {
       <div className="question-stats">
         <div className="stat">
           <i className="fas fa-users"></i>
-          <span>{answers} answers</span>
+          <span>{answers} varinatlar</span>
         </div>
         <div className="stat">
           <i className="fas fa-check-circle"></i>
-          <span>{correctRate}% correct</span>
+          <span>{correctRate}% to'g'ri </span>
         </div>
       </div>
       <div className="question-actions">
         <button className="btn btn-outline btn-sm">
           <i className="fas fa-edit"></i>
-          Edit
+          Tahrirlash
         </button>
         <button className="btn btn-primary btn-sm">
           <i className="fas fa-chart-bar"></i>
-          Analytics
+          Analitika
         </button>
       </div>
     </div>
@@ -577,16 +585,16 @@ const ProfilePage = () => {
                 </div>
                 <div className="flex items-center text-theme-secondary text-sm">
                   <Calendar size={16} className="mr-1" />
-                  Joined {formatDate(mestats?.join_date || "private")}
+                  Qoʻshildi {formatDate(mestats?.join_date || "private")}
                 </div>
                 <div className="flex items-center text-orange-500 text-sm">
                   <Zap size={16} className="mr-1" />
-                    {mestats?.streak_day || 0} day streak
+                    {mestats?.streak_day || 0} kunlik chiziq
                 </div>
               </div>
 
               <p className="text-theme-secondary mb-6 max-w-2xl">
-                {mestats?.bio || "No bio"}
+                {mestats?.bio || ""}
               </p>
 
               {/* Social Stats
@@ -606,28 +614,28 @@ const ProfilePage = () => {
               <StatCard
                 icon="fas fa-trophy"
                 number={mestats?.tests_solved || 5}
-                label="Tests Completed"
+                label="Testlar tugallandi"
                 change={{ type: 'positive' }}
                 type="primary"
               />
               <StatCard
                 icon="fas fa-bullseye"
                 number={accuracy}
-                label="Accuracy Rate"
+                label="Aniqlik darajasi"
                 change={{ type: 'positive'}}
                 type="success"
               />
-              <StatCard
+              {/* <StatCard
                 icon="fas fa-clock"
                 number={mestats?.average_time || 0}
-                label="Avg Response Time"
+                label="Oʻrtacha javob vaqti"
                 change={{ type: 'negative'}}
                 type="danger"
-              />
+              /> */}
               <StatCard
                 icon="fas fa-fire"
                 number={mestats?.streak_days || 0}
-                label="Day Streak"
+                label="Kunlik chiziq"
                 change={{ type: 'positive'}}
                 type="warning"
               />
@@ -640,16 +648,16 @@ const ProfilePage = () => {
                 <div className="stat-item">
                   <div className="stat-header">
                     <i className="fas fa-question-circle"></i>
-                    <span>Questions Solved</span>
+                    <span>Savollarga javob berildi</span>
                   </div>
                   <div className="stat-value">{Number(mestats?.correct_count) + Number(mestats?.wrong_count)}</div>
                   <div className="stat-breakdown">
                     <div className="breakdown-item correct">
-                      <span className="breakdown-label">Correct</span>
+                      <span className="breakdown-label">To'g'ri</span>
                       <span className="breakdown-value">{mestats?.correct_count}</span>
                     </div>
                     <div className="breakdown-item wrong">
-                      <span className="breakdown-label">Wrong</span>
+                      <span className="breakdown-label">Xato</span>
                       <span className="breakdown-value">{mestats?.wrong_count}</span>
                     </div>
                   </div>
@@ -658,7 +666,7 @@ const ProfilePage = () => {
                 <div className="stat-item">
                   <div className="stat-header">
                     <i className="fas fa-users"></i>
-                    <span>Social Stats</span>
+                    <span>Ijtimoiy statistika</span>
                   </div>
                   <div className="social-stats">
                     <button
@@ -666,14 +674,14 @@ const ProfilePage = () => {
                       className="text-center hover:bg-theme-tertiary p-2 rounded-lg transition-theme-normal"
                     >
                       <div className="text-2xl font-bold text-accent-primary">{follow?.followers?.length || 0}</div>
-                      <div className="text-sm text-theme-secondary">Followers</div>
+                      <div className="text-sm text-theme-secondary">Obunachilar</div>
                     </button>
                     <button
                         onClick={() => setShowFollowing(true)}
                         className="text-center hover:bg-theme-tertiary p-2 rounded-lg transition-theme-normal"
                         >
                                           <div className="text-2xl font-bold text-accent-primary">{follow?.following?.length || 0}</div>
-                        <div className="text-sm text-theme-secondary">Following</div>
+                        <div className="text-sm text-theme-secondary">Kuzatish</div>
                     </button>
                   </div>
                 </div>
@@ -710,11 +718,11 @@ const ProfilePage = () => {
               <h3>Activity Overview</h3>
               <div className="activity-chart">
                 <div className="chart-header">
-                  <span>Tests completed in the last 7 days</span>
+                  <span>Sinovlar oxirgi 7 kun ichida yakunlandi</span>
                   <div className="chart-legend">
                     <div className="legend-item">
                       <div className="legend-color primary"></div>
-                      <span>Tests</span>
+                      <span>Testlar</span>
                     </div>
                   </div>
                 </div>
@@ -729,7 +737,7 @@ const ProfilePage = () => {
                   ))}
                 </div>
                 <div className="chart-labels">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                    {['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'].map(day => (
                       <span key={day}>{day}</span>
                     ))}
                 </div>
@@ -740,11 +748,11 @@ const ProfilePage = () => {
           {/* My Tests Section */}
           <section className="my-tests-section">
             <div className="section-header">
-              <h2 className="section-title">My Tests</h2>
+              <h2 className="section-title">Mening bloklarim</h2>
               <div className="test-filters">
-                <button className="filter-btn active hover">All</button>
-                <button className="filter-btn hover">Published</button>
-                <button className="filter-btn hover">Draft</button>
+                <button className="filter-btn active hover">Barchasi</button>
+                <button className="filter-btn hover">Chop etilgan</button>
+                <button className="filter-btn hover">Qoralama</button>
               </div>
             </div>
             <div className="tests-grid">
@@ -756,14 +764,14 @@ const ProfilePage = () => {
 
           {/* Questions Overview Section */}
           <section className="questions-section">
-            <h2 className="section-title">Recent Questions</h2>
+            <h2 className="section-title">So'ngi savollar</h2>
             <div className="questions-grid">
               {recentQuestions.length > 0 ? (
                 recentQuestions.map((question, index) => (
                   <QuestionCard key={`q-${question.id}-${index}`} question={{ type: question.type, correctRate: question.correctRate, question: question.question, test_title: question.test_title, answers: question.answers, difficulty: question.difficulty }} />
                 ))
               ) : (
-                <p className="text-sm text-gray-500">No recent questions found.</p>
+                  <p className="text-sm text-gray-500">Oxirgi savollar topilmadi.</p>
               )}
             </div>
           </section>
@@ -772,381 +780,472 @@ const ProfilePage = () => {
       </main>
 
       {/* Settings Modal */}
-      {isSettingsOpen && (
-        <div className="modal-overlay active">
-          <div className="modal-content">
-            <div className="modal-header">
-              <button 
-                className="close-btn" 
-                onClick={() => setIsSettingsOpen(false)}
-              >
-                <i className="fas fa-times"></i>
-              </button>
-            </div>
-            
-            {/* Settings Sidebar */}
-            <div className="settings-sidebar">
-              <div className="settings-header">
-                <h2 className="settings-title">Settings</h2>
-                <p className="settings-subtitle">Manage your account and preferences</p>
-              </div>
-              
-              <nav className="settings-nav">
+      {showSettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex border-b border-theme-primary">
+              <div className="w-1/4 bg-theme-secondary p-6 space-y-2">
                 {[
-                  { id: 'profile', icon: 'fas fa-user', text: 'Profile' },
-                  // { id: 'premium', icon: 'fas fa-crown', text: 'Premium', disabled: true },
-                  // { id: 'ads', icon: 'fas fa-ad', text: 'Ads', disabled: true },
-                  // { id: 'monetization', icon: 'fas fa-dollar-sign', text: 'Monetization' },
-                  { id: 'preferences', icon: 'fas fa-cog', text: 'Preferences' }
+                  { id: 'profile', label: 'Edit profile', icon: Edit },
+                  { id: 'premium', label: 'Premium', icon: Crown },
+                  { id: 'ads', label: 'Advertisement', icon: Target },
+                  { id: 'monetization', label: 'Monetization', icon: DollarSign },
+                  { id: 'preferences', label: 'Language', icon: Globe },
+                  { id: 'logout', label: 'Logout', icon: LogOut }
                 ].map(item => (
-                  <div 
+                  <button
                     key={item.id}
-                    className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch(item.id)}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-theme-normal ${activeTab === item.id
+                      ? 'bg-accent-primary text-white'
+                      : 'text-theme-secondary hover:bg-theme-tertiary'
+                      }`}
                   >
-                    <div className="nav-icon">
-                      <i className={item.icon}></i>
-                    </div>
-                    <span className="nav-text">{item.text}</span>
-                    {/* {item.disabled && <span className="coming-soon">Coming Soon</span>} */}
-                  </div>
+                    <item.icon size={20} />
+                    <span>{item.label}</span>
+                  </button>
                 ))}
-              </nav>
-            </div>
-            
-            {/* Settings Content */}
-            <div className="settings-content">
-              {/* Profile Tab */}
-              {activeTab === 'profile' && (
-                <div className="tab-content active">
-                  <div className="content-header">
-                    <h3 className="content-title">Profile Settings</h3>
-                    <p className="content-description">Update your personal information and profile picture</p>
-                  </div>
-                  
-                  <div className="form-section">
-                    <h4 className="section-title">
-                      <div className="section-icon">
-                        <i className="fas fa-camera"></i>
-                      </div>
-                      Profile Picture
-                    </h4>
-                    
-                    <div className="profile-picture-section">
-                      <div className="current-avatar">
-                        <img src={`${mestats?.profile_image || "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg"}`} alt="Current Avatar" />
-                      </div>
-                      <div className="avatar-info">
-                        <h5 className="avatar-title">Change Profile Picture</h5>
-                        <p className="avatar-description">Upload a new profile picture. Recommended size: 400x400px</p>
-                        <div className="file-upload">
-                          <input type="file" accept="image/*" />
-                          <button className="upload-btn">
-                            <i className="fas fa-upload"></i>
-                            Upload New Photo
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="form-section">
-                    <h4 className="section-title">
-                      <div className="section-icon">
-                        <i className="fas fa-info-circle"></i>
-                      </div>
-                      Personal Information
-                    </h4>
-                    
-                    <div className="form-group">
-                      <label>Full Name</label>
-                      <input 
-                        type="text" 
-                        value={mestats?.first_name + ' ' + mestats?.last_name} 
-                        onChange={(e) => mestats?({...mestats, first_name: e.target.value.split(' ')[0], last_name: e.target.value.split(' ')[1]}) : null}
-                        placeholder="Enter your full name"
-                      />
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Username</label>
-                      <input 
-                        type="text" 
-                        value={mestats?.username} 
-                        onChange={(e) => mestats?({...mestats, username: e.target.value}) : null}
-                        placeholder="Choose a unique username"
-                      />
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Bio</label>
-                      <textarea placeholder="Tell us about yourself..." rows={4} value={mestats?.bio} onChange={(e) => mestats?({...mestats, bio: e.target.value}) : null}></textarea>
-                    </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                    <button className="btn btn-primary" onClick={handleSaveProfile}>
-                      <i className="fas fa-save"></i>
-                      Save Changes
-                    </button>
-                    <button className="btn btn-outline">
-                      <i className="fas fa-undo"></i>
-                      Reset
-                    </button>
-                  </div>
-                </div>
-              )}
+              </div>
 
-              {/* Monetization Tab */}
-              {activeTab === 'monetization' && (
-                <div className="tab-content active">
-                  <div className="content-header">
-                    <h3 className="content-title">Monetization Dashboard</h3>
-                    <p className="content-description">Earn money by creating quality content and engaging with the community</p>
-                  </div>
-                  
-                  <div className="monetization-section">
-                    <div className="monetization-toggle">
-                      <h4>Enable Monetization</h4>
-                      <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
-                          checked={settings.monetization}
-                          disabled
-                          onChange={(e) => handleSettingChange('monetization', '', e.target.checked)}
-                        />
-                        <span className="toggle-slider"></span>
-                      </label>
-                      <span className="disabled-note">Currently disabled - requirements not met</span>
-                    </div>
-                    
-                    <div className="monetization-info">
-                      <h4>Monetization Requirements</h4>
-                      <p>To enable monetization, you must meet the following requirements:</p>
-                      <ul>
-                        <li>✓ Have at least 10 published tests</li>
-                        <li>✓ Maintain a 4.0+ average rating</li>
-                        <li>✗ Have 1000+ total test completions (Current: 156)</li>
-                        <li>✓ Account verified and in good standing</li>
-                      </ul>
-                    </div>
-                    
-                    <div className="earnings-stats">
-                      <div className="earning-item">
-                        <div className="earning-number">$0.00</div>
-                        <div className="earning-label">Total Earnings</div>
-                      </div>
-                      <div className="earning-item">
-                        <div className="earning-number">$0.00</div>
-                        <div className="earning-label">This Month</div>
-                      </div>
-                    </div>
-                    
-                    <button className="btn btn-success" disabled>
-                      <i className="fas fa-money-bill-wave"></i>
-                      Withdraw Earnings (Disabled)
-                    </button>
-                  </div>
+              <div className="flex-1 p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-theme-primary">Settings</h2>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
+                  >
+                    <X size={24} className="text-theme-secondary" />
+                  </button>
                 </div>
-              )}
-
-              {/* Preferences Tab */}
-              {activeTab === 'preferences' && (
-                <div className="tab-content active">
-                  <div className="content-header">
-                    <h3 className="content-title">Preferences</h3>
-                    <p className="content-description">Customize your experience and app settings</p>
-                  </div>
-                  
-                  {/* Location Settings */}
-                  <div className="form-section">
-                    <h4 className="section-title">
-                      <div className="section-icon">
-                        <i className="fas fa-map-marker-alt"></i>
-                      </div>
-                      Location Settings
-                    </h4>
-                    
-                    <div className="form-group">
-                      <label>Country</label>
-                      <select 
-                        value={settings.country}
-                        onChange={(e) => handleSettingChange('country', '', e.target.value)}
-                      >
-                        <option value="uz">Uzbekistan</option>
-                        <option value="us">United States</option>
-                        <option value="ru">Russia</option>
-                        <option value="kz">Kazakhstan</option>
-                        <option value="kg">Kyrgyzstan</option>
-                      </select>
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Region/State</label>
-                      <select 
-                        value={settings.region}
-                        onChange={(e) => handleSettingChange('region', '', e.target.value)}
-                      >
-                        <option value="tashkent">Tashkent</option>
-                        <option value="samarkand">Samarkand</option>
-                        <option value="bukhara">Bukhara</option>
-                        <option value="fergana">Fergana</option>
-                        <option value="andijan">Andijan</option>
-                        <option value="namangan">Namangan</option>
-                      </select>
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>City</label>
-                      <select 
-                        value={settings.city}
-                        onChange={(e) => handleSettingChange('city', '', e.target.value)}
-                      >
-                        <option value="tashkent-city">Tashkent City</option>
-                        <option value="chirchiq">Chirchiq</option>
-                        <option value="angren">Angren</option>
-                        <option value="bekabad">Bekabad</option>
-                      </select>
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>District/Village</label>
-                      <input 
-                        type="text" 
-                        value={settings.district}
-                        onChange={(e) => handleSettingChange('district', '', e.target.value)}
-                        placeholder="Enter your district or village"
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Language & Appearance */}
-                  <div className="form-section">
-                    <h4 className="section-title">
-                      <div className="section-icon">
-                        <i className="fas fa-palette"></i>
-                      </div>
-                      Appearance & Language
-                    </h4>
-                    
-                    <div className="form-group">
-                      <label>Language</label>
-                      <div className="language-selector">
-                        {[
-                          { code: 'uz', flag: '🇺🇿', name: "O'zbek" },
-                          { code: 'en', flag: '🇺🇸', name: 'English' },
-                          { code: 'ru', flag: '🇷🇺', name: 'Русский' }
-                        ].map(lang => (
-                          <button 
-                            key={lang.code}
-                            className={`language-btn ${settings.language === lang.code ? 'active' : ''}`}
-                            onClick={() => handleSettingChange('language', '', lang.code)}
-                          >
-                            <div className="flag-icon">{lang.flag}</div>
-                            <span>{lang.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Theme</label>
-                      <div className="theme-selector">
-                        {[
-                          { code: 'light', icon: 'fas fa-sun', name: 'Light' },
-                          { code: 'dark', icon: 'fas fa-moon', name: 'Dark' },
-                          { code: 'auto', icon: 'fas fa-adjust', name: 'Auto' }
-                        ].map(theme => (
-                          <button 
-                            key={theme.code}
-                            className={`theme-btn ${settings.theme === theme.code ? 'active' : ''}`}
-                            onClick={() => handleSettingChange('theme', '', theme.code)}
-                          >
-                            <i className={theme.icon}></i>
-                            <span>{theme.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Notifications
-                  <div className="form-section">
-                    <h4 className="section-title">
-                      <div className="section-icon">
-                        <i className="fas fa-bell"></i>
-                      </div>
-                      Notifications
-                    </h4>
-                    
-                    {[
-                      { key: 'push', title: 'Push Notifications', desc: 'Receive notifications about new tests and updates' },
-                      { key: 'email', title: 'Email Notifications', desc: 'Get weekly summaries and important updates via email' },
-                      { key: 'sound', title: 'Sound Effects', desc: 'Play sounds for interactions and notifications' }
-                    ].map(notif => (
-                      <div key={notif.key} className="notification-item">
-                        <div className="notification-info">
-                          <h5>{notif.title}</h5>
-                          <p>{notif.desc}</p>
-                        </div>
-                        <label className="toggle-switch">
-                          <input 
-                            type="checkbox" 
-                            checked={settings.notifications[notif.key]}
-                            onChange={(e) => handleSettingChange('notifications', notif.key, e.target.checked)}
-                          />
-                          <span className="toggle-slider"></span>
-                        </label>
-                      </div>
-                    ))}
-                  </div> */}
-                  
-                  {/* Privacy */}
-                {/* <div className="form-section">
-                    <h4 className="section-title">
-                      <div className="section-icon">
-                        <i className="fas fa-shield-alt"></i>
-                      </div>
-                      Privacy & Security
-                    </h4>
-                    
-                    {[
-                      { key: 'publicProfile', title: 'Public Profile', desc: 'Allow others to view your profile and statistics' },
-                      { key: 'showOnlineStatus', title: 'Show Online Status', desc: 'Display when you\'re online to other users' }
-                    ].map(privacy => (
-                      <div key={privacy.key} className="notification-item">
-                        <div className="notification-info">
-                          <h5>{privacy.title}</h5>
-                          <p>{privacy.desc}</p>
-                        </div>
-                        <label className="toggle-switch">
-                          <input 
-                            type="checkbox" 
-                            checked={settings.privacy[privacy.key]}
-                            onChange={(e) => handleSettingChange('privacy', privacy.key, e.target.checked)}
-                          />
-                          <span className="toggle-slider"></span>
-                        </label>
-                      </div>
-                    ))}
-                  </div> */}
-                  
-                  <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-outline">
-                      <i className="fas fa-undo"></i>
-                      Reset
-                    </button>
-                    <button className="btn btn-primary">
-                      <i className="fas fa-save"></i>
-                      Save Preferences
-                    </button>
-                  </div>
-                </div>
-              )}
+                {/* Tab contents here */}
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {isSettingsOpen && (
+          <div className="modal-overlay active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <button
+                  className="close-btn"
+                  onClick={() => setIsSettingsOpen(false)}
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+
+              {/* Settings Sidebar */}
+              <div className="settings-sidebar">
+                <div className="settings-header">
+                  <h2 className="settings-title">Settings</h2>
+                  <p className="settings-subtitle">Manage your account and preferences</p>
+                </div>
+
+                <nav className="settings-nav">
+                  {[
+                    { id: 'profile', icon: User, text: 'Profile' },
+                    // { id: 'premium', icon: 'fas fa-crown', text: 'Premium', disabled: true },
+                    // { id: 'ads', icon: 'fas fa-ad', text: 'Ads', disabled: true },
+                    // { id: 'monetization', icon: 'fas fa-dollar-sign', text: 'Monetization' },
+                    { id: 'preferences', icon: Cog, text: 'Afzalliklar' },
+                    { id: 'logout', icon: LogOut, text: 'Chiqish' }
+                  ].map(item => (
+                    <div
+                      key={item.id}
+                      className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
+                      onClick={() => handleTabSwitch(item.id)}
+                    >
+                      <div className="nav-icon">
+                        {item.icon ? <item.icon size={20} /> : null}
+                        {/* <i className={item.icon}></i> */}
+                      </div>
+                      <span className="nav-text">{item.text}</span>
+                      {/* {item.disabled && <span className="coming-soon">Coming Soon</span>} */}
+                    </div>
+                  ))}
+                </nav>
+              </div>
+
+              {/* Settings Content */}
+              <div className="settings-content">
+                {/* Profile Tab */}
+                {activeTab === 'profile' && (
+                  <div className="tab-content active">
+                    <div className="content-header">
+                      <h3 className="content-title">Profile Settings</h3>
+                      <p className="content-description">Update your personal information and profile picture</p>
+                    </div>
+
+                    <div className="form-section">
+                      <h4 className="section-title">
+                        <div className="section-icon">
+                          <i className="fas fa-camera"></i>
+                        </div>
+                        Profile Picture
+                      </h4>
+
+                      <div className="profile-picture-section">
+                        <div className="current-avatar">
+                          <img src={`${mestats?.profile_image || "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg"}`} alt="Current Avatar" />
+                        </div>
+                        <div className="avatar-info">
+                          <h5 className="avatar-title">Change Profile Picture</h5>
+                          <p className="avatar-description">Upload a new profile picture. Recommended size: 400x400px</p>
+                          <div className="file-upload">
+                            <input type="file" accept="image/*" />
+                            <button className="upload-btn">
+                              <i className="fas fa-upload"></i>
+                              Upload New Photo
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="form-section">
+                      <h4 className="section-title">
+                        <div className="section-icon">
+                          <i className="fas fa-info-circle"></i>
+                        </div>
+                        Personal Information
+                      </h4>
+
+                      <div className="form-group">
+                        <label>Full Name</label>
+                        <input
+                          type="text"
+                          value={mestats?.first_name + ' ' + mestats?.last_name}
+                          onChange={(e) => mestats ? ({ ...mestats, first_name: e.target.value.split(' ')[0], last_name: e.target.value.split(' ')[1] }) : null}
+                          placeholder="Enter your full name"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Username</label>
+                        <input
+                          type="text"
+                          value={mestats?.username}
+                          onChange={(e) => mestats ? ({ ...mestats, username: e.target.value }) : null}
+                          placeholder="Choose a unique username"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Bio</label>
+                        <textarea placeholder="Tell us about yourself..." rows={4} value={mestats?.bio} onChange={(e) => mestats ? ({ ...mestats, bio: e.target.value }) : null}></textarea>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
+                      <button className="btn btn-primary" onClick={handleSaveProfile}>
+                        <i className="fas fa-save"></i>
+                        Save Changes
+                      </button>
+                      <button className="btn btn-outline">
+                        <i className="fas fa-undo"></i>
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Monetization Tab */}
+                {activeTab === 'monetization' && (
+                  <div className="tab-content active">
+                    <div className="content-header">
+                      <h3 className="content-title">Monetization Dashboard</h3>
+                      <p className="content-description">Earn money by creating quality content and engaging with the community</p>
+                    </div>
+
+                    <div className="monetization-section">
+                      <div className="monetization-toggle">
+                        <h4>Enable Monetization</h4>
+                        <label className="toggle-switch">
+                          <input
+                            type="checkbox"
+                            checked={settings.monetization}
+                            disabled
+                            onChange={(e) => handleSettingChange('monetization', '', e.target.checked)}
+                          />
+                          <span className="toggle-slider"></span>
+                        </label>
+                        <span className="disabled-note">Currently disabled - requirements not met</span>
+                      </div>
+
+                      <div className="monetization-info">
+                        <h4>Monetization Requirements</h4>
+                        <p>To enable monetization, you must meet the following requirements:</p>
+                        <ul>
+                          <li>✓ Have at least 10 published tests</li>
+                          <li>✓ Maintain a 4.0+ average rating</li>
+                          <li>✗ Have 1000+ total test completions (Current: 156)</li>
+                          <li>✓ Account verified and in good standing</li>
+                        </ul>
+                      </div>
+
+                      <div className="earnings-stats">
+                        <div className="earning-item">
+                          <div className="earning-number">$0.00</div>
+                          <div className="earning-label">Total Earnings</div>
+                        </div>
+                        <div className="earning-item">
+                          <div className="earning-number">$0.00</div>
+                          <div className="earning-label">This Month</div>
+                        </div>
+                      </div>
+
+                      <button className="btn btn-success" disabled>
+                        <i className="fas fa-money-bill-wave"></i>
+                        Withdraw Earnings (Disabled)
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Logout Tab */}
+              {activeTab === 'logout' && (
+                <div className="flex items-center justify-center min-h-[60vh]">
+                  <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 max-w-md w-full text-center">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                      Rostdan ham dasturdan chiqmoqchimisiz?
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                      Agar "Ha" tugmasini bossangiz, siz tizimdan chiqarilasiz.
+                    </p>
+
+                    <div className="flex justify-center gap-4">
+                      <button
+                        className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-5 rounded-md"
+                        onClick={async () => {
+                          try {
+                            await authAPI.logout();
+                            if (typeof window !== 'undefined') {
+                              window.location.href = '/logout';
+                            }
+                          } catch (error) {
+                            console.error('Logout failed:', error);
+                          }
+                        }}
+                      >
+                        Ha, chiqaman
+                      </button>
+
+                      <button
+                        className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium py-2 px-5 rounded-md"
+                        onClick={() => {
+                          window.location.href = '/';
+                        }}
+                      >
+                        Yo‘q, qolaman
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+                {/* Preferences Tab */}
+                {activeTab === 'preferences' && (
+                  <div className="tab-content active">
+                    <div className="content-header">
+                      <h3 className="content-title">Preferences</h3>
+                      <p className="content-description">Customize your experience and app settings</p>
+                    </div>
+
+                    {/* Location Settings */}
+                    <div className="form-section">
+                      <h4 className="section-title">
+                        <div className="section-icon">
+                          <i className="fas fa-map-marker-alt"></i>
+                        </div>
+                        Location Settings
+                      </h4>
+
+                      <div className="form-group">
+                        <label>Country</label>
+                        <select
+                          value={settings.country}
+                          onChange={(e) => handleSettingChange('country', '', e.target.value)}
+                        >
+                          <option value="uz">Uzbekistan</option>
+                          <option value="us">United States</option>
+                          <option value="ru">Russia</option>
+                          <option value="kz">Kazakhstan</option>
+                          <option value="kg">Kyrgyzstan</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Region/State</label>
+                        <select
+                          value={settings.region}
+                          onChange={(e) => handleSettingChange('region', '', e.target.value)}
+                        >
+                          <option value="tashkent">Tashkent</option>
+                          <option value="samarkand">Samarkand</option>
+                          <option value="bukhara">Bukhara</option>
+                          <option value="fergana">Fergana</option>
+                          <option value="andijan">Andijan</option>
+                          <option value="namangan">Namangan</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>City</label>
+                        <select
+                          value={settings.city}
+                          onChange={(e) => handleSettingChange('city', '', e.target.value)}
+                        >
+                          <option value="tashkent-city">Tashkent City</option>
+                          <option value="chirchiq">Chirchiq</option>
+                          <option value="angren">Angren</option>
+                          <option value="bekabad">Bekabad</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>District/Village</label>
+                        <input
+                          type="text"
+                          value={settings.district}
+                          onChange={(e) => handleSettingChange('district', '', e.target.value)}
+                          placeholder="Enter your district or village"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Language & Appearance */}
+                    <div className="form-section">
+                      <h4 className="section-title">
+                        <div className="section-icon">
+                          <i className="fas fa-palette"></i>
+                        </div>
+                        Appearance & Language
+                      </h4>
+
+                      <div className="form-group">
+                        <label>Language</label>
+                        <div className="language-selector">
+                          {[
+                            { code: 'uz', flag: '🇺🇿', name: "O'zbek" },
+                            { code: 'en', flag: '🇺🇸', name: 'English' },
+                            { code: 'ru', flag: '🇷🇺', name: 'Русский' }
+                          ].map(lang => (
+                            <button
+                              key={lang.code}
+                              className={`language-btn ${settings.language === lang.code ? 'active' : ''}`}
+                              onClick={() => handleSettingChange('language', '', lang.code)}
+                            >
+                              <div className="flag-icon">{lang.flag}</div>
+                              <span>{lang.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Theme</label>
+                        <div className="theme-selector">
+                          {[
+                            { code: 'light', icon: 'fas fa-sun', name: 'Light' },
+                            { code: 'dark', icon: 'fas fa-moon', name: 'Dark' },
+                            { code: 'auto', icon: 'fas fa-adjust', name: 'Auto' }
+                          ].map(theme => (
+                            <button
+                              key={theme.code}
+                              className={`theme-btn ${settings.theme === theme.code ? 'active' : ''}`}
+                              onClick={() => handleSettingChange('theme', '', theme.code)}
+                            >
+                              <i className={theme.icon}></i>
+                              <span>{theme.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Notifications
+            <div className="form-section">
+              <h4 className="section-title">
+                <div className="section-icon">
+                  <i className="fas fa-bell"></i>
+                </div>
+                Notifications
+              </h4>
+              
+              {[
+                { key: 'push', title: 'Push Notifications', desc: 'Receive notifications about new tests and updates' },
+                { key: 'email', title: 'Email Notifications', desc: 'Get weekly summaries and important updates via email' },
+                { key: 'sound', title: 'Sound Effects', desc: 'Play sounds for interactions and notifications' }
+              ].map(notif => (
+                <div key={notif.key} className="notification-item">
+                  <div className="notification-info">
+                    <h5>{notif.title}</h5>
+                    <p>{notif.desc}</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.notifications[notif.key]}
+                      onChange={(e) => handleSettingChange('notifications', notif.key, e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+              ))}
+            </div> */}
+
+                    {/* Privacy */}
+                    {/* <div className="form-section">
+              <h4 className="section-title">
+                <div className="section-icon">
+                  <i className="fas fa-shield-alt"></i>
+                </div>
+                Privacy & Security
+              </h4>
+              
+              {[
+                { key: 'publicProfile', title: 'Public Profile', desc: 'Allow others to view your profile and statistics' },
+                { key: 'showOnlineStatus', title: 'Show Online Status', desc: 'Display when you\'re online to other users' }
+              ].map(privacy => (
+                <div key={privacy.key} className="notification-item">
+                  <div className="notification-info">
+                    <h5>{privacy.title}</h5>
+                    <p>{privacy.desc}</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.privacy[privacy.key]}
+                      onChange={(e) => handleSettingChange('privacy', privacy.key, e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+              ))}
+            </div> */}
+
+                    <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end' }}>
+                      <button className="btn btn-outline">
+                        <i className="fas fa-undo"></i>
+                        Reset
+                      </button>
+                      <button className="btn btn-primary">
+                        <i className="fas fa-save"></i>
+                        Save Preferences
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+
 
       {/* Loading Overlay */}
       {isLoading && (
@@ -1275,3 +1374,5 @@ const ProfilePage = () => {
 };
 
 export default ProfilePage;
+
+

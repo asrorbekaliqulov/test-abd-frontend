@@ -107,7 +107,6 @@ export const passwordResetAPI = {
   sendResetCode: async (contact: string, method: 'email' | 'sms') => {
     // Simulate API call - replace with real endpoint when available
     await new Promise(resolve => setTimeout(resolve, 2000));
-    console.log(`Reset code sent via ${method} to:`, contact);
     return { success: true };
   }
 };
@@ -119,9 +118,9 @@ export const checkUsername = async (username: string) => {
 };
 
 export const userProfile = async (username: string) => {
-  const response = await publicApi.get(`/accounts/profile/${username}`);
-  const data = await response.data;
-  return data;
+  const response = await api.get(`/accounts/profile/${username}`);
+  const { user, stats } = response.data;
+  return { user, stats };
 };
 
 
@@ -233,9 +232,20 @@ export const quizAPI = {
   fetchRecommendedTests: (pageNum: number) => api.get(`/quiz/recommended/?page=${pageNum}`),
 };
 
+interface FollowUser {
+  id: number;
+  username: string;
+  profile_image: string | null;
+}
+
+interface FollowDataResponse {
+  followers: FollowUser[];
+  following: FollowUser[];
+}
+
 // Accounts API
 export const accountsAPI = {
-  getUserFollowData: (userId: number) =>
+  getUserFollowData: (userId: number): Promise<FollowDataResponse> =>
     api.get(`/accounts/followers/${userId}/`),
 
   toggleFollow: (userId: number) =>

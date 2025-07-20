@@ -258,6 +258,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
               >
                 {/* Header */}
                 <div className="flex justify-between items-start mb-4">
+                  <a href={`profile/${quiz.user.username}`}>
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
                       {quiz.user.profile_image ? (
@@ -266,13 +267,14 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                         <span className="text-lg font-bold">{quiz.user.username.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
+                    
                     <div>
                       <div className="flex items-center space-x-1">
                         <span className="font-semibold text-sm">{quiz.user.username}</span>
                         {quiz.user.is_badged && <CheckCircle size={16} className="text-blue-500" />}
                       </div>
                     </div>
-                  </div>
+                  </div></a>
                   <div
                     className={`px-3 py-1 rounded-full text-xs font-medium ${getDifficultyColor(
                       quiz.difficulty_percentage

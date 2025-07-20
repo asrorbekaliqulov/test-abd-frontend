@@ -6,21 +6,15 @@ import {
   Crown, 
   Calendar,
   Trophy,
-  Target,
-  Clock,
-  Users,
   UserPlus,
   UserMinus,
   ChevronRight,
   X,
-  Star,
   Award,
   Zap,
   CheckCircle,
   TrendingUp,
   BookOpen,
-  Brain,
-  Medal
 } from 'lucide-react';
 
 interface ProfilePageProps {

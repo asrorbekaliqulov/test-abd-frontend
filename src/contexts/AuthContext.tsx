@@ -95,7 +95,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string): Promise<void> => {
     try {
-      console.log(username, password)
       const response = await authAPI.login(username, password);
       const { access, refresh } = response.data;
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { ProfileHeader } from './ProfileHeader';
 import { TestCard } from './TestCard';
 import { QuestionCard } from './QuestionCard';
@@ -9,26 +10,29 @@ import { QuestionDetailModal } from './QuestionDetailModal';
 import { TikTokStyleTest } from './TikTokStyleTest';
 import { BookOpen, HelpCircle, Users, UserCheck } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+import ProfilePage from '../ProfilePage';
+import BottomNavigation from '../BottomNavigation';
 import { userProfile, accountsAPI } from '../../utils/api'
+import { useAuth } from '../../contexts/AuthContext';
 
 export interface User {
     id: number;
     username: string;
-    firstName: string;
-    lastName: string;
+    first_name: string;
+    last_name: string;
     bio: string;
-    profileImage: string;
-    followersCount: number;
-    followingCount: number;
-    isFollowing: boolean;
+    profile_image: string;
+    followers_count: number;
+    following_count: number;
+    is_following: boolean;
     level: string;
-    joinDate: string;
+    join_date: string;
 }
 
 export interface UserStats {
-    totalTests: number;
-    correctAnswers: number;
-    wrongAnswers: number;
+    total_tests: number;
+    correct_answers: number;
+    wrong_answers: number;
     accuracy: number;
 }
 
@@ -56,14 +60,14 @@ export interface Question {
     answers: number;
 }
 
-export interface Follower {
+interface FollowUser {
     id: number;
     username: string;
-    firstName: string;
-    lastName: string;
-    profileImage: string;
-    isFollowing: boolean;
+    profile_image: string | null;
 }
+
+
+  
 
 export interface TestQuestion {
     id: number;
@@ -174,9 +178,46 @@ const mockQuestions: Question[] = [
     }
 ];
 
+export const OtherUserProfilePage: React.FC = () => {
+    const [currentPage, setCurrentPage] = useState('home');
+    const { username } = useParams();
+    const { user } = useAuth();
+    const handlePageChange = (page: string) => {
+        if (currentPage === 'quiz' && page === 'quiz') {
+            setCurrentPage('create');
+        } else if (currentPage === 'create' && page === 'quiz') {
+            setCurrentPage('quiz');
+        } else {
+            setCurrentPage(page);
+        }
+      };
+
+    // Username yo‘q bo‘lsa - redirect
+    if (!username) return <Navigate to="/" />;
+
+    // Bu useEffect faqat bir marta yoki user/username o‘zgarsa ishlaydi
+    useEffect(() => {
+        if (user && username === user.username) {
+            setCurrentPage('profile');
+        }
+    }, [user, username]);
+
+    // O‘z profiling bo‘lsa to‘g‘ridan-to‘g‘ri ProfilePage
+    if (user && username === user.username) {
+        return <ProfilePage />;
+    }
+
+    return (
+        <>
+            <UserProfilePage />
+            <BottomNavigation currentPage={currentPage} onPageChange={handlePageChange} />
+        </>
+    );
+};
 
 export const UserProfilePage: React.FC = () => {
     const { username } = useParams<{ username: string }>();
+
     const [activeTab, setActiveTab] = useState<'tests' | 'questions'>('tests');
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [showFollowingModal, setShowFollowingModal] = useState(false);
@@ -186,26 +227,32 @@ export const UserProfilePage: React.FC = () => {
     const [showTikTokTest, setShowTikTokTest] = useState(false);
     const [selectedTest, setSelectedTest] = useState<Test | null>(null);
     const [selectedQuestion, setSelectedQuestion] = useState<TestQuestion | null>(null);
-    const [followers, setFollowers] = useState();
-    const [following, setFollowing] = useState();
+    const [followers, setFollowers] = useState<FollowUser[]>([]);
+    const [following, setFollowing] = useState<FollowUser[]>([]);
+    console.log(`UserProfilePagedagi followers:`, followers)
+    console.log(`UserProfilePagedagi following:`, following)
     const [user, setUser] = useState<User | null>(null);
+    console.log(`USER:`, user)
     const [stats, setStats] = useState<UserStats | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const { user, stats } = await userProfile(username || "asrorbek");
-                console.log(`USER DATA: ${user}`)
-                console.log(`STATS INFO: ${stats}`)
+                console.log(`ProfilePagedagi USER:`, user)
                 setUser(user);
                 setStats(stats);
             } catch (error) {
                 console.error('Profil ma’lumotlarini olishda xatolik:', error);
+            } finally {
+                setLoading(false); // har holda loading false bo‘lsin
             }
         };
 
         fetchData();
     }, [username]);
+    
 
     const handleFollow = async () => {
         if (!user) return; // Null check
@@ -215,10 +262,10 @@ export const UserProfilePage: React.FC = () => {
             if (!prev) return prev; // null bo‘lsa o‘zgarishsiz qaytar
             return {
                 ...prev,
-                isFollowing: !prev.isFollowing,
-                followersCount: prev.isFollowing
-                    ? prev.followersCount - 1
-                    : prev.followersCount + 1,
+                is_following: !prev.is_following,
+                followers_count: prev.is_following
+                    ? prev.followers_count - 1
+                    : prev.followers_count + 1,
             };
         });
 
@@ -232,21 +279,39 @@ export const UserProfilePage: React.FC = () => {
                 if (!prev) return prev;
                 return {
                     ...prev,
-                    isFollowing: !prev.isFollowing,
-                    followersCount: prev.isFollowing
-                        ? prev.followersCount - 1
-                        : prev.followersCount + 1,
+                    is_following: !prev.is_following,
+                    followers_count: prev.is_following
+                        ? prev.followers_count - 1
+                        : prev.followers_count + 1,
                 };
             });
         }
     };
       
+    useEffect(() => {
+        const fetchFollowers = async () => {
+            if (!user) return; // Null check to prevent error
+            try {
+                const followersData = await accountsAPI.getUserFollowData(user.id);
+                console.log(`Followers data:`, followersData);
+                setFollowers(followersData.data.followers);
+                setFollowing(followersData.data.following);
+            } catch (error) {
+                console.error('Failed to fetch followers:', error);
+            }
+        };
+
+
+        fetchFollowers();
+    }, [user]);
+      
+
 
     const handleShare = () => {
         if (navigator.share) {
             navigator.share({
-                title: `${user?.firstName} ${user?.lastName}'s Profile`,
-                text: `Check out ${user?.firstName}'s profile on our platform!`,
+                title: `${user?.first_name} ${user?.last_name}'s Profile`,
+                text: `Check out ${user?.first_name}'s profile on our platform!`,
                 url: window.location.href,
             });
         } else {
@@ -293,9 +358,12 @@ export const UserProfilePage: React.FC = () => {
         setShowQuestionDetailModal(false);
         setShowQuestionsListModal(true);
     };
+    if (loading || !user || !stats) {
+        return <div className="text-center py-10 text-gray-600">Loading profile...</div>;
+    }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 ">
             <div className="max-w-6xl mx-auto px-4 py-8">
                 <ProfileHeader
                     user={user}
@@ -312,14 +380,14 @@ export const UserProfilePage: React.FC = () => {
                             className="flex items-center px-6 py-3 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
                         >
                             <Users className="w-5 h-5 mr-2" />
-                            View Followers ({user?.followersCount})
+                            View Followers ({user?.followers_count})
                         </button>
                         <button
                             onClick={() => setShowFollowingModal(true)}
                             className="flex items-center px-6 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
                         >
                             <UserCheck className="w-5 h-5 mr-2" />
-                            View Following ({user?.followingCount})
+                            View Following ({user?.following_count})
                         </button>
                     </div>
                 </div>
@@ -375,7 +443,6 @@ export const UserProfilePage: React.FC = () => {
                 onClose={() => setShowFollowersModal(false)}
                 title="Followers"
                 followers={followers}
-                onFollowToggle={handleFollow}
             />
 
             <FollowersModal
@@ -383,7 +450,6 @@ export const UserProfilePage: React.FC = () => {
                 onClose={() => setShowFollowingModal(false)}
                 title="Following"
                 followers={following}
-                onFollowToggle={handleFollow}
             />
 
             <TestModal

@@ -35,7 +35,6 @@ const ForgotPasswordPage: React.FC = () => {
       await passwordResetAPI.sendResetCode(contact, method);
       setStep(2);
       setResendTimer(60);
-      console.log(`Code sent via ${method} to:`, contact);
     } catch (err) {
       setError('Kod yuborishda xatolik yuz berdi. Qaytadan urinib ko\'ring.');
     } finally {

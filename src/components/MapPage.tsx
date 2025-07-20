@@ -21,7 +21,7 @@ const topUsers = [
   // Country level (National Champions)
   {
     id: 'country-1',
-    name: 'Asrorbek Abdullayev',
+    name: 'Asrorbek Aliqulov',
     lat: 41.3775,
     lng: 64.5853,
     level: 'country',

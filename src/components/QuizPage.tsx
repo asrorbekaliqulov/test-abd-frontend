@@ -167,7 +167,6 @@ const QuizPage: React.FC<QuizPageProps> = ({}) => {
           const selectedAnswer = userInteractions.selectedAnswers.get(quiz.id);
           const isFollowing = userInteractions.follows.has(quiz.user.username);
           const isSaved = userInteractions.saves.has(quiz.id);
-          console.log(quiz.round_image)
 
           return (
             <div key={quiz.id} className="h-screen snap-start flex justify-center items-center relative">

@@ -31,7 +31,6 @@ interface Question {
 
 const QuestionPage: React.FC = () => {
     const { id } = useParams();
-    console.log("Savol ID:", id);
     const [question, setQuestion] = useState<Question | null>(null);
     const [selectedAnswerId, setSelectedAnswerId] = useState<number | null>(null);
 
@@ -39,7 +38,6 @@ const QuestionPage: React.FC = () => {
         if (id) {
             quizAPI.fetchQuestionById(id)
                 .then(res => {
-                    console.log("Savol ma'lumotlari:", res.data);
                     setQuestion(res.data);
                 })
                 .catch(err => {

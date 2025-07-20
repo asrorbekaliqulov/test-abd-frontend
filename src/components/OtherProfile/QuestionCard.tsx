@@ -3,7 +3,7 @@ import React from 'react';
 import { Heart, MessageCircle, Calendar, Tag } from 'lucide-react';
 
 export interface Question {
-    id: string;
+    id: number;
     title: string;
     description: string;
     difficulty: 'Easy' | 'Medium' | 'Hard';

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import {
-  Edit, Crown, Target, DollarSign, Globe, LogOut, X
-} from 'lucide-react';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+
 
 import { useAuth } from './contexts/AuthContext';
 
@@ -23,7 +21,12 @@ import ProfilePage from './components/ProfilePage';
 import QuestionPage from './components/QuestionPgaes';
 import EmailVerificationPage from './components/auth/EmailVerificationPgae';
 import CompleteProfilePage from './components/auth/CompleteProfilePgae';
-import {UserProfilePage} from './components/OtherProfile/OtherUserProfilePage'
+import { OtherUserProfilePage } from './components/OtherProfile/OtherUserProfilePage'
+import LogoutPage from './components/auth/LogOutPage';
+
+// interface ProfilePageProps {
+//   onShowSettings: () => void;
+// }
 
 const AppContent: React.FC = () => {
   const { loading } = useAuth();
@@ -88,6 +91,7 @@ const AppContent: React.FC = () => {
     }
   ];
 
+
   return (
     <div className="min-h-screen bg-theme-secondary transition-theme-normal">
       {/* Pages */}
@@ -97,54 +101,13 @@ const AppContent: React.FC = () => {
       {currentPage === 'create' && <CreatePage onNavigate={handlePageChange} />}
       {currentPage === 'map' && <MapPage theme={theme} />}
       {currentPage === 'profile' && <ProfilePage onShowSettings={() => setShowSettings(true)} />}
+      {/* {currentPage === 'logout' && } */}
 
       {/* Bottom Navigation */}
       <BottomNavigation currentPage={currentPage} onPageChange={handlePageChange} />
 
       {/* Modals */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex border-b border-theme-primary">
-              <div className="w-1/4 bg-theme-secondary p-6 space-y-2">
-                {[
-                  { id: 'profile', label: 'Edit profile', icon: Edit },
-                  { id: 'premium', label: 'Premium', icon: Crown },
-                  { id: 'ads', label: 'Advertisement', icon: Target },
-                  { id: 'monetization', label: 'Monetization', icon: DollarSign },
-                  { id: 'preferences', label: 'Language', icon: Globe },
-                  { id: 'logout', label: 'Logout', icon: LogOut }
-                ].map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-theme-normal ${activeTab === item.id
-                        ? 'bg-accent-primary text-white'
-                        : 'text-theme-secondary hover:bg-theme-tertiary'
-                      }`}
-                  >
-                    <item.icon size={20} />
-                    <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
 
-              <div className="flex-1 p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-theme-primary">Settings</h2>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
-                  >
-                    <X size={24} className="text-theme-secondary" />
-                  </button>
-                </div>
-                {/* Tab contents here */}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showTestCreator && (
         <TestCreator theme={theme} onClose={() => setShowTestCreator(false)} />
@@ -193,10 +156,11 @@ const App: React.FC = () => {
         path="/register"
         element={!isAuthenticated ? <RegisterPage /> : <Navigate to="/" replace />}
       />
-      <Route path="/profile/:username" element={<UserProfilePage />} />
+      <Route path="/profile/:username" element={<OtherUserProfilePage />} />
       <Route path="/verify-email/:token" element={<EmailVerificationPage />} />
       <Route path="/complete-profile" element={<CompleteProfilePage />} />
       <Route path="/questions/:id" element={<QuestionPage />} />
+      <Route path="/logout" element={<LogoutPage  />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/admin" element={<ProtectedRoute><AdminPanel theme="light" /></ProtectedRoute>} />
       <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />

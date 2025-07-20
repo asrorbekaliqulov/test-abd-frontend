@@ -168,7 +168,6 @@ const RegisterPage: React.FC = () => {
         return;
       }
       if (passwordStrength < 75){
-        console.log(passwordStrength)
         setError("Ushbu parol juda kuchsiz boshqasini yarating");
         return;
       }
@@ -195,11 +194,8 @@ const RegisterPage: React.FC = () => {
         // if (verificationToken !== undefined) {
         //   data.verification_token = verificationToken;
         // }
-        console.log('Registering with data:', data);
         const res = await authAPI.register(data);
-        console.log(res)
         setEmailSent(true);
-        console.log('Registration email sent to:', formData.email);
       } catch (err: any) {
         setError(err.response?.message || 'Ro\'yxatdan o\'tishda xatolik yuz berdi');
       } finally {
@@ -396,7 +392,6 @@ const RegisterPage: React.FC = () => {
                 <button
                   onClick={() => {
                     // Resend email logic here
-                    console.log('Resending email...');
                   }}
                   className="text-blue-600 hover:text-blue-700 font-medium"
                 >
