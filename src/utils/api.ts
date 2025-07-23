@@ -1,6 +1,11 @@
 import axios from 'axios';
+import { useState } from 'react';
 
-const API_BASE_URL = 'https://backend.testabd.uz';
+const API_BASE_URL = 'http://backend.testabd.uz';
+
+
+
+
 
 // Public API (auth oldidan ishlatiladigan)
 const publicApi = axios.create({
@@ -124,6 +129,39 @@ export const userProfile = async (username: string) => {
 };
 
 
+interface SearchParams {
+  query?: string
+  type?: "test" | "question" | "user"
+  category?: number
+  period?: "day" | "week" | "month" | "year" | "all"
+  sort_by?: string
+}
+
+export function useSearch() {
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const search = async (params: SearchParams = {}) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await api.get("accounts/search/", {
+        params,
+      })
+      setData(response.data)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Qidiruvda xatolik yuz berdi")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return { search, loading, data, error }
+}
+
+
+
 // Auth API
 export const authAPI = {
   login: (username: string, password: string) =>
@@ -199,11 +237,18 @@ export const quizAPI = {
   fetchQuestionById: (id: number) => api.get(`/quiz/questions/${id}/`),
   createQuestion: (data: any) => api.post('/quiz/questions/', data),
 
+
   submitAnswers: (answers: {
-    question_id: number;
-    selected_answer_id: number;
+    question: number;
+    selected_answer_ids: number[];
     duration?: number;
-  }) => api.post('/quiz/submit-question-answer/', answers),
+  }) => api.post('/quiz/submit-answer/', answers),
+
+  submitTextAnswers: (answers: {
+    question: number;
+    written_answer: string;
+    duration?: number;
+  }) => api.post('/quiz/submit-answer/', answers),
 
   getQuestionAttempts: () => api.get('/quiz/question-attempts/'),
 

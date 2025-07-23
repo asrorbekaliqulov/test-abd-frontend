@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, FileText, HelpCircle, ArrowLeft } from 'lucide-react';
 import { quizAPI } from '../utils/api';
 import ProfilePage from './ProfilePage'
+import QuestionCreator from './create/QuestionCreator';
 
 interface CreatePageProps {
   onNavigate: (page: string) => void;
@@ -516,7 +517,9 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'test' && renderTestCreation()}
-        {activeTab === 'questions' && renderQuestionCreation()}
+        {activeTab === 'questions' && <QuestionCreator theme={''} onClose={function (): void {
+          throw new Error('Function not implemented.');
+        } }  />}
       </div>
     </div>
   );

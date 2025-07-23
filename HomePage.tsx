@@ -99,7 +99,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme, onShowStories }
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <img src="/logo.png" alt="TestAbd" className="h-8 w-8" />
+              <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8" />
               <h1 className="text-xl font-bold text-accent-primary">TestAbd</h1>
             </div>
             
@@ -214,15 +214,15 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme, onShowStories }
                   <div className="flex space-x-6">
                     <div className="flex items-center space-x-2 text-green-600">
                       <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">✓</span>
+                        <span className="text-white text-xs font-bold">T</span>
                       </div>
-                      <span className="font-semibold text-sm">{test.correct_attempts || 0}</span>
+                      <span className="font-semibold text-sm">{test.correct_count}</span>
                     </div>
                     <div className="flex items-center space-x-2 text-red-600">
                       <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
                         <span className="text-white text-xs font-bold">✗</span>
                       </div>
-                      <span className="font-semibold text-sm">{test.wrong_attempts || 0}</span>
+                      <span className="font-semibold text-sm">{test.wrong_attempts || 12}</span>
                     </div>
                   </div>
 

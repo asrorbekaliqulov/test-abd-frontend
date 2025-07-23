@@ -2,7 +2,7 @@ import React from 'react';
 import { Home, Search, Plus, MapPin, User } from 'lucide-react';
 
 const LogoImage: React.FC = () => (
-  <img src="/logo.png" alt="T" className="w-8 h-8 rounded-full" />
+  <img src="/logo.jpg" alt="T" className="w-8 h-8 rounded-full" />
 );
 
 interface BottomNavigationProps {
@@ -24,7 +24,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ currentPage, onPage
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-theme-primary border-t border-theme-primary z-50">
       <div className="max-w-2xl mx-auto px-4">
-        <div className="flex justify-around items-center py-2">
+        <div className="flex justify-around items-center py-0.8">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPage === item.id;

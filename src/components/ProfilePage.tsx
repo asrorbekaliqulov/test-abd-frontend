@@ -529,7 +529,7 @@ const ProfilePage = () => {
             
             <div className="logo">
               <div className="logo-icon">
-                <img src="/logo.png" alt="TestABd logo" />
+                <img src="/logo.jpg" alt="TestABd logo" />
               </div>
               <span className="logo-text">TestAbd</span>
             </div>
@@ -718,7 +718,7 @@ const ProfilePage = () => {
               <h3>Activity Overview</h3>
               <div className="activity-chart">
                 <div className="chart-header">
-                  <span>Sinovlar oxirgi 7 kun ichida yakunlandi</span>
+                  <span>Sinovlar hafta ichida yakunlandi</span>
                   <div className="chart-legend">
                     <div className="legend-item">
                       <div className="legend-color primary"></div>
