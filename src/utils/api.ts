@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'http://backend.testabd.uz';
+const API_BASE_URL = 'http://192.168.100.14:8000';
 
 
 
@@ -160,6 +160,55 @@ export function useSearch() {
   return { search, loading, data, error }
 }
 
+
+
+export interface UserLeaderboardData {
+  username: string
+  tests_solved: number
+  correct: number
+  wrong: number
+  average_time: number
+  level: string
+  location: string
+  lat: number
+  lng: number
+  level_type: string
+  profile_image?: string
+}
+
+export interface LeaderboardFilters {
+  level?: string
+  date?: string
+  level_type?: string
+  location?: string
+}
+
+export const leaderboardApi = {
+  async getLeaderboardData(filters: LeaderboardFilters = {}): Promise<UserLeaderboardData[]> {
+    try {
+      const queryParams = new URLSearchParams()
+  
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) {
+          queryParams.append(key, value)
+        }
+      })
+  
+      const url = `${API_BASE_URL}/accounts/leaderboard/?${queryParams.toString()}`
+      const response = await api.get(url)
+  
+      const data = response.data
+      return data.results || data
+    } catch (error) {
+      console.error("Error fetching leaderboard data:", error)
+      throw error
+    }
+  }
+  
+
+}
+
+     
 
 
 // Auth API

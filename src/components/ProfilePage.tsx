@@ -1,183 +1,181 @@
-import { useState, useEffect, SetStateAction } from 'react';
-import './ProfilePage.css';
-import { 
-    Settings,
-    Shield, 
-    Crown, 
-    Calendar,
-    UserPlus,
-    Cog,
-    UserMinus,
-    User,
-    X,
-    Zap,
-  } from 'lucide-react';
-import {
-  Edit, Target, DollarSign, Globe, LogOut
-} from 'lucide-react';
-  import { quizAPI, authAPI, accountsAPI } from '../utils/api';
+"use client"
 
-// types.ts yoki ProfilePage.tsx ichida yuqoriga yozing
+import type React from "react"
 
+import { useState, useEffect, type SetStateAction } from "react"
+import { Settings, Shield, Crown, Calendar, UserPlus, Cog, UserMinus, User, Zap, BarChart3, Edit, Upload, Moon, Sun, X } from 'lucide-react'
+import { LogOut } from 'lucide-react'
+import { quizAPI, authAPI, accountsAPI } from "../utils/api"
+
+// Types
 export interface Country {
-    id: number;
-    name: string;
-    code: string;
+  id: number
+  name: string
+  code: string
 }
+
 export interface Region {
-    id: number;
-    name: string;
-    country_id: number;
+  id: number
+  name: string
+  country_id: number
 }
+
 export interface District {
-    id: number;
-    name: string;
-    region_id: number;
+  id: number
+  name: string
+  region_id: number
 }
+
 export interface Settlement {
-    id: number;
-    name: string;
-    district_id: number;
+  id: number
+  name: string
+  district_id: number
 }
 
 export interface UserType {
-    id: number;
-    username: string;
-    profile_image: string | null;
-    // tests_count?: number;
-    // level?: string;
-    following?: boolean; // foydalanuvchi men bilan o'zaro follow qilganmi?
+  id: number
+  username: string
+  profile_image: string | null
+  following?: boolean
 }
 
 interface UserData {
-    id: number;
-    last_login: string;
-    is_superuser: boolean;
-    username: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    is_staff: boolean;
-    date_joined: string;
-    profile_image: string;
-    bio: string;
-    phone_number: string;
-    created_at: string;
-    is_active: boolean;
-    role: string;
-    is_premium: boolean;
-    is_badged: boolean;
-    join_date: string;
-    level: string;
-    tests_solved: number;
-    correct_count: number;
-    wrong_count: number;
-    average_time: number;
-    country: number;
-    region: number;
-    district: number;
-    settlement: number;
-    streak_day: number;
-    streak_days: number;
-
-    weekly_test_count: {
-      Dush: number;
-      Sesh: number;
-      Chor: number;
-      Pay: number;
-      Jum: number;
-      Shan: number;
-      Yak: number;
-      };
-    groups: number[];
-    user_permissions: number[];
-    categories_of_interest: number[];
-
+  id: number
+  last_login: string
+  is_superuser: boolean
+  username: string
+  first_name: string
+  last_name: string
+  email: string
+  is_staff: boolean
+  date_joined: string
+  profile_image: string
+  bio: string
+  phone_number: string
+  created_at: string
+  is_active: boolean
+  role: string
+  is_premium: boolean
+  is_badged: boolean
+  join_date: string
+  level: string
+  tests_solved: number
+  correct_count: number
+  wrong_count: number
+  average_time: number
+  country: number
+  region: number
+  district: number
+  settlement: number
+  streak_day: number
+  streak_days: number
+  weekly_test_count: {
+    Dush: number
+    Sesh: number
+    Chor: number
+    Pay: number
+    Jum: number
+    Shan: number
+    Yak: number
+  }
+  groups: number[]
+  user_permissions: number[]
+  categories_of_interest: number[]
 }
 
 interface UserFollowData {
-    followers: UserType[];
-    following: UserType[];
+  followers: UserType[]
+  following: UserType[]
 }
 
 interface UserSettings {
-    country: string;
-    region: string;
-    city: string;
-    district: string;
-    language: string;
-    theme: string;
-    notifications: {
-        push: boolean;
-        email: boolean;
-        sound: boolean;
-    };
-    privacy: {
-        publicProfile: boolean;
-        showOnlineStatus: boolean;
-    };
-    monetization: boolean;
+  country: number
+  region: number
+  district: number
+  settlement: number
+  language: string
+  theme: string
+  notifications: {
+    push: boolean
+    email: boolean
+    sound: boolean
+  }
+  privacy: {
+    publicProfile: boolean
+    showOnlineStatus: boolean
+  }
+  monetization: boolean
 }
 
 interface MyTests {
-    id: number;
-    title: string;
-    description: string;
-    total_questions: number;
-    completions: number;
-    rating: number;
-    status: 'published' | 'draft';
-    category: {
-        id: number;
-        title: string;
-        slug: string;
-        emoji: string;
-    };
+  id: number
+  title: string
+  description: string
+  total_questions: number
+  completions: number
+  rating: number
+  status: "published" | "draft"
+  created_at: string
+  updated_at: string
+  is_public: boolean
+  time_limit: number
+  category: {
+    id: number
+    title: string
+    slug: string
+    emoji: string
+  }
 }
+
 export interface RecentQuestion {
-  id: number;
-  question: string;
-  test_title: string;
-  type: string;
-  difficulty: string;
-  category: null; // API da hozircha yo‘q
-  answers: number;
-  correctRate: number;
+  id: number
+  question: string
+  test_title: string
+  type: string
+  difficulty: string
+  category: null
+  answers: number
+  correctRate: number
+  created_at: string
+  updated_at: string
+  is_active: boolean
 }
 
+// Toast Component
+const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose()
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [onClose])
 
-
-
-interface QuestionCardProps {
-  question: RecentQuestion;
+  return (
+    <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${type === 'success'
+        ? 'bg-green-500 text-white'
+        : 'bg-red-500 text-white'
+      } animate-slide-in`}>
+      <div className="flex items-center justify-between">
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-4 text-white hover:text-gray-200">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  )
 }
-
-interface StatCardProps {
-  icon: string;
-  number: string | number;
-  label: string;
-  change?: {
-    type: 'positive' | 'negative';
-  };
-  type?: 'primary' | 'success' | 'danger' | 'warning'; // optional class variation
-}
-
-interface TestCardProps {
-  test: MyTests;
-}
-
 
 const ProfilePage = () => {
-  const [mestats, setMestats] = useState<UserData | null>(null);
-  const [myTests, setMyTests] = useState<MyTests[]>([]);
-  const [recentQuestions, setRecentQuestions] = useState<RecentQuestion[]>([]);
+  const [mestats, setMestats] = useState<UserData | null>(null)
+  const [myTests, setMyTests] = useState<MyTests[]>([])
+  const [recentQuestions, setRecentQuestions] = useState<RecentQuestion[]>([])
   const [settings, setSettings] = useState<UserSettings>({
-    country: '',
-    region: '',
-    city: '',
-    district: '',
-    language: 'uz',
-    theme: 'light',
+    country: 0,
+    region: 0,
+    district: 0,
+    settlement: 0,
+    language: "uz",
+    theme: "light",
     notifications: {
       push: true,
       email: true,
@@ -188,1191 +186,1616 @@ const ProfilePage = () => {
       showOnlineStatus: true,
     },
     monetization: false,
-  });
-  const [follow, setFollow] = useState<UserFollowData | null>(null);
-  const [showFollowers, setShowFollowers] = useState(false);
-  const [showFollowing, setShowFollowing] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  
-  // const [loadingFollowData, setLoadingFollowData] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
-  
+  })
+  const [follow, setFollow] = useState<UserFollowData | null>(null)
+  const [showFollowers, setShowFollowers] = useState(false)
+  const [showFollowing, setShowFollowing] = useState(false)
+
+  // Location data states
+  const [countries, setCountries] = useState<Country[]>([])
+  const [regions, setRegions] = useState<Region[]>([])
+  const [districts, setDistricts] = useState<District[]>([])
+  const [settlements, setSettlements] = useState<Settlement[]>([])
+
+  const [loadingFollowData, setLoadingFollowData] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState("profile")
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [imageUploading, setImageUploading] = useState(false)
+
+  // Modal states
+  const [selectedTest, setSelectedTest] = useState<MyTests | null>(null)
+  const [selectedQuestion, setSelectedQuestion] = useState<RecentQuestion | null>(null)
+  const [editingTest, setEditingTest] = useState<MyTests | null>(null)
+  const [editingQuestion, setEditingQuestion] = useState<RecentQuestion | null>(null)
+  const [showTestAnalytics, setShowTestAnalytics] = useState(false)
+  const [showQuestionAnalytics, setShowQuestionAnalytics] = useState(false)
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(false)
+
+  // Initialize theme
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme")
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+
+    const shouldBeDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark)
+
+    setIsDarkMode(shouldBeDark)
+    document.documentElement.setAttribute("data-theme", shouldBeDark ? "dark" : "light")
+    setSettings(prev => ({ ...prev, theme: shouldBeDark ? "dark" : "light" }))
+  }, [])
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode
+    setIsDarkMode(newMode)
+    const theme = newMode ? "dark" : "light"
+
+    document.documentElement.setAttribute("data-theme", theme)
+    localStorage.setItem("theme", theme)
+    setSettings(prev => ({ ...prev, theme }))
+  }
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+  }
+
   // PROFILE MALUMOTLARINI OLISH
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await authAPI.getMe();
-        setMestats(res.data);
+        const res = await authAPI.getMe()
+        setMestats(res.data)
+        setSettings((prev) => ({
+          ...prev,
+          country: res.data.country || 0,
+          region: res.data.region || 0,
+          district: res.data.district || 0,
+          settlement: res.data.settlement || 0,
+        }))
       } catch (err) {
-        console.error("Profil ma'lumotlarini olishda xatolik:", err);
+        console.error("Profil ma'lumotlarini olishda xatolik:", err)
+        showToast("Profil ma'lumotlarini olishda xatolik yuz berdi", "error")
       }
-    };
-    fetchProfile();
-  }, []);
-  
+    }
+    fetchProfile()
+  }, [])
+
   // MY TESTS OLISH
   useEffect(() => {
     const fetchTests = async () => {
       try {
-        const res = await quizAPI.fetchMyTest();
-        setMyTests(res.data);
+        const res = await quizAPI.fetchMyTest()
+        setMyTests(res.data)
       } catch (err) {
-        console.error("MyTests olishda xatolik:", err);
+        console.error("MyTests olishda xatolik:", err)
       }
-    };
-    fetchTests();
-  }, []);
-  
+    }
+    fetchTests()
+  }, [])
 
   // FOLLOW DATA OLISH
-  // useEffect(() => {
-  //   if ((showFollowers || showFollowing) && mestats?.id) {
-  //     setLoadingFollowData(true);
-  //     accountsAPI.getUserFollowData(mestats.id)
-  //       .then((res) => {
-  //         setFollow({
-  //           followers: res.data.followers,
-  //           following: res.data.following,
-  //         });
-  //       })
-  //       .catch(console.error)
-  //       .finally(() => setLoadingFollowData(false));
-  //   }
-  // }, [showFollowers, showFollowing, mestats?.id]);
-  
-  const activityData: number[] = Object.values(mestats?.weekly_test_count || {}) as number[];
-
-
-  const handleFollow = (userId: number) => {
-    accountsAPI.toggleFollow(userId).then(() => {
-      if (mestats?.id) {
-        accountsAPI.getUserFollowData(mestats.id)
-          .then((res) => {
-            setFollow({
-              followers: res.data.followers,
-              following: res.data.following,
-            });
-          });
-      }
-    });
-  };
-  
   useEffect(() => {
-    const maxValue = Math.max(...activityData);
+    const fetchFollowData = async () => {
+      if (mestats?.id) {
+        setLoadingFollowData(true)
+        try {
+          const res = await accountsAPI.getUserFollowData(mestats.id)
+          setFollow({
+            followers: res.followers,
+            following: res.following,
+          })
+        } catch (error) {
+          console.error("Follow data olishda xatolik:", error)
+        } finally {
+          setLoadingFollowData(false)
+        }
+      }
+    }
+    fetchFollowData()
+  }, [mestats?.id])
 
-    const chartBars = document.querySelectorAll<HTMLElement>('.chart-bar');
-    chartBars.forEach((bar, index) => {
-      const barValue = activityData[index] || 0;
-      const heightPercent = maxValue ? (barValue / maxValue) * 100 : 0;
+  // LOCATION DATA OLISH
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const res = await authAPI.getCountry()
+        setCountries(res.data)
+      } catch (err) {
+        console.error("Countries olishda xatolik:", err)
+      }
+    }
+    fetchCountries()
+  }, [])
 
-      setTimeout(() => {
-        bar.style.height = `${heightPercent}%`;
-      }, index * 100);
-    });
-  }, [activityData]);
-  
+  useEffect(() => {
+    if (settings.country > 0) {
+      const fetchRegions = async () => {
+        try {
+          const res = await authAPI.getRegion(settings.country)
+          setRegions(res.data)
+        } catch (err) {
+          console.error("Regions olishda xatolik:", err)
+        }
+      }
+      fetchRegions()
+    }
+  }, [settings.country])
+
+  useEffect(() => {
+    if (settings.region > 0) {
+      const fetchDistricts = async () => {
+        try {
+          const res = await authAPI.getDistrict(settings.region)
+          setDistricts(res.data)
+        } catch (err) {
+          console.error("Districts olishda xatolik:", err)
+        }
+      }
+      fetchDistricts()
+    }
+  }, [settings.region])
+
+  useEffect(() => {
+    if (settings.district > 0) {
+      const fetchSettlements = async () => {
+        try {
+          const res = await authAPI.getSettlement(settings.district)
+          setSettlements(res.data)
+        } catch (err) {
+          console.error("Settlements olishda xatolik:", err)
+        }
+      }
+      fetchSettlements()
+    }
+  }, [settings.district])
+
+  const activityData: number[] = Object.values(mestats?.weekly_test_count || {}) as number[]
+
+  const handleFollow = async (userId: number) => {
+    try {
+      await accountsAPI.toggleFollow(userId)
+      if (mestats?.id) {
+        const res = await accountsAPI.getUserFollowData(mestats.id)
+        setFollow({
+          followers: res.followers,
+          following: res.following,
+        })
+      }
+    } catch (error) {
+      console.error("Follow toggle xatolik:", error)
+    }
+  }
+
   const convertToRecentQuestion = (q: any): RecentQuestion => ({
     id: q.id,
     question: q.question_text,
     type: q.question_type,
-    test_title: q.test_title || 'No Test',
-    difficulty:
-      q.difficulty_percentage < 33
-        ? 'Oson'
-        : q.difficulty_percentage < 66
-          ? "O'rtacha"
-          : 'Qiyin',
-    category: null, // backendda yo‘q, agar bo‘lsa q.category.name ishlatiladi
+    test_title: q.test_title || "No Test",
+    difficulty: q.difficulty_percentage < 33 ? "Oson" : q.difficulty_percentage < 66 ? "O'rtacha" : "Qiyin",
+    category: null,
     answers: q.answers?.length || 0,
     correctRate:
-      q.correct_count + q.wrong_count > 0
-        ? Math.round((q.correct_count / (q.correct_count + q.wrong_count)) * 100)
-        : 0,
-  });
-  
+      q.correct_count + q.wrong_count > 0 ? Math.round((q.correct_count / (q.correct_count + q.wrong_count)) * 100) : 0,
+    created_at: q.created_at,
+    updated_at: q.updated_at,
+    is_active: q.is_active,
+  })
+
   useEffect(() => {
     const fetchRecentQuestions = async () => {
       try {
-        const res = await quizAPI.fetchRecentQuestions();
-        const converted = res.data.map(convertToRecentQuestion);
-        setRecentQuestions(converted);
+        const res = await quizAPI.fetchRecentQuestions()
+        const converted = res.data.map(convertToRecentQuestion)
+        setRecentQuestions(converted)
       } catch (err) {
-        console.error("So'nggi savollarni olishda xatolik:", err);
+        console.error("So'nggi savollarni olishda xatolik:", err)
       }
-    };
-    fetchRecentQuestions();
-  }, []);
-  
-
-//   const formatDuration = (seconds: number) => {
-//     const mins = Math.floor(seconds / 60);
-//     const secs = seconds % 60;
-//     return `${mins}:${secs.toString().padStart(2, '0')}`;
-//   };
+    }
+    fetchRecentQuestions()
+  }, [])
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-    // useEffect(() => {
-    //     const fetchStats = async () => {
-    //         try {
-    //             const res = await quizAPI.fetchStatistics();
-    //             setStats(res.data);
-    //         } catch (err) {
-    //             console.error("Statistikani olishda xatolik:", err);
-    //         }
-    //     };
-    //     fetchStats();
-    // }, []);
-  
-
-//   const getDifficultyColor = (difficulty: string) => {
-//     switch (difficulty) {
-//       case 'easy': return 'bg-green-100 text-green-600 border-green-200';
-//       case 'medium': return 'bg-yellow-100 text-yellow-600 border-yellow-200';
-//       case 'hard': return 'bg-red-100 text-red-600 border-red-200';
-//       default: return 'bg-gray-100 text-gray-600 border-gray-200';
-//     }
-//   };
-
-//   const getScoreColor = (score: number) => {
-//     if (score >= 90) return 'text-green-500';
-//     if (score >= 70) return 'text-yellow-500';
-//     return 'text-red-500';
-//   };
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+  }
 
   const getLevelBadge = (level: string) => {
     const badges = {
-      beginner: { icon: '🔰', color: 'bg-green-100 text-green-800' },
-      intermediate: { icon: '⭐', color: 'bg-blue-100 text-blue-800' },
-      advanced: { icon: '🏆', color: 'bg-purple-100 text-purple-800' },
-      expert: { icon: '👑', color: 'bg-yellow-100 text-yellow-800' }
-    };
-    return badges[level as keyof typeof badges] || badges.beginner;
-  };
+      beginner: { icon: "🔰", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" },
+      intermediate: { icon: "⭐", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300" },
+      advanced: { icon: "🏆", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300" },
+      expert: { icon: "👑", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" },
+    }
+    return badges[level as keyof typeof badges] || badges.beginner
+  }
 
   const handleTabSwitch = (tabId: SetStateAction<string>) => {
-    setActiveTab(tabId);
-  };
+    setActiveTab(tabId)
+  }
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setImageUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("profile_image", file)
+
+      // Replace with actual API call
+      await new Promise((resolve) => setTimeout(resolve, 2000)) // Simulate upload
+
+      showToast("Profil rasmi muvaffaqiyatli yangilandi!", "success")
+    } catch (error) {
+      showToast("Rasm yuklashda xatolik yuz berdi", "error")
+    } finally {
+      setImageUploading(false)
+    }
+  }
 
   const handleSaveProfile = async () => {
-    if (!mestats) return;
-    setIsLoading(true);
+    if (!mestats) return
+    setIsLoading(true)
     try {
       await authAPI.updateProfile({
         first_name: mestats.first_name,
         last_name: mestats.last_name,
         username: mestats.username,
         bio: mestats.bio,
-      });
-      alert('Profil muvaffaqiyatli saqlandi!');
+        email: mestats.email,
+        phone_number: mestats.phone_number,
+        country: settings.country,
+        region: settings.region,
+        district: settings.district,
+        settlement: settings.settlement,
+      })
+      showToast("Profil muvaffaqiyatli saqlandi!", "success")
     } catch (error) {
-      console.error('Profile update error:', error);
-      alert('Profile update failed.');
+      console.error("Profile update error:", error)
+      showToast("Profilni saqlashda xatolik yuz berdi", "error")
     }
-    setIsLoading(false);
-  };
+    setIsLoading(false)
+  }
 
-  const handleSettingChange = (
-    category: keyof UserSettings,
-    key: string,
-    value: string | boolean
-  ) => {
-    setSettings(prev => {
-      const current = prev[category];
-
-      // Agar ichki obyekt bo‘lsa (e.g., notifications, privacy)
-      if (typeof current === 'object' && current !== null) {
+  const handleSettingChange = (category: keyof UserSettings, key: string, value: string | boolean | number) => {
+    setSettings((prev) => {
+      const current = prev[category]
+      if (typeof current === "object" && current !== null) {
         return {
           ...prev,
           [category]: {
             ...current,
             [key]: value,
           },
-        };
+        }
       }
-
-      // Oddiy string/boolean qiymatlar uchun
       return {
         ...prev,
         [category]: value,
-      };
-    });
-  };
-  
+      }
+    })
+  }
 
-  const StatCard: React.FC<StatCardProps> = ({ icon, number, label, change, type = 'primary' }) => (
-    <div className={`stat-card ${type}`}>
-      <div className="stat-icon">
-        <i className={icon}></i>
-      </div>
-      <div className="stat-content">
-        <div className="stat-number">{number}</div>
-        <div className="stat-label">{label}</div>
-        {change && (
-          <div className={`stat-change ${change.type}`}>
-            <i className={`fas fa-arrow-${change.type === 'positive' ? 'up' : 'down'}`}></i>
-            {/* <span>{change.text}</span> */}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-  
-  const handleLogout = () => {
-    // Implement logout logic here or remove this function if not needed
-    authAPI.logout().then(() => {
-      window.location.href = '/login';
-    });
-  };
+  const handleSaveSettings = async () => {
+    setSettingsLoading(true)
+    try {
+      await authAPI.updateProfile({
+        country: settings.country,
+        region: settings.region,
+        district: settings.district,
+        settlement: settings.settlement,
+      })
+      showToast("Sozlamalar muvaffaqiyatli saqlandi!", "success")
+    } catch (error) {
+      console.error("Settings update error:", error)
+      showToast("Sozlamalarni saqlashda xatolik yuz berdi", "error")
+    }
+    setSettingsLoading(false)
+  }
 
-  const TestCard: React.FC<TestCardProps> = ({ test }) => (
-    <div className="test-card" data-status={test.status}>
-      <div className="test-header">
-        <div className="test-category">{test.category?.emoji} {test.category?.title}</div>
-        <div className={`test-status ${test.status}`}>{test.status}</div>
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout()
+      localStorage.removeItem("access_token")
+      localStorage.removeItem("refresh_token")
+      window.location.href = "/login"
+    } catch (error) {
+      console.error("Logout error:", error)
+      localStorage.removeItem("access_token")
+      localStorage.removeItem("refresh_token")
+      window.location.href = "/login"
+    }
+  }
+
+  const accuracy =
+    mestats && mestats.correct_count + mestats.wrong_count > 0
+      ? ((mestats.correct_count / (mestats.correct_count + mestats.wrong_count)) * 100).toFixed(2)
+      : "0.00"
+
+  // Custom Button Component
+  const CustomButton = ({
+    children,
+    onClick,
+    variant = "primary",
+    size = "md",
+    disabled = false,
+    className = "",
+    ...props
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+    variant?: "primary" | "secondary" | "outline" | "ghost" | "danger"
+    size?: "sm" | "md" | "lg"
+    disabled?: boolean
+    className?: string
+    [key: string]: any
+  }) => {
+    const baseStyles =
+      "inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+
+    const variants = {
+      primary: "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500",
+      secondary: "bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500",
+      outline: "border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700",
+      ghost: "bg-transparent hover:bg-gray-100 text-gray-700 focus:ring-gray-500 dark:text-gray-300 dark:hover:bg-gray-800",
+      danger: "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500",
+    }
+
+    const sizes = {
+      sm: "px-3 py-1.5 text-sm",
+      md: "px-4 py-2 text-sm",
+      lg: "px-6 py-3 text-base",
+    }
+
+    const disabledStyles = disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+
+    return (
+      <button
+        className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${disabledStyles} ${className}`}
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
+        {...props}
+      >
+        {children}
+      </button>
+    )
+  }
+
+  // Custom Card Component
+  const CustomCard = ({
+    children,
+    className = "",
+    ...props
+  }: {
+    children: React.ReactNode
+    className?: string
+    [key: string]: any
+  }) => {
+    return (
+      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 ${className}`} {...props}>
+        {children}
       </div>
-      <h3 className="test-title">{test.title}</h3>
-      <p className="test-description">{test.description}</p>
-      <div className="test-stats">
-        <div className="stat">
-          <i className="fas fa-question-circle"></i>
-          <span>{test.total_questions} savollar</span>
+    )
+  }
+
+  // Custom Modal Component
+  const CustomModal = ({
+    isOpen,
+    onClose,
+    title,
+    children,
+    size = "md",
+  }: {
+    isOpen: boolean
+    onClose: () => void
+    title?: string
+    children: React.ReactNode
+    size?: "sm" | "md" | "lg" | "xl"
+  }) => {
+    if (!isOpen) return null
+
+    const sizes = {
+      sm: "max-w-md",
+      md: "max-w-2xl",
+      lg: "max-w-4xl",
+      xl: "max-w-6xl",
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose} />
+        <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-xl ${sizes[size]} w-full max-h-[90vh] overflow-hidden`}>
+          {title && (
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+          )}
+          <div className="overflow-y-auto max-h-[calc(90vh-80px)]">{children}</div>
         </div>
-        {/* <div className="stat">
-          <i className="fas fa-users"></i>
-          <span>{test.completions} completions</span>
-        </div> */}
-        {test.rating > 0 && (
-          <div className="stat">
-            <i className="fas fa-star"></i>
-            <span>{test.rating}</span>
-          </div>
-        )}
       </div>
-      <div className="test-actions">
-        <button className="btn btn-outline btn-sm">
-          <i className="fas fa-edit"></i>
-          Tahrirlash
-        </button>
-        <button className="btn btn-primary btn-sm">
-          <i className="fas fa-eye"></i>
-          Ko'rish
-        </button>
-      </div>
-    </div>
-  );
+    )
+  }
 
-  const QuestionCard: React.FC<QuestionCardProps> = ({ question: { type, difficulty, question, test_title, answers, correctRate } }) => (
-    <div className="question-card">
-      <div className="question-header">
-        <div className="question-type">{type}</div>
-        <div className={`question-difficulty ${difficulty.toLowerCase()}`}>
-          {difficulty}
-        </div>
-      </div>
-      <h4 className="question-title">{question}</h4>
+  // Custom Badge Component
+  const CustomBadge = ({
+    children,
+    variant = "default",
+    className = "",
+  }: {
+    children: React.ReactNode
+    variant?: "default" | "secondary" | "success" | "danger" | "warning"
+    className?: string
+  }) => {
+    const variants = {
+      default: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+      secondary: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+      success: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+      danger: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+      warning: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+    }
 
-      {/* ✅ only show category.name */}
-      <div className="question-category">{test_title}</div>
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}
+      >
+        {children}
+      </span>
+    )
+  }
 
-      <div className="question-stats">
-        <div className="stat">
-          <i className="fas fa-users"></i>
-          <span>{answers} varinatlar</span>
-        </div>
-        <div className="stat">
-          <i className="fas fa-check-circle"></i>
-          <span>{correctRate}% to'g'ri </span>
-        </div>
+  // Custom Input Component
+  const CustomInput = ({
+    label,
+    className = "",
+    ...props
+  }: {
+    label?: string
+    className?: string
+    [key: string]: any
+  }) => {
+    return (
+      <div className="space-y-1">
+        {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>}
+        <input
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${className}`}
+          {...props}
+        />
       </div>
-      <div className="question-actions">
-        <button className="btn btn-outline btn-sm">
-          <i className="fas fa-edit"></i>
-          Tahrirlash
-        </button>
-        <button className="btn btn-primary btn-sm">
-          <i className="fas fa-chart-bar"></i>
-          Analitika
+    )
+  }
+
+  // Custom Textarea Component
+  const CustomTextarea = ({
+    label,
+    className = "",
+    ...props
+  }: {
+    label?: string
+    className?: string
+    [key: string]: any
+  }) => {
+    return (
+      <div className="space-y-1">
+        {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>}
+        <textarea
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${className}`}
+          {...props}
+        />
+      </div>
+    )
+  }
+
+  // Custom Select Component
+  const CustomSelect = ({
+    label,
+    options,
+    className = "",
+    ...props
+  }: {
+    label?: string
+    options: { value: string | number; label: string }[]
+    className?: string
+    [key: string]: any
+  }) => {
+    return (
+      <div className="space-y-1">
+        {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>}
+        <select
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${className}`}
+          {...props}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+
+  // Custom Switch Component
+  const CustomSwitch = ({
+    checked,
+    onChange,
+    label,
+    description,
+  }: {
+    checked: boolean
+    onChange: (checked: boolean) => void
+    label?: string
+    description?: string
+  }) => {
+    return (
+      <div className="flex items-center justify-between">
+        <div>
+          {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>}
+          {description && <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>}
+        </div>
+        <button
+          type="button"
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
+            }`}
+          onClick={() => onChange(!checked)}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'
+              }`}
+          />
         </button>
       </div>
-    </div>
-  );
-  
-  
-  const accuracy = mestats && (mestats.correct_count + mestats.wrong_count > 0)
-    ? ((mestats.correct_count / (mestats.correct_count + mestats.wrong_count)) * 100).toFixed(2)
-    : '0.00';
+    )
+  }
 
   return (
-    <div className="profile-page" data-theme={settings.theme}>
-      {/* Background Elements */}
-      <div className="bg-elements">
-        <div className="floating-shape shape-1"></div>
-        <div className="floating-shape shape-2"></div>
-        <div className="floating-shape shape-3"></div>
-        <div className="floating-shape shape-4"></div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 touch-pan-y select-none">
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
       {/* Header */}
-      <header className="header">
-        <div className="container">
-          <div className="header-content">
-            <div className="balance-section"></div>
-            
-            <div className="logo">
-              <div className="logo-icon">
-                <img src="/logo.jpg" alt="TestABd logo" />
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex-1" />
+
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <img src="/logo.jpg" alt="TestAbd logo" className="w-6 h-6" style={{ objectFit: "cover", borderRadius: "0.375rem" }} />
               </div>
-              <span className="logo-text">TestAbd</span>
+              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                TestAbd
+              </span>
             </div>
-            
-            <div className="settings-section">
-              <button 
-                className="settings-btn" 
-                onClick={() => setIsSettingsOpen(true)}
-              >
-                <Settings size={20} />
-              </button>
+
+            <div className="flex-1 flex justify-end items-center space-x-2">
+              <CustomButton variant="ghost" onClick={toggleDarkMode} className="rounded-full p-2">
+                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </CustomButton>
+              <CustomButton variant="ghost" onClick={() => setIsSettingsOpen(true)} className="rounded-full p-2">
+                <Settings className="h-5 w-5" />
+              </CustomButton>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="main">
-        <div className="container">
-          
-          {/* Profile Section */}
-          <div className="bg-theme-primary rounded-2xl p-8 mb-8 border border-theme-primary shadow-theme-md">
-          <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
-            {/* Profile Image */}
-            <div className="relative">
-              <img
-                  src={mestats?.profile_image || "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg"}
-                alt="Profile"
-                className="w-32 h-32 rounded-full object-cover shadow-theme-lg border-4 border-theme-secondary"
-              />
-              {mestats?.is_badged && (
-                <div className="absolute bottom-2 right-2 bg-blue-500 text-white p-2 rounded-full shadow-theme-md">
-                  <Shield size={16} />
-                </div>
-              )}
-              {mestats?.is_premium && (
-                <div className="absolute top-0 right-0 bg-yellow-500 text-white p-2 rounded-full shadow-theme-md">
-                  <Crown size={16} />
-                </div>
-              )}
-            </div>
-
-            {/* Profile Info */}
-            <div className="flex-1 text-center md:text-left">
-              <h1 className="text-3xl font-bold text-theme-primary mb-2">
-                {mestats?.first_name} {mestats?.last_name}
-              </h1>
-              <p className="text-theme-secondary mb-4">@{mestats?.username}</p>
-
-              <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 mb-4">
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getLevelBadge(mestats?.level || "beginner").color}`}>
-                    {getLevelBadge(mestats?.level || "beginner").icon} {mestats?.level}
-                </div>
-                <div className="flex items-center text-theme-secondary text-sm">
-                  <Calendar size={16} className="mr-1" />
-                  Qoʻshildi {formatDate(mestats?.join_date || "private")}
-                </div>
-                <div className="flex items-center text-orange-500 text-sm">
-                  <Zap size={16} className="mr-1" />
-                    {mestats?.streak_day || 0} kunlik chiziq
-                </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Profile Section */}
+        <CustomCard className="overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 h-32 sm:h-30" />
+          <div className="px-6 pb-5">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end space-y-4 sm:space-y-0 sm:space-x-6 -mt-16 sm:-mt-20">
+              <div className="relative">
+                <img
+                  src={mestats?.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
+                  alt="Profile"
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white object-cover shadow-lg"
+                />
+                {mestats?.is_badged && (
+                  <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full shadow-lg">
+                    <Shield size={16} />
+                  </div>
+                )}
+                {mestats?.is_premium && (
+                  <div className="absolute top-0 right-0 bg-yellow-500 text-white p-2 rounded-full shadow-lg">
+                    <Crown size={16} />
+                  </div>
+                )}
               </div>
 
-              <p className="text-theme-secondary mb-6 max-w-2xl">
-                {mestats?.bio || ""}
-              </p>
+              <div className="flex-1 text-center sm:text-left space-y-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                  {mestats?.first_name} {mestats?.last_name}
+                </h1>
+                <p className="text-gray-600 dark:text-white">@{mestats?.username}</p>
 
-              {/* Social Stats
-              <div className="flex justify-center md:justify-start space-x-6">
-                
-                
-              </div> */}
+                <div className="flex flex-wrap justify-center sm:justify-start items-center gap-3">
+                  <CustomBadge className={getLevelBadge(mestats?.level || "beginner").color}>
+                    {getLevelBadge(mestats?.level || "beginner").icon} {mestats?.level}
+                  </CustomBadge>
+                  <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm">
+                    <Calendar size={16} className="mr-1" />
+                    Qoʻshildi {formatDate(mestats?.join_date || "")}
+                  </div>
+                  <div className="flex items-center text-orange-500 text-sm">
+                    <Zap size={16} className="mr-1" />
+                    {mestats?.streak_day || 0} kunlik chiziq
+                  </div>
+                </div>
+
+                {mestats?.bio && <p className="text-gray-600 dark:text-gray-400 max-w-2xl">{mestats.bio}</p>}
+              </div>
             </div>
           </div>
+        </CustomCard>
+
+        {/* Statistics Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <CustomCard className="p-6">
+            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Testlar tugallandi</div>
+            <div className="text-2xl font-bold text-blue-600">{mestats?.tests_solved || 0}</div>
+          </CustomCard>
+
+          <CustomCard className="p-6">
+            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Aniqlik darajasi</div>
+            <div className="text-2xl font-bold text-green-600">{accuracy}%</div>
+          </CustomCard>
+
+          <CustomCard className="p-6">
+            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Kunlik chiziq</div>
+            <div className="text-2xl font-bold text-orange-600">{mestats?.streak_days || 0}</div>
+          </CustomCard>
         </div>
 
-          {/* Enhanced Statistics Section */}
-          <section className="enhanced-stats-section">
-            <h2 className="section-title">Natijalar Paneli</h2>
-            
-            <div className="main-stats-grid">
-              <StatCard
-                icon="fas fa-trophy"
-                number={mestats?.tests_solved || 5}
-                label="Testlar tugallandi"
-                change={{ type: 'positive' }}
-                type="primary"
-              />
-              <StatCard
-                icon="fas fa-bullseye"
-                number={accuracy}
-                label="Aniqlik darajasi"
-                change={{ type: 'positive'}}
-                type="success"
-              />
-              {/* <StatCard
-                icon="fas fa-clock"
-                number={mestats?.average_time || 0}
-                label="Oʻrtacha javob vaqti"
-                change={{ type: 'negative'}}
-                type="danger"
-              /> */}
-              <StatCard
-                icon="fas fa-fire"
-                number={mestats?.streak_days || 0}
-                label="Kunlik chiziq"
-                change={{ type: 'positive'}}
-                type="warning"
-              />
+        {/* Detailed Statistics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <CustomCard className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <User className="h-5 w-5" />
+              <h3 className="text-lg font-semibold dark:text-white">Savollarga javob berildi</h3>
             </div>
+            <div className="text-3xl font-bold mb-4 dark:text-white">
+              {Number(mestats?.correct_count || 0) + Number(mestats?.wrong_count || 0)}
+            </div>
+            <div className="flex justify-between">
+              <div className="text-center">
+                <div className="text-xl font-semibold text-green-600">{mestats?.correct_count || 0}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">To'g'ri</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-semibold text-red-600">{mestats?.wrong_count || 0}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Xato</div>
+              </div>
+            </div>
+          </CustomCard>
 
-            {/* Detailed Statistics */}
-            <div className="detailed-stats">
-
-              <div className="stats-row">
-                <div className="stat-item">
-                  <div className="stat-header">
-                    <i className="fas fa-question-circle"></i>
-                    <span>Savollarga javob berildi</span>
-                  </div>
-                  <div className="stat-value">{Number(mestats?.correct_count) + Number(mestats?.wrong_count)}</div>
-                  <div className="stat-breakdown">
-                    <div className="breakdown-item correct">
-                      <span className="breakdown-label">To'g'ri</span>
-                      <span className="breakdown-value">{mestats?.correct_count}</span>
-                    </div>
-                    <div className="breakdown-item wrong">
-                      <span className="breakdown-label">Xato</span>
-                      <span className="breakdown-value">{mestats?.wrong_count}</span>
-                    </div>
-                  </div>
+          <CustomCard className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <UserPlus className="h-5 w-5" />
+              <h3 className="text-lg font-semibold dark:text-white">Ijtimoiy statistika</h3>
+            </div>
+            <div className="flex justify-around">
+              <CustomButton
+                variant="ghost"
+                onClick={() => setShowFollowers(true)}
+                disabled={loadingFollowData}
+                className="flex flex-col items-center p-4"
+              >
+                <div className="text-2xl font-bold text-blue-600">
+                  {loadingFollowData ? "..." : follow?.followers?.length || 0}
                 </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Obunachilar</div>
+              </CustomButton>
+              <CustomButton
+                variant="ghost"
+                onClick={() => setShowFollowing(true)}
+                disabled={loadingFollowData}
+                className="flex flex-col items-center p-4"
+              >
+                <div className="text-2xl font-bold text-blue-600">
+                  {loadingFollowData ? "..." : follow?.following?.length || 0}
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Kuzatish</div>
+              </CustomButton>
+            </div>
+          </CustomCard>
+        </div>
 
-                <div className="stat-item">
-                  <div className="stat-header">
-                    <i className="fas fa-users"></i>
-                    <span>Ijtimoiy statistika</span>
-                  </div>
-                  <div className="social-stats">
-                    <button
-                      onClick={() => setShowFollowers(true)}
-                      className="text-center hover:bg-theme-tertiary p-2 rounded-lg transition-theme-normal"
+        {/* Activity Chart */}
+        <CustomCard className="p-6">
+          <h3 className="text-lg font-semibold mb-4 dark:text-white">Haftalik Faollik</h3>
+          <div className="flex items-end justify-between h-32 gap-2">
+            {activityData.map((value, index) => {
+              const maxValue = Math.max(...activityData)
+              const height = maxValue ? (value / maxValue) * 100 : 0
+              const days = ["Dush", "Sesh", "Chor", "Pay", "Jum", "Shan", "Yak"]
+
+              return (
+                <div key={index} className="flex flex-col items-center flex-1">
+                  <div
+                    className="w-full bg-gradient-to-t from-blue-500 to-purple-600 rounded-t transition-all duration-1000 ease-out"
+                    style={{ height: `${height}%`, minHeight: "4px" }}
+                  />
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">{days[index]}</div>
+                </div>
+              )
+            })}
+          </div>
+        </CustomCard>
+
+        {/* My Tests Section */}
+        <CustomCard className="p-6">
+          <h3 className="text-lg font-semibold mb-6 dark:text-white">Mening Testlarim</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {myTests.map((test) => (
+              <CustomCard key={test.id} className="p-4 hover:shadow-lg transition-shadow">
+                <div className="flex justify-between items-start mb-3">
+                  <CustomBadge variant="secondary">
+                    {test.category?.emoji} {test.category?.title}
+                  </CustomBadge>
+                  <CustomBadge variant={test.status === "published" ? "default" : "secondary"}>
+                    {test.status}
+                  </CustomBadge>
+                </div>
+                <h4 className="text-lg font-semibold mb-2 dark:text-white">{test.title}</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">{test.description}</p>
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  <span>{test.total_questions} savollar</span>
+                  {test.rating > 0 && <span>⭐ {test.rating}</span>}
+                </div>
+                <div className="flex gap-2">
+                  <CustomButton
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setEditingTest(test)
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    Tahrirlash
+                  </CustomButton>
+                  <CustomButton
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setSelectedTest(test)
+                      setShowTestAnalytics(true)
+                    }}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-1" />
+                    Analitika
+                  </CustomButton>
+                </div>
+              </CustomCard>
+            ))}
+          </div>
+        </CustomCard>
+
+        {/* Recent Questions Section */}
+        <CustomCard className="p-6">
+          <h3 className="text-lg font-semibold mb-6 dark:text-white">So'nggi Savollar</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recentQuestions.length > 0 ? (
+              recentQuestions.map((question, index) => (
+                <CustomCard key={`q-${question.id}-${index}`} className="p-4 hover:shadow-lg transition-shadow">
+                  <div className="flex justify-between items-start mb-3">
+                    <CustomBadge variant="secondary">{question.type}</CustomBadge>
+                    <CustomBadge
+                      variant={
+                        question.difficulty === "Oson"
+                          ? "success"
+                          : question.difficulty === "O'rtacha"
+                            ? "warning"
+                            : "danger"
+                      }
                     >
-                      <div className="text-2xl font-bold text-accent-primary">{follow?.followers?.length || 0}</div>
-                      <div className="text-sm text-theme-secondary">Obunachilar</div>
-                    </button>
-                    <button
-                        onClick={() => setShowFollowing(true)}
-                        className="text-center hover:bg-theme-tertiary p-2 rounded-lg transition-theme-normal"
-                        >
-                                          <div className="text-2xl font-bold text-accent-primary">{follow?.following?.length || 0}</div>
-                        <div className="text-sm text-theme-secondary">Kuzatish</div>
-                    </button>
+                      {question.difficulty}
+                    </CustomBadge>
                   </div>
-                </div>
-
-                {/* <div className="stat-item">
-                  <div className="stat-header">
-                    <i className="fas fa-star"></i>
-                    <span>Achievements</span>
+                  <h4 className="text-lg font-semibold mb-2 line-clamp-2 dark:text-white">{question.question}</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{question.test_title}</p>
+                  <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    <span>{question.answers} variantlar</span>
+                    <span>{question.correctRate}% to'g'ri</span>
                   </div>
-                  <div className="achievements-grid">
-                    <div className="achievement-badge earned">
-                      <i className="fas fa-medal"></i>
-                      <span>First Test</span>
-                    </div>
-                    <div className="achievement-badge earned">
-                      <i className="fas fa-crown"></i>
-                      <span>100 Tests</span>
-                    </div>
-                    <div className="achievement-badge">
-                      <i className="fas fa-gem"></i>
-                      <span>Perfect Week</span>
-                    </div>
-                    <div className="achievement-badge">
-                      <i className="fas fa-rocket"></i>
-                      <span>Speed Master</span>
-                    </div>
+                  <div className="flex gap-2">
+                    <CustomButton
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setEditingQuestion(question)
+                      }}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Tahrirlash
+                    </CustomButton>
+                    <CustomButton
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedQuestion(question)
+                        setShowQuestionAnalytics(true)
+                      }}
+                    >
+                      <BarChart3 className="h-4 w-4 mr-1" />
+                      Analitika
+                    </CustomButton>
                   </div>
-                </div> */}
-              </div>
-            </div>
-
-            {/* Activity Chart */}
-            <div className="activity-section">
-              <h3>Activity Overview</h3>
-              <div className="activity-chart">
-                <div className="chart-header">
-                  <span>Sinovlar hafta ichida yakunlandi</span>
-                  <div className="chart-legend">
-                    <div className="legend-item">
-                      <div className="legend-color primary"></div>
-                      <span>Testlar</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="chart-bars">
-                  {activityData.map((value, index) => (
-                    <div 
-                      key={index}
-                      className="chart-bar" 
-                      data-value={value}
-                      style={{ height: '0%' }}
-                    ></div>
-                  ))}
-                </div>
-                <div className="chart-labels">
-                    {['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'].map(day => (
-                      <span key={day}>{day}</span>
-                    ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* My Tests Section */}
-          <section className="my-tests-section">
-            <div className="section-header">
-              <h2 className="section-title">Mening bloklarim</h2>
-              <div className="test-filters">
-                <button className="filter-btn active hover">Barchasi</button>
-                <button className="filter-btn hover">Chop etilgan</button>
-                <button className="filter-btn hover">Qoralama</button>
-              </div>
-            </div>
-            <div className="tests-grid">
-              {myTests.map(test => (
-                <TestCard key={test.id} test={test} />
-              ))}
-            </div>
-          </section>
-
-          {/* Questions Overview Section */}
-          <section className="questions-section">
-            <h2 className="section-title">So'ngi savollar</h2>
-            <div className="questions-grid">
-              {recentQuestions.length > 0 ? (
-                recentQuestions.map((question, index) => (
-                  <QuestionCard key={`q-${question.id}-${index}`} question={{ type: question.type, correctRate: question.correctRate, question: question.question, test_title: question.test_title, answers: question.answers, difficulty: question.difficulty }} />
-                ))
-              ) : (
-                  <p className="text-sm text-gray-500">Oxirgi savollar topilmadi.</p>
-              )}
-            </div>
-          </section>
-
-        </div>
+                </CustomCard>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400 col-span-full text-center py-8">
+                Oxirgi savollar topilmadi.
+              </p>
+            )}
+          </div>
+        </CustomCard>
       </main>
 
       {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex border-b border-theme-primary">
-              <div className="w-1/4 bg-theme-secondary p-6 space-y-2">
-                {[
-                  { id: 'profile', label: 'Edit profile', icon: Edit },
-                  { id: 'premium', label: 'Premium', icon: Crown },
-                  { id: 'ads', label: 'Advertisement', icon: Target },
-                  { id: 'monetization', label: 'Monetization', icon: DollarSign },
-                  { id: 'preferences', label: 'Language', icon: Globe },
-                  { id: 'logout', label: 'Logout', icon: LogOut }
-                ].map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-theme-normal ${activeTab === item.id
-                      ? 'bg-accent-primary text-white'
-                      : 'text-theme-secondary hover:bg-theme-tertiary'
-                      }`}
-                  >
-                    <item.icon size={20} />
-                    <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex-1 p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-theme-primary">Settings</h2>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
-                  >
-                    <X size={24} className="text-theme-secondary" />
-                  </button>
-                </div>
-                {/* Tab contents here */}
-              </div>
+      <CustomModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} size="xl">
+        <div className="flex flex-col md:flex-row h-full">
+          {/* Mobile Top Navigation */}
+          <div className="md:hidden border-b border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex space-x-2 overflow-x-auto">
+              {[
+                { id: "profile", icon: User, text: "Profile" },
+                { id: "preferences", icon: Cog, text: "Afzalliklar" },
+                { id: "logout", icon: LogOut, text: "Chiqish" },
+              ].map((item) => (
+                <CustomButton
+                  key={item.id}
+                  variant={activeTab === item.id ? "primary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleTabSwitch(item.id)}
+                  className="flex items-center gap-2 whitespace-nowrap"
+                >
+                  <item.icon size={16} />
+                  <span className="text-xs">{item.text}</span>
+                </CustomButton>
+              ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {isSettingsOpen && (
-          <div className="modal-overlay active">
-            <div className="modal-content">
-              <div className="modal-header">
-                <button
-                  className="close-btn"
-                  onClick={() => setIsSettingsOpen(false)}
-                >
-                  <i className="fas fa-times"></i>
-                </button>
-              </div>
+          {/* Desktop Sidebar */}
+          <div className="hidden md:block w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <div className="p-6">
+              <h2 className="text-lg font-semibold mb-2 dark:text-white">Settings</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Manage your account and preferences</p>
 
-              {/* Settings Sidebar */}
-              <div className="settings-sidebar">
-                <div className="settings-header">
-                  <h2 className="settings-title">Settings</h2>
-                  <p className="settings-subtitle">Manage your account and preferences</p>
+              <nav className="space-y-2">
+                {[
+                  { id: "profile", icon: User, text: "Profile" },
+                  { id: "preferences", icon: Cog, text: "Afzalliklar" },
+                  { id: "logout", icon: LogOut, text: "Chiqish" },
+                ].map((item) => (
+                  <CustomButton
+                    key={item.id}
+                    variant={activeTab === item.id ? "primary" : "ghost"}
+                    className="w-full justify-start"
+                    onClick={() => handleTabSwitch(item.id)}
+                  >
+                    <item.icon size={20} className="mr-3" />
+                    {item.text}
+                  </CustomButton>
+                ))}
+              </nav>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            {activeTab === "profile" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 dark:text-white">Profile Settings</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                    Update your personal information and profile picture
+                  </p>
                 </div>
 
-                <nav className="settings-nav">
-                  {[
-                    { id: 'profile', icon: User, text: 'Profile' },
-                    // { id: 'premium', icon: 'fas fa-crown', text: 'Premium', disabled: true },
-                    // { id: 'ads', icon: 'fas fa-ad', text: 'Ads', disabled: true },
-                    // { id: 'monetization', icon: 'fas fa-dollar-sign', text: 'Monetization' },
-                    { id: 'preferences', icon: Cog, text: 'Afzalliklar' },
-                    { id: 'logout', icon: LogOut, text: 'Chiqish' }
-                  ].map(item => (
-                    <div
-                      key={item.id}
-                      className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-                      onClick={() => handleTabSwitch(item.id)}
-                    >
-                      <div className="nav-icon">
-                        {item.icon ? <item.icon size={20} /> : null}
-                        {/* <i className={item.icon}></i> */}
-                      </div>
-                      <span className="nav-text">{item.text}</span>
-                      {/* {item.disabled && <span className="coming-soon">Coming Soon</span>} */}
-                    </div>
-                  ))}
-                </nav>
-              </div>
-
-              {/* Settings Content */}
-              <div className="settings-content">
-                {/* Profile Tab */}
-                {activeTab === 'profile' && (
-                  <div className="tab-content active">
-                    <div className="content-header">
-                      <h3 className="content-title">Profile Settings</h3>
-                      <p className="content-description">Update your personal information and profile picture</p>
-                    </div>
-
-                    <div className="form-section">
-                      <h4 className="section-title">
-                        <div className="section-icon">
-                          <i className="fas fa-camera"></i>
-                        </div>
-                        Profile Picture
-                      </h4>
-
-                      <div className="profile-picture-section">
-                        <div className="current-avatar">
-                          <img src={`${mestats?.profile_image || "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg"}`} alt="Current Avatar" />
-                        </div>
-                        <div className="avatar-info">
-                          <h5 className="avatar-title">Change Profile Picture</h5>
-                          <p className="avatar-description">Upload a new profile picture. Recommended size: 400x400px</p>
-                          <div className="file-upload">
-                            <input type="file" accept="image/*" />
-                            <button className="upload-btn">
-                              <i className="fas fa-upload"></i>
-                              Upload New Photo
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="form-section">
-                      <h4 className="section-title">
-                        <div className="section-icon">
-                          <i className="fas fa-info-circle"></i>
-                        </div>
-                        Personal Information
-                      </h4>
-
-                      <div className="form-group">
-                        <label>Full Name</label>
-                        <input
-                          type="text"
-                          value={mestats?.first_name + ' ' + mestats?.last_name}
-                          onChange={(e) => mestats ? ({ ...mestats, first_name: e.target.value.split(' ')[0], last_name: e.target.value.split(' ')[1] }) : null}
-                          placeholder="Enter your full name"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>Username</label>
-                        <input
-                          type="text"
-                          value={mestats?.username}
-                          onChange={(e) => mestats ? ({ ...mestats, username: e.target.value }) : null}
-                          placeholder="Choose a unique username"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>Bio</label>
-                        <textarea placeholder="Tell us about yourself..." rows={4} value={mestats?.bio} onChange={(e) => mestats ? ({ ...mestats, bio: e.target.value }) : null}></textarea>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                      <button className="btn btn-primary" onClick={handleSaveProfile}>
-                        <i className="fas fa-save"></i>
-                        Save Changes
-                      </button>
-                      <button className="btn btn-outline">
-                        <i className="fas fa-undo"></i>
-                        Reset
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Monetization Tab */}
-                {activeTab === 'monetization' && (
-                  <div className="tab-content active">
-                    <div className="content-header">
-                      <h3 className="content-title">Monetization Dashboard</h3>
-                      <p className="content-description">Earn money by creating quality content and engaging with the community</p>
-                    </div>
-
-                    <div className="monetization-section">
-                      <div className="monetization-toggle">
-                        <h4>Enable Monetization</h4>
-                        <label className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={settings.monetization}
-                            disabled
-                            onChange={(e) => handleSettingChange('monetization', '', e.target.checked)}
-                          />
-                          <span className="toggle-slider"></span>
-                        </label>
-                        <span className="disabled-note">Currently disabled - requirements not met</span>
-                      </div>
-
-                      <div className="monetization-info">
-                        <h4>Monetization Requirements</h4>
-                        <p>To enable monetization, you must meet the following requirements:</p>
-                        <ul>
-                          <li>✓ Have at least 10 published tests</li>
-                          <li>✓ Maintain a 4.0+ average rating</li>
-                          <li>✗ Have 1000+ total test completions (Current: 156)</li>
-                          <li>✓ Account verified and in good standing</li>
-                        </ul>
-                      </div>
-
-                      <div className="earnings-stats">
-                        <div className="earning-item">
-                          <div className="earning-number">$0.00</div>
-                          <div className="earning-label">Total Earnings</div>
-                        </div>
-                        <div className="earning-item">
-                          <div className="earning-number">$0.00</div>
-                          <div className="earning-label">This Month</div>
-                        </div>
-                      </div>
-
-                      <button className="btn btn-success" disabled>
-                        <i className="fas fa-money-bill-wave"></i>
-                        Withdraw Earnings (Disabled)
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Logout Tab */}
-              {activeTab === 'logout' && (
-                <div className="flex items-center justify-center min-h-[60vh]">
-                  <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 max-w-md w-full text-center">
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                      Rostdan ham dasturdan chiqmoqchimisiz?
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-300 mb-6">
-                      Agar "Ha" tugmasini bossangiz, siz tizimdan chiqarilasiz.
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                  <img
+                    src={mestats?.profile_image || "/placeholder.svg?height=100&width=100&text=User"}
+                    alt="Current Avatar"
+                    className="w-20 h-20 rounded-full object-cover"
+                  />
+                  <div className="flex-1 text-center sm:text-left">
+                    <h5 className="font-medium mb-2 dark:text-white">Change Profile Picture</h5>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Upload a new profile picture. Recommended size: 400x400px
                     </p>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        disabled={imageUploading}
+                      />
+                      <CustomButton variant="outline" disabled={imageUploading}>
+                        {imageUploading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
+                            Yuklanmoqda...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload New Photo
+                          </>
+                        )}
+                      </CustomButton>
+                    </div>
+                  </div>
+                </div>
 
-                    <div className="flex justify-center gap-4">
-                      <button
-                        className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-5 rounded-md"
-                        onClick={async () => {
-                          try {
-                            await authAPI.logout();
-                            if (typeof window !== 'undefined') {
-                              window.location.href = '/logout';
-                            }
-                          } catch (error) {
-                            console.error('Logout failed:', error);
+                <hr className="border-gray-200 dark:border-gray-700" />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <CustomInput
+                    label="First Name"
+                    value={mestats?.first_name || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setMestats((prev) => (prev ? { ...prev, first_name: e.target.value } : null))
+                    }
+                    placeholder="Enter your first name"
+                  />
+                  <CustomInput
+                    label="Last Name"
+                    value={mestats?.last_name || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setMestats((prev) => (prev ? { ...prev, last_name: e.target.value } : null))
+                    }
+                    placeholder="Enter your last name"
+                  />
+                </div>
+
+                <CustomInput
+                  label="Username"
+                  value={mestats?.username || ""}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMestats((prev) => (prev ? { ...prev, username: e.target.value } : null))
+                  }
+                  placeholder="Choose a unique username"
+                />
+
+                <CustomInput
+                  label="Email"
+                  type="email"
+                  value={mestats?.email || ""}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMestats((prev) => (prev ? { ...prev, email: e.target.value } : null))
+                  }
+                  placeholder="Enter your email"
+                />
+
+                <CustomInput
+                  label="Phone Number"
+                  value={mestats?.phone_number || ""}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMestats((prev) => (prev ? { ...prev, phone_number: e.target.value } : null))
+                  }
+                  placeholder="Enter your phone number"
+                />
+
+                <CustomTextarea
+                  label="Bio"
+                  placeholder="Tell us about yourself..."
+                  rows={4}
+                  value={mestats?.bio || ""}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setMestats((prev) => (prev ? { ...prev, bio: e.target.value } : null))
+                  }
+                />
+
+                <div className="flex gap-4">
+                  <CustomButton onClick={handleSaveProfile} disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Saqlanmoqda...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </CustomButton>
+                  <CustomButton variant="outline">Reset</CustomButton>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "preferences" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 dark:text-white">Preferences</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                    Customize your experience and app settings
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <CustomSelect
+                    label="Country"
+                    value={settings.country}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                      handleSettingChange("country", "", Number(e.target.value))
+                    }
+                    options={[
+                      { value: 0, label: "Select Country" },
+                      ...countries.map((country) => ({ value: country.id, label: country.name })),
+                    ]}
+                  />
+
+                  <CustomSelect
+                    label="Region/State"
+                    value={settings.region}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                      handleSettingChange("region", "", Number(e.target.value))
+                    }
+                    disabled={!settings.country}
+                    options={[
+                      { value: 0, label: "Select Region" },
+                      ...regions.map((region) => ({ value: region.id, label: region.name })),
+                    ]}
+                  />
+
+                  <CustomSelect
+                    label="District"
+                    value={settings.district}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                      handleSettingChange("district", "", Number(e.target.value))
+                    }
+                    disabled={!settings.region}
+                    options={[
+                      { value: 0, label: "Select District" },
+                      ...districts.map((district) => ({ value: district.id, label: district.name })),
+                    ]}
+                  />
+
+                  <CustomSelect
+                    label="Settlement"
+                    value={settings.settlement}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                      handleSettingChange("settlement", "", Number(e.target.value))
+                    }
+                    disabled={!settings.district}
+                    options={[
+                      { value: 0, label: "Select Settlement" },
+                      ...settlements.map((settlement) => ({ value: settlement.id, label: settlement.name })),
+                    ]}
+                  />
+                </div>
+
+                <hr className="border-gray-200 dark:border-gray-700" />
+
+                <div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Language</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { code: "uz", flag: "🇺🇿", name: "O'zbek" },
+                      { code: "en", flag: "🇺🇸", name: "English" },
+                      { code: "ru", flag: "🇷🇺", name: "Русский" },
+                    ].map((lang) => (
+                      <CustomButton
+                        key={lang.code}
+                        variant={settings.language === lang.code ? "primary" : "outline"}
+                        onClick={() => handleSettingChange("language", "", lang.code)}
+                        className="justify-start"
+                      >
+                        <span className="mr-2">{lang.flag}</span>
+                        {lang.name}
+                      </CustomButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Theme</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { code: "light", icon: "☀️", name: "Light" },
+                      { code: "dark", icon: "🌙", name: "Dark" },
+                      { code: "auto", icon: "🔄", name: "Auto" },
+                    ].map((theme) => (
+                      <CustomButton
+                        key={theme.code}
+                        variant={settings.theme === theme.code ? "primary" : "outline"}
+                        onClick={() => {
+                          handleSettingChange("theme", "", theme.code)
+                          if (theme.code === "dark") {
+                            setIsDarkMode(true)
+                            document.documentElement.setAttribute("data-theme", "dark")
+                            localStorage.setItem("theme", "dark")
+                          } else if (theme.code === "light") {
+                            setIsDarkMode(false)
+                            document.documentElement.setAttribute("data-theme", "light")
+                            localStorage.setItem("theme", "light")
                           }
                         }}
+                        className="justify-start"
                       >
-                        Ha, chiqaman
-                      </button>
-
-                      <button
-                        className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium py-2 px-5 rounded-md"
-                        onClick={() => {
-                          window.location.href = '/';
-                        }}
-                      >
-                        Yo‘q, qolaman
-                      </button>
-                    </div>
+                        <span className="mr-2">{theme.icon}</span>
+                        {theme.name}
+                      </CustomButton>
+                    ))}
                   </div>
                 </div>
-              )}
 
+                <hr className="border-gray-200 dark:border-gray-700" />
 
-                {/* Preferences Tab */}
-                {activeTab === 'preferences' && (
-                  <div className="tab-content active">
-                    <div className="content-header">
-                      <h3 className="content-title">Preferences</h3>
-                      <p className="content-description">Customize your experience and app settings</p>
-                    </div>
-
-                    {/* Location Settings */}
-                    <div className="form-section">
-                      <h4 className="section-title">
-                        <div className="section-icon">
-                          <i className="fas fa-map-marker-alt"></i>
-                        </div>
-                        Location Settings
-                      </h4>
-
-                      <div className="form-group">
-                        <label>Country</label>
-                        <select
-                          value={settings.country}
-                          onChange={(e) => handleSettingChange('country', '', e.target.value)}
-                        >
-                          <option value="uz">Uzbekistan</option>
-                          <option value="us">United States</option>
-                          <option value="ru">Russia</option>
-                          <option value="kz">Kazakhstan</option>
-                          <option value="kg">Kyrgyzstan</option>
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label>Region/State</label>
-                        <select
-                          value={settings.region}
-                          onChange={(e) => handleSettingChange('region', '', e.target.value)}
-                        >
-                          <option value="tashkent">Tashkent</option>
-                          <option value="samarkand">Samarkand</option>
-                          <option value="bukhara">Bukhara</option>
-                          <option value="fergana">Fergana</option>
-                          <option value="andijan">Andijan</option>
-                          <option value="namangan">Namangan</option>
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label>City</label>
-                        <select
-                          value={settings.city}
-                          onChange={(e) => handleSettingChange('city', '', e.target.value)}
-                        >
-                          <option value="tashkent-city">Tashkent City</option>
-                          <option value="chirchiq">Chirchiq</option>
-                          <option value="angren">Angren</option>
-                          <option value="bekabad">Bekabad</option>
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label>District/Village</label>
-                        <input
-                          type="text"
-                          value={settings.district}
-                          onChange={(e) => handleSettingChange('district', '', e.target.value)}
-                          placeholder="Enter your district or village"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Language & Appearance */}
-                    <div className="form-section">
-                      <h4 className="section-title">
-                        <div className="section-icon">
-                          <i className="fas fa-palette"></i>
-                        </div>
-                        Appearance & Language
-                      </h4>
-
-                      <div className="form-group">
-                        <label>Language</label>
-                        <div className="language-selector">
-                          {[
-                            { code: 'uz', flag: '🇺🇿', name: "O'zbek" },
-                            { code: 'en', flag: '🇺🇸', name: 'English' },
-                            { code: 'ru', flag: '🇷🇺', name: 'Русский' }
-                          ].map(lang => (
-                            <button
-                              key={lang.code}
-                              className={`language-btn ${settings.language === lang.code ? 'active' : ''}`}
-                              onClick={() => handleSettingChange('language', '', lang.code)}
-                            >
-                              <div className="flag-icon">{lang.flag}</div>
-                              <span>{lang.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="form-group">
-                        <label>Theme</label>
-                        <div className="theme-selector">
-                          {[
-                            { code: 'light', icon: 'fas fa-sun', name: 'Light' },
-                            { code: 'dark', icon: 'fas fa-moon', name: 'Dark' },
-                            { code: 'auto', icon: 'fas fa-adjust', name: 'Auto' }
-                          ].map(theme => (
-                            <button
-                              key={theme.code}
-                              className={`theme-btn ${settings.theme === theme.code ? 'active' : ''}`}
-                              onClick={() => handleSettingChange('theme', '', theme.code)}
-                            >
-                              <i className={theme.icon}></i>
-                              <span>{theme.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Notifications
-            <div className="form-section">
-              <h4 className="section-title">
-                <div className="section-icon">
-                  <i className="fas fa-bell"></i>
-                </div>
-                Notifications
-              </h4>
-              
-              {[
-                { key: 'push', title: 'Push Notifications', desc: 'Receive notifications about new tests and updates' },
-                { key: 'email', title: 'Email Notifications', desc: 'Get weekly summaries and important updates via email' },
-                { key: 'sound', title: 'Sound Effects', desc: 'Play sounds for interactions and notifications' }
-              ].map(notif => (
-                <div key={notif.key} className="notification-item">
-                  <div className="notification-info">
-                    <h5>{notif.title}</h5>
-                    <p>{notif.desc}</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      checked={settings.notifications[notif.key]}
-                      onChange={(e) => handleSettingChange('notifications', notif.key, e.target.checked)}
+                <div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Notifications</div>
+                  <div className="space-y-4">
+                    <CustomSwitch
+                      checked={settings.notifications.push}
+                      onChange={(checked) => handleSettingChange("notifications", "push", checked)}
+                      label="Push Notifications"
+                      description="Receive push notifications"
                     />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-              ))}
-            </div> */}
-
-                    {/* Privacy */}
-                    {/* <div className="form-section">
-              <h4 className="section-title">
-                <div className="section-icon">
-                  <i className="fas fa-shield-alt"></i>
-                </div>
-                Privacy & Security
-              </h4>
-              
-              {[
-                { key: 'publicProfile', title: 'Public Profile', desc: 'Allow others to view your profile and statistics' },
-                { key: 'showOnlineStatus', title: 'Show Online Status', desc: 'Display when you\'re online to other users' }
-              ].map(privacy => (
-                <div key={privacy.key} className="notification-item">
-                  <div className="notification-info">
-                    <h5>{privacy.title}</h5>
-                    <p>{privacy.desc}</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      checked={settings.privacy[privacy.key]}
-                      onChange={(e) => handleSettingChange('privacy', privacy.key, e.target.checked)}
+                    <CustomSwitch
+                      checked={settings.notifications.email}
+                      onChange={(checked) => handleSettingChange("notifications", "email", checked)}
+                      label="Email Notifications"
+                      description="Receive email notifications"
                     />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-              ))}
-            </div> */}
-
-                    <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end' }}>
-                      <button className="btn btn-outline">
-                        <i className="fas fa-undo"></i>
-                        Reset
-                      </button>
-                      <button className="btn btn-primary">
-                        <i className="fas fa-save"></i>
-                        Save Preferences
-                      </button>
-                    </div>
+                    <CustomSwitch
+                      checked={settings.notifications.sound}
+                      onChange={(checked) => handleSettingChange("notifications", "sound", checked)}
+                      label="Sound Notifications"
+                      description="Play sound for notifications"
+                    />
                   </div>
-                )}
+                </div>
+
+                <hr className="border-gray-200 dark:border-gray-700" />
+
+                <div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Privacy</div>
+                  <div className="space-y-4">
+                    <CustomSwitch
+                      checked={settings.privacy.publicProfile}
+                      onChange={(checked) => handleSettingChange("privacy", "publicProfile", checked)}
+                      label="Public Profile"
+                      description="Make your profile visible to everyone"
+                    />
+                    <CustomSwitch
+                      checked={settings.privacy.showOnlineStatus}
+                      onChange={(checked) => handleSettingChange("privacy", "showOnlineStatus", checked)}
+                      label="Show Online Status"
+                      description="Let others see when you're online"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-4">
+                  <CustomButton variant="outline">Reset</CustomButton>
+                  <CustomButton onClick={handleSaveSettings} disabled={settingsLoading}>
+                    {settingsLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Saqlanmoqda...
+                      </>
+                    ) : (
+                      "Save Preferences"
+                    )}
+                  </CustomButton>
+                </div>
               </div>
+            )}
+
+            {activeTab === "logout" && (
+              <div className="flex items-center justify-center min-h-[400px]">
+                <CustomCard className="max-w-md w-full p-6 text-center">
+                  <h3 className="text-xl font-semibold mb-3 dark:text-white">Rostdan ham dasturdan chiqmoqchimisiz?</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Agar "Ha" tugmasini bossangiz, siz tizimdan chiqarilasiz.
+                  </p>
+                  <div className="flex justify-center gap-4">
+                    <CustomButton variant="danger" onClick={handleLogout}>
+                      Ha, chiqaman
+                    </CustomButton>
+                    <CustomButton variant="outline" onClick={() => setIsSettingsOpen(false)}>
+                      Yo'q, qolaman
+                    </CustomButton>
+                  </div>
+                </CustomCard>
+              </div>
+            )}
+          </div>
+        </div>
+      </CustomModal>
+
+      {/* Test Analytics Modal */}
+      <CustomModal
+        isOpen={showTestAnalytics && selectedTest !== null}
+        onClose={() => {
+          setShowTestAnalytics(false)
+          setSelectedTest(null)
+        }}
+        title={`${selectedTest?.title} - Analitika`}
+        size="lg"
+      >
+        {selectedTest && (
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <CustomCard className="p-4">
+                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Jami Tugallanganlar</div>
+                <div className="text-2xl font-bold dark:text-white">{selectedTest.completions}</div>
+              </CustomCard>
+              <CustomCard className="p-4">
+                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Reyting</div>
+                <div className="text-2xl font-bold dark:text-white">{selectedTest.rating}/5</div>
+              </CustomCard>
+              <CustomCard className="p-4">
+                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Savollar Soni</div>
+                <div className="text-2xl font-bold dark:text-white">{selectedTest.total_questions}</div>
+              </CustomCard>
+            </div>
+
+            <CustomCard className="p-6">
+              <h4 className="text-lg font-semibold mb-4 dark:text-white">Test Ma'lumotlari</h4>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kategoriya</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedTest.category?.emoji} {selectedTest.category?.title}
+                  </p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tavsif</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{selectedTest.description}</p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</div>
+                  <CustomBadge variant={selectedTest.status === "published" ? "default" : "secondary"}>
+                    {selectedTest.status}
+                  </CustomBadge>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Yaratilgan sana</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{formatDate(selectedTest.created_at)}</p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vaqt chegarasi</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{selectedTest.time_limit} daqiqa</p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ommaviy</div>
+                  <CustomBadge variant={selectedTest.is_public ? "default" : "secondary"}>
+                    {selectedTest.is_public ? "Ha" : "Yo'q"}
+                  </CustomBadge>
+                </div>
+              </div>
+            </CustomCard>
+          </div>
+        )}
+      </CustomModal>
+
+      {/* Test Edit Modal */}
+      <CustomModal
+        isOpen={editingTest !== null}
+        onClose={() => setEditingTest(null)}
+        title="Testni Tahrirlash"
+        size="md"
+      >
+        {editingTest && (
+          <div className="p-6 space-y-4">
+            <CustomInput
+              label="Test Nomi"
+              value={editingTest.title}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditingTest((prev) => (prev ? { ...prev, title: e.target.value } : null))
+              }
+            />
+            <CustomTextarea
+              label="Tavsif"
+              value={editingTest.description}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setEditingTest((prev) => (prev ? { ...prev, description: e.target.value } : null))
+              }
+              rows={4}
+            />
+            <CustomInput
+              label="Vaqt chegarasi (daqiqa)"
+              type="number"
+              value={editingTest.time_limit}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditingTest((prev) => (prev ? { ...prev, time_limit: Number(e.target.value) } : null))
+              }
+            />
+            <CustomSelect
+              label="Status"
+              value={editingTest.status}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setEditingTest((prev) => (prev ? { ...prev, status: e.target.value as "published" | "draft" } : null))
+              }
+              options={[
+                { value: "draft", label: "Qoralama" },
+                { value: "published", label: "Chop etilgan" },
+              ]}
+            />
+            <div className="flex items-center space-x-2">
+              <CustomSwitch
+                checked={editingTest.is_public}
+                onChange={(checked) => setEditingTest((prev) => (prev ? { ...prev, is_public: checked } : null))}
+                label="Ommaviy test"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <CustomButton variant="outline" onClick={() => setEditingTest(null)}>
+                Bekor qilish
+              </CustomButton>
+              <CustomButton
+                onClick={() => {
+                  console.log("Updating test:", editingTest)
+                  showToast("Test muvaffaqiyatli yangilandi!", "success")
+                  setEditingTest(null)
+                }}
+              >
+                Saqlash
+              </CustomButton>
             </div>
           </div>
-        )
-      }
+        )}
+      </CustomModal>
 
+      {/* Question Analytics Modal */}
+      <CustomModal
+        isOpen={showQuestionAnalytics && selectedQuestion !== null}
+        onClose={() => {
+          setShowQuestionAnalytics(false)
+          setSelectedQuestion(null)
+        }}
+        title="Savol Analitikasi"
+        size="lg"
+      >
+        {selectedQuestion && (
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <CustomCard className="p-4">
+                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Javoblar Soni</div>
+                <div className="text-2xl font-bold dark:text-white">{selectedQuestion.answers}</div>
+              </CustomCard>
+              <CustomCard className="p-4">
+                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">To'g'ri Javob %</div>
+                <div className="text-2xl font-bold dark:text-white">{selectedQuestion.correctRate}%</div>
+              </CustomCard>
+              <CustomCard className="p-4">
+                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Qiyinlik Darajasi</div>
+                <CustomBadge
+                  variant={
+                    selectedQuestion.difficulty === "Oson"
+                      ? "success"
+                      : selectedQuestion.difficulty === "O'rtacha"
+                        ? "warning"
+                        : "danger"
+                  }
+                >
+                  {selectedQuestion.difficulty}
+                </CustomBadge>
+              </CustomCard>
+            </div>
 
-
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="loading-overlay active">
-          <div className="loading-spinner">
-            <div className="spinner-ring"></div>
-            <div className="spinner-ring"></div>
-            <div className="spinner-ring"></div>
+            <CustomCard className="p-6">
+              <h4 className="text-lg font-semibold mb-4 dark:text-white">Savol Ma'lumotlari</h4>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Savol</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{selectedQuestion.question}</p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Test</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{selectedQuestion.test_title}</p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Turi</div>
+                  <CustomBadge variant="secondary">{selectedQuestion.type}</CustomBadge>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Yaratilgan sana</div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{formatDate(selectedQuestion.created_at)}</p>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Holati</div>
+                  <CustomBadge variant={selectedQuestion.is_active ? "default" : "secondary"}>
+                    {selectedQuestion.is_active ? "Faol" : "Nofaol"}
+                  </CustomBadge>
+                </div>
+              </div>
+            </CustomCard>
           </div>
-          <p className="loading-text">Processing...</p>
-        </div>
-      )}
+        )}
+      </CustomModal>
+
+      {/* Question Edit Modal */}
+      <CustomModal
+        isOpen={editingQuestion !== null}
+        onClose={() => setEditingQuestion(null)}
+        title="Savolni Tahrirlash"
+        size="md"
+      >
+        {editingQuestion && (
+          <div className="p-6 space-y-4">
+            <CustomTextarea
+              label="Savol"
+              value={editingQuestion.question}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setEditingQuestion((prev) => (prev ? { ...prev, question: e.target.value } : null))
+              }
+              rows={3}
+            />
+            <CustomInput
+              label="Turi"
+              value={editingQuestion.type}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditingQuestion((prev) => (prev ? { ...prev, type: e.target.value } : null))
+              }
+            />
+            <CustomSelect
+              label="Qiyinlik Darajasi"
+              value={editingQuestion.difficulty}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setEditingQuestion((prev) => (prev ? { ...prev, difficulty: e.target.value } : null))
+              }
+              options={[
+                { value: "Oson", label: "Oson" },
+                { value: "O'rtacha", label: "O'rtacha" },
+                { value: "Qiyin", label: "Qiyin" },
+              ]}
+            />
+            <div className="flex items-center space-x-2">
+              <CustomSwitch
+                checked={editingQuestion.is_active}
+                onChange={(checked) => setEditingQuestion((prev) => (prev ? { ...prev, is_active: checked } : null))}
+                label="Faol savol"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <CustomButton variant="outline" onClick={() => setEditingQuestion(null)}>
+                Bekor qilish
+              </CustomButton>
+              <CustomButton
+                onClick={() => {
+                  console.log("Updating question:", editingQuestion)
+                  showToast("Savol muvaffaqiyatli yangilandi!", "success")
+                  setEditingQuestion(null)
+                }}
+              >
+                Saqlash
+              </CustomButton>
+            </div>
+          </div>
+        )}
+      </CustomModal>
 
       {/* Followers Modal */}
-            {showFollowers && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-md w-full max-h-[80vh] overflow-hidden">
-                  <div className="flex justify-between items-center p-6 border-b border-theme-primary">
-              <h3 className="text-xl font-bold text-theme-primary">Followers ({Array.isArray(follow?.followers) && follow.followers.length || 0})</h3>
-                    <button
-                      onClick={() => setShowFollowers(false)}
-                      className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
-                    >
-                      <X size={20} className="text-theme-secondary" />
-                    </button>
-                  </div>
-                  
-                  <div className="p-6 overflow-y-auto max-h-[60vh]">
-                    <div className="space-y-4">
-                {follow?.followers.map((user) => (
-                        <div key={user.id} className="flex items-center space-x-4 p-3 bg-theme-secondary rounded-lg">
-                          <img
-                            src={user.profile_image || 'https://media.istockphoto.com/id/1300845620/vector/user-icon-flat-isolated-on-white-background-user-symbol-vector-illustration.jpg?s=612x612&w=0&k=20&c=yBeyba0hUkh14_jgv1OKqIH0CCSWU_4ckRkAoy2p73o='}
-                            alt={user.username}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                          {/* <div className="flex-1">
-                            <h4 className="font-semibold text-theme-primary">@{user.username}</h4>
-                            <div className="flex items-center space-x-2 text-sm text-theme-secondary">
-                              <span>{user.tests_count} tests</span>
-                              <span>•</span>
-                              <span className={`px-2 py-0.5 rounded-full text-xs ${getLevelBadge(user.level).color}`}>
-                                {user.level}
-                              </span>
-                            </div>
-                          </div> */}
-                          <button
-                            onClick={() => accountsAPI.toggleFollow(user.id)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-theme-normal ${
-                              user.following
-                                ? 'bg-theme-tertiary text-theme-primary hover:bg-red-100 hover:text-red-600'
-                                : 'bg-accent-primary text-white hover:bg-accent-secondary'
-                            }`}
-                          >
-                            {user.following ? (
-                              <div className="flex items-center space-x-1">
-                                <UserMinus size={16} />
-                                <span>Unfollow</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center space-x-1">
-                                <UserPlus size={16} />
-                                <span>Follow</span>
-                              </div>
-                            )}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+      <CustomModal
+        isOpen={showFollowers}
+        onClose={() => setShowFollowers(false)}
+        title={`Followers (${(Array.isArray(follow?.followers) && follow.followers.length) || 0})`}
+        size="sm"
+      >
+        <div className="p-6">
+          <div className="max-h-96 overflow-y-auto space-y-4">
+            {Array.isArray(follow?.following) && follow.following.length > 0 ? (
+              follow.following.map((user) => (
+                <div key={user.id} className="flex items-center space-x-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <img
+                    src={user.profile_image || "/placeholder.svg?height=48&width=48&text=User"}
+                    alt={user.username}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+                <div className="flex-1">
+                  <h4 className="font-semibold dark:text-white">@{user.username}</h4>
                 </div>
+                <CustomButton
+                  size="sm"
+                  variant={user.following ? "outline" : "primary"}
+                  onClick={() => handleFollow(user.id)}
+                >
+                  {user.following ? (
+                    <>
+                      <UserMinus size={16} className="mr-1" />
+                      Unfollow
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={16} className="mr-1" />
+                      Follow
+                    </>
+                  )}
+                </CustomButton>
               </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400 py-8">Hozircha hech kimni kuzatmayapsiz</p>
             )}
-      
-            {/* Following Modal */}
-            {showFollowing && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-md w-full max-h-[80vh] overflow-hidden">
-                  <div className="flex justify-between items-center p-6 border-b border-theme-primary">
-                          <h3 className="text-xl font-bold text-theme-primary">Following ({Array.isArray(follow?.following) && follow.following.length || 0})</h3>
-                    <button
-                      onClick={() => setShowFollowing(false)}
-                      className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
-                    >
-                      <X size={20} className="text-theme-secondary" />
-                    </button>
+
+          </div>
+        </div>
+      </CustomModal>
+
+      {/* Following Modal */}
+      <CustomModal
+        isOpen={showFollowing}
+        onClose={() => setShowFollowing(false)}
+        title={`Following (${Array.isArray(follow?.following) ? follow.following.length : 0})`}
+        size="sm"
+      >
+        <div className="p-6">
+          <div className="max-h-96 overflow-y-auto space-y-4">
+            {Array.isArray(follow?.following) && follow.following.length > 0 ? (
+              follow.following.map((user) => (
+                <div key={user.id} className="flex items-center space-x-4 p-3 rounded-lg border border-gray-200">
+                  <img
+                    src={user.profile_image || "/placeholder.svg?height=48&width=48&text=User"}
+                    alt={user.username}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                  <div className="flex-1">
+                    <h4 className="font-semibold">{user.username}</h4>
                   </div>
-                  
-                  <div className="p-6 overflow-y-auto max-h-[60vh]">
-                    <div className="space-y-4">
-                      {follow?.following.map((user) => (
-                        <div key={user.id} className="flex items-center space-x-4 p-3 bg-theme-secondary rounded-lg">
-                          <img
-                            src={user.profile_image || 'https://media.istockphoto.com/id/1300845620/vector/user-icon-flat-isolated-on-white-background-user-symbol-vector-illustration.jpg?s=612x612&w=0&k=20&c=yBeyba0hUkh14_jgv1OKqIH0CCSWU_4ckRkAoy2p73o='}
-                            alt={user.username}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-theme-primary">{user.username}</h4>
-                            {/* <div className="flex items-center space-x-2 text-sm text-theme-secondary">
-                              <span>{user.tests_count} tests</span>
-                              <span>•</span>
-                              <span className={`px-2 py-0.5 rounded-full text-xs ${getLevelBadge(user.level).color}`}>
-                                {user.level}
-                              </span>
-                            </div> */}
-                          </div>
-                          <button
-                            onClick={() => handleFollow(user.id)}
-                            className="px-4 py-2 rounded-lg text-sm font-medium bg-theme-tertiary text-theme-primary hover:bg-red-100 hover:text-red-600 transition-theme-normal"
-                          >
-                            <div className="flex items-center space-x-1">
-                              <UserMinus size={16} />
-                              <span>Unfollow</span>
-                            </div>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <CustomButton size="sm" variant="outline" onClick={() => handleFollow(user.id)}>
+                    <UserMinus size={16} className="mr-1" />
+                    Unfollow
+                  </CustomButton>
                 </div>
-              </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 py-8">Hozircha hech kimni kuzatmayapsiz</p>
             )}
+          </div>
+        </div>
+      </CustomModal>
+
+
+      <style>{`
+        .animate-slide-in {
+          animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </div>
-  );
-};
+  )
+}
 
-export default ProfilePage;
-
-
+export default ProfilePage
