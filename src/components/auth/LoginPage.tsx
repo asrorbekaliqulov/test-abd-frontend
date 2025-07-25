@@ -23,7 +23,7 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(formData.username, formData.password);
-      navigate('/');
+      navigate('/home');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Login failed. Please try again.');
     } finally {

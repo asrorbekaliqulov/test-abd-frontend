@@ -2,303 +2,271 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { X, ChevronLeft, ChevronRight, Heart, MessageCircle, Share } from "lucide-react"
+import { X } from "lucide-react"
 
-interface Answer {
+interface StoryItem {
   id: number
-  answer_text: string
-  is_correct: boolean
-}
-
-interface TestContent {
-  title: string
-  description: string
-  category: string
-  questions_count: number
-}
-
-interface QuestionContent {
-  question_text: string
-  answers: Answer[]
-}
-
-interface Story {
-  id: number
+  question_text?: string // for questions
+  title?: string // for tests
+  description?: string // for tests
+  question_type?: string
+  answers?: Array<{
+    id: number
+    letter: string
+    answer_text: string
+    is_correct: boolean
+  }>
   user: {
+    id: number
     username: string
-    user_profile_image: string
+    profile_image: string | null
   }
-  type: "test" | "question"
-  content: TestContent | QuestionContent
   created_at: string
-  status?: "solved" | "unsolved"
+  type: "test" | "question"
 }
 
 interface StoriesViewerProps {
-  stories: Story[]
+  stories: StoryItem[]
   initialIndex: number
   onClose: () => void
-  theme?: string
-  apiBaseUrl?: string
+  theme: string
+  onQuestionAnswer?: (questionId: number, answerIds: number[], textAnswer?: string) => void
 }
 
-const StoriesViewer: React.FC<StoriesViewerProps> = ({
+export const StoriesViewer: React.FC<StoriesViewerProps> = ({
   stories,
   initialIndex,
   onClose,
-  theme = "light",
-  apiBaseUrl = "https://backend.testabd.uz",
+  theme,
+  onQuestionAnswer,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
   const [progress, setProgress] = useState(0)
-  const [isPaused, setPaused] = useState(false)
+  const [selectedAnswers, setSelectedAnswers] = useState<number[]>([])
+  const [textAnswer, setTextAnswer] = useState("")
+  const [isAnswered, setIsAnswered] = useState(false)
 
-  const currentStory = stories[currentIndex]
-  const STORY_DURATION = 5000 // 5 seconds
-
+  // Reset answer state when story changes
   useEffect(() => {
-    if (isPaused || !currentStory) return
-
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          nextStory()
-          return 0
-        }
-        return prev + 100 / (STORY_DURATION / 100)
-      })
-    }, 100)
-
-    return () => clearInterval(interval)
-  }, [currentIndex, isPaused, currentStory])
-
-  const nextStory = () => {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
-      setProgress(0)
-    } else {
-      onClose()
-    }
-  }
-
-  const prevStory = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1)
-      setProgress(0)
-    }
-  }
-
-  const handleKeyPress = (event: KeyboardEvent) => {
-    if (event.key === "ArrowLeft") {
-      prevStory()
-    } else if (event.key === "ArrowRight") {
-      nextStory()
-    } else if (event.key === "Escape") {
-      onClose()
-    }
-  }
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyPress)
-    return () => document.removeEventListener("keydown", handleKeyPress)
+    setSelectedAnswers([])
+    setTextAnswer("")
+    setIsAnswered(false)
+    setProgress(0)
   }, [currentIndex])
 
-  const isTestContent = (content: TestContent | QuestionContent): content is TestContent => {
-    return currentStory.type === "test"
+  useEffect(() => {
+    if (isAnswered) return // Don't auto-advance if user is answering
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          if (currentIndex < stories.length - 1) {
+            setCurrentIndex(currentIndex + 1)
+            return 0
+          } else {
+            onClose()
+            return 100
+          }
+        }
+        return prev + 1 // Slower progress for questions
+      })
+    }, 150)
+
+    return () => clearInterval(timer)
+  }, [currentIndex, stories.length, onClose, isAnswered])
+
+  const currentStory = stories[currentIndex]
+
+  const handleQuestionAnswer = () => {
+    if (currentStory.type === "question" && onQuestionAnswer) {
+      if (currentStory.question_type === "text_input") {
+        onQuestionAnswer(currentStory.id, [], textAnswer)
+      } else {
+        onQuestionAnswer(currentStory.id, selectedAnswers)
+      }
+      setIsAnswered(true)
+
+      // Auto advance after 2 seconds
+      setTimeout(() => {
+        if (currentIndex < stories.length - 1) {
+          setCurrentIndex(currentIndex + 1)
+        } else {
+          onClose()
+        }
+      }, 2000)
+    }
   }
 
-  const isQuestionContent = (content: TestContent | QuestionContent): content is QuestionContent => {
-    return currentStory.type === "question"
+  const handleAnswerSelect = (answerId: number) => {
+    if (isAnswered) return
+
+    if (currentStory.question_type === "multiple") {
+      setSelectedAnswers((prev) =>
+        prev.includes(answerId) ? prev.filter((id) => id !== answerId) : [...prev, answerId],
+      )
+    } else {
+      setSelectedAnswers([answerId])
+      // Auto submit for single choice
+      setTimeout(() => handleQuestionAnswer(), 500)
+    }
   }
 
   const renderStoryContent = () => {
-    if (!currentStory) return null
-
-    if (isTestContent(currentStory.content)) {
-      const testContent = currentStory.content as TestContent
+    if (currentStory.type === "test") {
       return (
-        <div className="text-center text-white p-8">
-          <div className="bg-black bg-opacity-30 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-2xl font-bold mb-4">📝 New Test Created!</h2>
-            <h3 className="text-xl font-semibold mb-2">{testContent.title}</h3>
-            <p className="text-gray-200 mb-4">{testContent.description}</p>
-            <div className="flex justify-center space-x-4 text-sm">
-              <span className="bg-blue-500 px-3 py-1 rounded-full">{testContent.category}</span>
-              <span className="bg-green-500 px-3 py-1 rounded-full">{testContent.questions_count} questions</span>
+        <div className="h-full flex flex-col justify-center items-center p-6 text-white">
+          <div className="text-center mb-6">
+            <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 border-4 border-white">
+              <img
+                src={currentStory.user.profile_image || "/placeholder.svg?height=80&width=80"}
+                alt={currentStory.user.username}
+                className="w-full h-full object-cover"
+              />
             </div>
+            <h3 className="font-bold text-xl mb-2">{currentStory.user.username}</h3>
+            <p className="text-sm text-gray-300 mb-4">Yangi test yaratdi</p>
           </div>
-        </div>
-      )
-    } else if (isQuestionContent(currentStory.content)) {
-      const questionContent = currentStory.content as QuestionContent
-      return (
-        <div className="text-center text-white p-8">
-          <div className="bg-black bg-opacity-30 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-2xl font-bold mb-4">❓ New Question Added!</h2>
-            <p className="text-lg mb-4">{questionContent.question_text}</p>
-            <div className="space-y-2">
-              {questionContent.answers?.map((answer: Answer, index: number) => (
-                <div
-                  key={answer.id || index}
-                  className={`p-3 rounded-lg text-left transition-all hover:scale-105 ${answer.is_correct ? "bg-green-500 bg-opacity-80" : "bg-gray-500 bg-opacity-50"
-                    }`}
-                >
-                  {answer.answer_text}
-                </div>
-              ))}
-            </div>
+
+          <div className="bg-black bg-opacity-50 rounded-lg p-6 max-w-sm w-full text-center">
+            <h4 className="font-bold text-lg mb-3">{currentStory.title}</h4>
+            {currentStory.description && <p className="text-sm text-gray-300 mb-4">{currentStory.description}</p>}
+            <button className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full font-medium transition-colors">
+              Testni boshlash
+            </button>
           </div>
         </div>
       )
     }
 
+    // Question story
     return (
-      <div className="text-center text-white p-8">
-        <div className="bg-black bg-opacity-30 rounded-2xl p-6 backdrop-blur-sm">
-          <p className="text-lg">Unknown story type</p>
+      <div className="h-full flex flex-col justify-between p-4 text-white">
+        <div className="text-center mb-4">
+          <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3 border-2 border-white">
+            <img
+              src={currentStory.user.profile_image || "/placeholder.svg?height=64&width=64"}
+              alt={currentStory.user.username}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <h3 className="font-semibold text-lg">{currentStory.user.username}</h3>
+          <p className="text-xs text-gray-300">Yangi savol yaratdi</p>
+        </div>
+
+        <div className="flex-1 flex flex-col justify-center">
+          <h4 className="text-lg font-semibold mb-6 text-center leading-relaxed">{currentStory.question_text}</h4>
+
+          {currentStory.question_type === "text_input" ? (
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={textAnswer}
+                onChange={(e) => setTextAnswer(e.target.value)}
+                placeholder="Javobingizni kiriting..."
+                disabled={isAnswered}
+                className="w-full px-4 py-3 rounded-lg bg-black bg-opacity-50 border border-gray-400 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
+              />
+              <button
+                onClick={handleQuestionAnswer}
+                disabled={!textAnswer.trim() || isAnswered}
+                className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+              >
+                {isAnswered ? "Yuborildi!" : "Yuborish"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {currentStory.answers?.map((answer) => (
+                <button
+                  key={answer.id}
+                  onClick={() => handleAnswerSelect(answer.id)}
+                  disabled={isAnswered}
+                  className={`w-full p-4 rounded-lg text-left transition-all duration-200 ${selectedAnswers.includes(answer.id)
+                      ? "bg-blue-500 bg-opacity-80 border-2 border-blue-400"
+                      : "bg-black bg-opacity-50 border border-gray-400 hover:border-gray-300"
+                    } disabled:opacity-60`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${selectedAnswers.includes(answer.id) ? "bg-white text-blue-500" : "bg-gray-600 text-white"
+                        }`}
+                    >
+                      {answer.letter}
+                    </div>
+                    <span>{answer.answer_text}</span>
+                  </div>
+                </button>
+              ))}
+
+              {currentStory.question_type === "multiple" && selectedAnswers.length > 0 && !isAnswered && (
+                <button
+                  onClick={handleQuestionAnswer}
+                  className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition-colors mt-4"
+                >
+                  Javobni yuborish ({selectedAnswers.length} ta)
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="text-center text-xs text-gray-400 mt-4">
+          {new Date(currentStory.created_at).toLocaleDateString("uz-UZ")}
         </div>
       </div>
     )
   }
 
-  const getProfileImageUrl = (imagePath: string) => {
-    if (imagePath.startsWith("http")) {
-      return imagePath
-    }
-    return `${apiBaseUrl}${imagePath}`
-  }
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString()
-    } catch {
-      return "Unknown date"
-    }
-  }
-
-  if (!currentStory) {
-    return null
-  }
-
   return (
-    <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-      {/* Background */}
-      <div
-        className="absolute inset-0 bg-gradient-to-br from-purple-600 via-blue-600 to-green-600"
-        style={{
-          backgroundImage: `url(${getProfileImageUrl(currentStory.user.user_profile_image)})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          filter: "blur(20px) brightness(0.3)",
-        }}
-      />
-
-      {/* Progress bars */}
-      <div className="absolute top-4 left-4 right-4 flex space-x-1 z-10">
-        {stories.map((_, index) => (
-          <div key={index} className="flex-1 h-1 bg-white bg-opacity-30 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white transition-all duration-100"
-              style={{
-                width: index < currentIndex ? "100%" : index === currentIndex ? `${progress}%` : "0%",
-              }}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Header */}
-      <div className="absolute top-8 left-4 right-4 flex items-center justify-between z-10">
-        <div className="flex items-center space-x-3">
-          <img
-            src={getProfileImageUrl(currentStory.user.user_profile_image) || "/placeholder.svg?height=40&width=40"}
-            alt={currentStory.user.username}
-            className="w-10 h-10 rounded-full border-2 border-white object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.src = "/placeholder.svg?height=40&width=40"
-            }}
-          />
-          <div>
-            <p className="text-white font-semibold">{currentStory.user.username}</p>
-            <p className="text-white text-sm opacity-75">{formatDate(currentStory.created_at)}</p>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center">
+      <div className="relative w-full max-w-md h-full max-h-[700px] bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg overflow-hidden">
+        {/* Progress bars */}
+        <div className="absolute top-4 left-4 right-4 flex space-x-1 z-10">
+          {stories.map((_, index) => (
+            <div key={index} className="flex-1 h-1 bg-white bg-opacity-30 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white transition-all duration-100"
+                style={{
+                  width: index < currentIndex ? "100%" : index === currentIndex ? `${progress}%` : "0%",
+                }}
+              />
+            </div>
+          ))}
         </div>
 
+        {/* Close button */}
         <button
           onClick={onClose}
-          className="p-2 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 transition-all"
-          aria-label="Close stories"
+          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black bg-opacity-50 text-white hover:bg-opacity-70"
         >
           <X size={20} />
         </button>
-      </div>
 
-      {/* Navigation areas */}
-      <div className="absolute inset-0 flex">
-        <div
-          className="flex-1 cursor-pointer"
-          onClick={prevStory}
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-          aria-label="Previous story"
-        />
-        <div
-          className="flex-1 cursor-pointer"
-          onClick={nextStory}
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-          aria-label="Next story"
-        />
-      </div>
+        {/* Navigation areas */}
+        <div className="absolute inset-0 flex">
+          <div
+            className="flex-1 z-10"
+            onClick={() => {
+              if (currentIndex > 0) {
+                setCurrentIndex(currentIndex - 1)
+              }
+            }}
+          />
+          <div
+            className="flex-1 z-10"
+            onClick={() => {
+              if (currentIndex < stories.length - 1) {
+                setCurrentIndex(currentIndex + 1)
+              } else {
+                onClose()
+              }
+            }}
+          />
+        </div>
 
-      {/* Navigation buttons */}
-      {currentIndex > 0 && (
-        <button
-          onClick={prevStory}
-          className="absolute left-4 top-1/2 transform -translate-y-1/2 p-2 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 transition-all z-10"
-          aria-label="Previous story"
-        >
-          <ChevronLeft size={24} />
-        </button>
-      )}
-
-      {currentIndex < stories.length - 1 && (
-        <button
-          onClick={nextStory}
-          className="absolute right-4 top-1/2 transform -translate-y-1/2 p-2 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 transition-all z-10"
-          aria-label="Next story"
-        >
-          <ChevronRight size={24} />
-        </button>
-      )}
-
-      {/* Story content */}
-      <div className="relative z-10 max-w-md w-full mx-4">{renderStoryContent()}</div>
-
-      {/* Action buttons */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-4 z-10">
-        <button
-          className="p-3 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 transition-all hover:scale-110"
-          aria-label="Like story"
-        >
-          <Heart size={20} />
-        </button>
-        <button
-          className="p-3 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 transition-all hover:scale-110"
-          aria-label="Comment on story"
-        >
-          <MessageCircle size={20} />
-        </button>
-        <button
-          className="p-3 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 transition-all hover:scale-110"
-          aria-label="Share story"
-        >
-          <Share size={20} />
-        </button>
+        {/* Story content */}
+        {renderStoryContent()}
       </div>
     </div>
   )
 }
-
-export default StoriesViewer

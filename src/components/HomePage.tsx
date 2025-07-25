@@ -1,8 +1,22 @@
 "use client"
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Share, Bookmark, CheckCircle, Sun, Moon, Loader2, X, Send, Check, ThumbsUp, ThumbsDown } from "lucide-react"
-import { quizAPI } from "../utils/api"
+import {
+  Share,
+  Bookmark,
+  CheckCircle,
+  Sun,
+  Moon,
+  Loader2,
+  X,
+  Send,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  Plus,
+} from "lucide-react"
+import { quizAPI, authAPI } from "../utils/api"
+import { StoriesViewer } from "./stories/StoriesViewer"
 
 interface HomePageProps {
   theme: string
@@ -35,16 +49,26 @@ interface Quiz {
   is_bookmarked: boolean
 }
 
+// Update the Story interface
 interface Story {
   id: number
+  question_text?: string // for questions
+  title?: string // for tests
+  description?: string // for tests
+  question_type?: string
+  answers?: Array<{
+    id: number
+    letter: string
+    answer_text: string
+    is_correct: boolean
+  }>
   user: {
+    id: number
     username: string
-    user_profile_image: string
+    profile_image: string | null
   }
-  type: "test" | "question"
-  content: any
   created_at: string
-  status: "solved" | "unsolved"
+  type: "test" | "question"
 }
 
 const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
@@ -75,8 +99,48 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     }
   }
 
+  // Update the fetchStories function
+  const fetchStories = async () => {
+    try {
+      const response = await authAPI.fetchStories()
+      const data = response.data
+      console.log("Fetched stories:", data)
+
+      // Combine tests and questions into a single stories array
+      const allStories: Story[] = []
+
+      // Add tests
+      if (data.tests && Array.isArray(data.tests)) {
+        data.tests.forEach((test: any) => {
+          allStories.push({
+            ...test,
+            type: "test",
+          })
+        })
+      }
+
+      // Add questions
+      if (data.questions && Array.isArray(data.questions)) {
+        data.questions.forEach((question: any) => {
+          allStories.push({
+            ...question,
+            type: "question",
+          })
+        })
+      }
+
+      // Sort by creation date (newest first)
+      allStories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      setStories(allStories)
+    } catch (error) {
+      console.error("Stories yuklashda xatolik:", error)
+    }
+  }
+
   useEffect(() => {
     fetchQuizzes()
+    fetchStories()
   }, [])
 
   const shareQuestion = (quizId: number) => {
@@ -282,22 +346,59 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
   const getOptionStatus = (quizId: number, answerId: number, isCorrect: boolean, questionType: string) => {
     const answerState = answerStates.get(quizId)
     const selected = selectedAnswers.get(quizId) || []
+    const isSelected = selected.includes(answerId)
 
-    if (questionType === "multiple") {
-      if (!answerState) {
-        return selected.includes(answerId) ? "selected" : ""
-      }
-      if (answerState && isCorrect) return "show-correct"
-      if (selected.includes(answerId) && answerState === "incorrect") return "incorrect"
-      return "disabled"
+    // If not answered yet, return selection state
+    if (!answerState) {
+      return isSelected ? "selected" : "default"
     }
 
-    // For single choice and true/false
-    if (!selected.length || !answerState) return ""
-    if (selected.includes(answerId) && answerState === "correct" && isCorrect) return "correct"
-    if (selected.includes(answerId) && answerState === "incorrect") return "incorrect"
-    if (answerState && isCorrect) return "show-correct"
-    return "disabled"
+    // After answering - show correct/incorrect states
+    if (questionType === "multiple") {
+      if (isCorrect && isSelected) return "correct-selected" // ✅ correct and selected
+      if (!isCorrect && isSelected) return "incorrect-selected" // ❌ incorrect and selected
+      if (isCorrect && !isSelected) return "correct-unselected" // ✅ correct but not selected
+      return "neutral" // ❌ incorrect and not selected
+    }
+
+    // Single choice and true/false
+    if (isSelected) {
+      return isCorrect ? "correct-selected" : "incorrect-selected"
+    }
+
+    // Show correct answer if not selected
+    if (isCorrect) {
+      return "correct-unselected"
+    }
+
+    return "neutral"
+  }
+
+  const getOptionStyles = (status: string) => {
+    const baseStyles =
+      "w-full flex items-center justify-between space-x-3 p-4 sm:p-5 rounded-lg border-2 text-left transition-all duration-200"
+
+    switch (status) {
+      case "correct-selected":
+        return `${baseStyles} bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300`
+      case "incorrect-selected":
+        return `${baseStyles} bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300`
+      case "correct-unselected":
+        return `${baseStyles} bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300 opacity-80`
+      case "selected":
+        return `${baseStyles} ${theme === "dark" ? "bg-blue-900/30 border-blue-400 text-blue-300" : "bg-blue-50 border-blue-400 text-blue-700"
+          }`
+      case "neutral":
+        return `${baseStyles} ${theme === "dark"
+            ? "bg-gray-800 border-gray-600 text-gray-400 opacity-60"
+            : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
+          }`
+      default:
+        return `${baseStyles} ${theme === "dark"
+            ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white"
+            : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900"
+          }`
+    }
   }
 
   const getDifficultyColor = (difficulty: number) => {
@@ -385,27 +486,15 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
 
               const checkboxClass = `
                 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors duration-200
-                ${isSelected
-                  ? "bg-blue-500 border-blue-500 text-white"
-                  : theme === "dark"
-                    ? "bg-gray-700 border-gray-500"
-                    : "bg-white border-gray-300"
-                }
-              `
-
-              const buttonClass = `
-                w-full flex items-center justify-between space-x-3 p-4 sm:p-5 rounded-lg border-2 text-left transition-all duration-200 disabled:cursor-not-allowed
-                ${status === "show-correct" && option.is_correct
-                  ? "bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300"
-                  : status === "incorrect" && isSelected
-                    ? "bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300"
-                    : status === "selected" || status === "disabled"
-                      ? theme === "dark"
-                        ? "bg-gray-800 border-gray-600 text-gray-500 opacity-60"
-                        : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
+                ${status === "correct-selected" || status === "correct-unselected"
+                  ? "bg-green-500 border-green-500 text-white"
+                  : status === "incorrect-selected"
+                    ? "bg-red-500 border-red-500 text-white"
+                    : isSelected
+                      ? "bg-blue-500 border-blue-500 text-white"
                       : theme === "dark"
-                        ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white"
-                        : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900"
+                        ? "bg-gray-700 border-gray-500"
+                        : "bg-white border-gray-300"
                 }
               `
 
@@ -414,17 +503,18 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                   key={option.id}
                   onClick={() => handleMultipleChoice(quiz.id, option.id)}
                   disabled={isAnswered}
-                  className={buttonClass}
+                  className={getOptionStyles(status)}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className={checkboxClass}>{isSelected && <Check size={16} />}</div>
+                    <div className={checkboxClass}>
+                      {(isSelected || status === "correct-unselected") && <Check size={16} />}
+                    </div>
                     <span className="flex-1 text-base sm:text-lg">{option.answer_text}</span>
                   </div>
 
-                  {isSelected && !isAnswered && <Check size={22} className="text-blue-500" />}
-                  {isSelected && status === "show-correct" && option.is_correct && (
-                    <Check size={22} className="text-green-500" />
-                  )}
+                  {status === "correct-selected" && <Check size={22} className="text-green-500" />}
+                  {status === "incorrect-selected" && <X size={22} className="text-red-500" />}
+                  {status === "correct-unselected" && <Check size={22} className="text-green-500" />}
                 </button>
               )
             })}
@@ -455,7 +545,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
       )
     }
 
-    // For true/false questions - Fixed rendering
+    // For true/false questions
     if (isTrueFalseQuestion(quiz)) {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -466,23 +556,25 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
             // Determine if this is the "true" option
             const isTrue = ["true", "to'g'ri", "ha", "yes"].includes(option.answer_text.toLowerCase())
 
+            const buttonClass = `flex flex-col items-center justify-center gap-3 p-6 sm:p-8 rounded-xl border-2 text-center transition-all duration-200 min-h-[120px] ${status === "correct-selected" || status === "correct-unselected"
+                ? "bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300"
+                : status === "incorrect-selected"
+                  ? "bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300"
+                  : status === "neutral"
+                    ? theme === "dark"
+                      ? "bg-gray-800 border-gray-600 text-gray-500 opacity-60"
+                      : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
+                    : theme === "dark"
+                      ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white"
+                      : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900"
+              } disabled:cursor-not-allowed`
+
             return (
               <button
                 key={option.id}
                 onClick={() => handleSingleChoice(quiz.id, option.id)}
                 disabled={isAnswered || isSubmitting}
-                className={`flex flex-col items-center justify-center gap-3 p-6 sm:p-8 rounded-xl border-2 text-center transition-all duration-200 min-h-[120px] ${status === "correct" || (status === "show-correct" && option.is_correct)
-                    ? "bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300"
-                    : status === "incorrect" && isSelected
-                      ? "bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300"
-                      : status === "disabled"
-                        ? theme === "dark"
-                          ? "bg-gray-800 border-gray-600 text-gray-500 opacity-60"
-                          : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
-                        : theme === "dark"
-                          ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white"
-                          : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900"
-                  } disabled:cursor-not-allowed`}
+                className={buttonClass}
               >
                 {isTrue ? (
                   <ThumbsUp size={32} className="text-green-500" />
@@ -491,8 +583,9 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                 )}
                 <span className="text-lg sm:text-xl font-semibold">{option.answer_text}</span>
                 {isSubmitting && isSelected && <Loader2 size={20} className="animate-spin text-blue-500" />}
-                {status === "correct" && <Check size={24} className="text-green-500" />}
-                {status === "incorrect" && isSelected && <X size={24} className="text-red-500" />}
+                {status === "correct-selected" && <Check size={24} className="text-green-500" />}
+                {status === "incorrect-selected" && <X size={24} className="text-red-500" />}
+                {status === "correct-unselected" && <Check size={24} className="text-green-500" />}
               </button>
             )
           })}
@@ -507,50 +600,61 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
           const status = getOptionStatus(quiz.id, option.id, option.is_correct, quiz.question_type)
           const isSelected = selectedForQuestion.includes(option.id)
 
+          const letterClass = `w-10 h-10 rounded-full flex items-center justify-center text-base font-bold transition-all duration-200 ${status === "correct-selected" || status === "correct-unselected"
+              ? "bg-green-500 text-white"
+              : status === "incorrect-selected"
+                ? "bg-red-500 text-white"
+                : status === "neutral"
+                  ? theme === "dark"
+                    ? "bg-gray-600 text-gray-400"
+                    : "bg-gray-200 text-gray-400"
+                  : theme === "dark"
+                    ? "bg-gray-600 text-gray-200"
+                    : "bg-gray-200 text-gray-600"
+            }`
+
           return (
             <button
               key={option.id}
               onClick={() => handleSingleChoice(quiz.id, option.id)}
               disabled={isAnswered || isSubmitting}
-              className={`w-full flex items-center justify-between space-x-3 p-4 sm:p-5 rounded-lg border-2 text-left transition-all duration-200 ${status === "correct" || (status === "show-correct" && option.is_correct)
-                  ? "bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300"
-                  : status === "incorrect" && isSelected
-                    ? "bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300"
-                    : status === "disabled"
-                      ? theme === "dark"
-                        ? "bg-gray-800 border-gray-600 text-gray-500 opacity-60"
-                        : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
-                      : theme === "dark"
-                        ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white"
-                        : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900"
-                } disabled:cursor-not-allowed`}
+              className={getOptionStyles(status)}
             >
               <div className="flex items-center space-x-3">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold transition-all duration-200 ${status === "correct" || (status === "show-correct" && option.is_correct)
-                      ? "bg-green-500 text-white"
-                      : status === "incorrect" && isSelected
-                        ? "bg-red-500 text-white"
-                        : status === "disabled"
-                          ? theme === "dark"
-                            ? "bg-gray-600 text-gray-400"
-                            : "bg-gray-200 text-gray-400"
-                          : theme === "dark"
-                            ? "bg-gray-600 text-gray-200"
-                            : "bg-gray-200 text-gray-600"
-                    }`}
-                >
-                  {option.letter}
-                </div>
+                <div className={letterClass}>{option.letter}</div>
                 <span className="flex-1 text-base sm:text-lg">{option.answer_text}</span>
               </div>
               {isSubmitting && isSelected && <Loader2 size={20} className="animate-spin text-blue-500" />}
-              {status === "correct" && <Check size={22} className="text-green-500" />}
+              {status === "correct-selected" && <Check size={22} className="text-green-500" />}
+              {status === "incorrect-selected" && <X size={22} className="text-red-500" />}
+              {status === "correct-unselected" && <Check size={22} className="text-green-500" />}
             </button>
           )
         })}
       </div>
     )
+  }
+
+  // Add function to handle story question answers
+  const handleStoryQuestionAnswer = async (questionId: number, answerIds: number[], textAnswer?: string) => {
+    try {
+      if (textAnswer) {
+        await quizAPI.submitTextAnswers({
+          question: questionId,
+          written_answer: textAnswer,
+          duration: 2,
+        })
+      } else {
+        await quizAPI.submitAnswers({
+          question: questionId,
+          selected_answer_ids: answerIds,
+          duration: 2,
+        })
+      }
+      console.log("Story question answered successfully")
+    } catch (error) {
+      console.error("Story question answer error:", error)
+    }
   }
 
   return (
@@ -566,8 +670,8 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full" />
-              <h1 className="text-xl font-bold text-[var(--accent-primary)]">TestAbd</h1>
+              <img src="/placeholder.svg?height=32&width=32" alt="TestAbd" className="h-8 w-8 rounded-full" />
+              <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
             </div>
             <div className="flex items-center space-x-2">
               <button
@@ -582,8 +686,77 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         </div>
       </header>
 
+      {/* Stories Section */}
+      <section className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-4">
+        <div className="flex space-x-4 overflow-x-auto pb-2">
+          {/* Add Story Button */}
+          <div className="flex-shrink-0">
+            <button className="flex flex-col items-center space-y-2">
+              <div
+                className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center ${theme === "dark" ? "border-gray-600 bg-gray-800" : "border-gray-300 bg-gray-100"
+                  }`}
+              >
+                <Plus size={24} className={theme === "dark" ? "text-gray-400" : "text-gray-500"} />
+              </div>
+              <span className="text-xs text-center max-w-[70px] truncate">Qo'shish</span>
+            </button>
+          </div>
+
+          {/* Stories */}
+          {stories.map((story, index) => (
+            <div key={`${story.type}-${story.id}`} className="flex-shrink-0">
+              <button
+                onClick={() => {
+                  setSelectedStoryIndex(index)
+                  setShowStoriesViewer(true)
+                }}
+                className="flex flex-col items-center space-y-2"
+              >
+                <div
+                  className={`w-16 h-16 rounded-full p-0.5 ${story.type === "test"
+                      ? "bg-gradient-to-tr from-blue-400 to-purple-600"
+                      : "bg-gradient-to-tr from-green-400 to-blue-500"
+                    }`}
+                >
+                  <div
+                    className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"
+                      }`}
+                  >
+                    <img
+                      src={story.user.profile_image || "/placeholder.svg?height=60&width=60"}
+                      alt={story.user.username}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <span className="text-xs text-center max-w-[70px] truncate">{story.user.username}</span>
+                <div
+                  className={`text-xs px-2 py-0.5 rounded-full ${story.type === "test"
+                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                      : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300"
+                    }`}
+                >
+                  {story.type === "test" ? "Test" : "Savol"}
+                </div>
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Stories Viewer Modal */}
+      {showStoriesViewer && (
+        <StoriesViewer
+          stories={stories}
+          initialIndex={selectedStoryIndex}
+          onClose={() => setShowStoriesViewer(false)}
+          theme={theme}
+          onQuestionAnswer={handleStoryQuestionAnswer}
+        />
+      )}
+
       {/* Main */}
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-24">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-24">
         {/* Quizzes */}
         <section className="space-y-6">
           {quizzes.map((quiz, index) => (
@@ -602,7 +775,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                     >
                       {quiz.user.profile_image ? (
                         <img
-                          src={quiz.user.profile_image || "/placeholder.svg"}
+                          src={quiz.user.profile_image || "/placeholder.svg?height=40&width=40"}
                           alt="avatar"
                           className="object-cover w-full h-full"
                         />
@@ -662,7 +835,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                 {renderQuestionContent(quiz)}
               </div>
 
-              {/* Footer - Moved higher to avoid navbar overlap */}
+              {/* Footer */}
               <div
                 className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pt-4 border-t mb-2 ${theme === "dark" ? "border-gray-700" : "border-gray-200"
                   }`}

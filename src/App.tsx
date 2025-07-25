@@ -16,13 +16,15 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import AdminPanel from './components/admin/AdminPanel';
 import TestCreator from './components/create/TestCreator';
 import QuestionCreator from './components/create/QuestionCreator';
-import StoriesViewer from './components/stories/StoriesViewer';
+import { StoriesViewer } from './components/stories/StoriesViewer';
 import ProfilePage from './components/ProfilePage';
 import QuestionPage from './components/QuestionPgaes';
 import EmailVerificationPage from './components/auth/EmailVerificationPgae';
 import CompleteProfilePage from './components/auth/CompleteProfilePgae';
 import { OtherUserProfilePage } from './components/OtherProfile/OtherUserProfilePage'
 import LogoutPage from './components/auth/LogOutPage';
+import TestDetailPage from './components/TestDetailPages';
+import QuizTakingPage from './components/QuizTalkingPages';
 
 // interface ProfilePageProps {
 //   onShowSettings: () => void;
@@ -144,6 +146,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const App: React.FC = () => {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem('theme');
+    return stored === 'dark' ? 'dark' : 'light';
+  });
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
   const { isAuthenticated } = useAuth();
 
   return (
@@ -159,7 +169,9 @@ const App: React.FC = () => {
       <Route path="/profile/:username" element={<OtherUserProfilePage />} />
       <Route path="/verify-email/:token" element={<EmailVerificationPage />} />
       <Route path="/complete-profile" element={<CompleteProfilePage />} />
+      <Route path="/tests/:testId" element={<TestDetailPage theme={theme} />} />
       <Route path="/questions/:id" element={<QuestionPage />} />
+      <Route path="/quiz" element={<QuizTakingPage theme={theme} />} />{" "}
       <Route path="/logout" element={<LogoutPage  />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/admin" element={<ProtectedRoute><AdminPanel theme="light" /></ProtectedRoute>} />

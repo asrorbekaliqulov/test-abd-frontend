@@ -148,6 +148,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({ theme, onClose }) => 
 
       // Create question first
       const questionResponse = await quizAPI.createQuestion(questionData);
+      console.log('Question created:', questionResponse.data);
 
       // Create answers for choice-based questions using quizAPI
       // if (formData.question_type !== 'text_input') {
