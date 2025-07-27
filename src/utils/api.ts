@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'http://192.168.100.14:8000';
+const API_BASE_URL = 'https://backend.testabd.uz';
 
 
 
@@ -24,6 +24,12 @@ const api = axios.create({
     Accept: 'application/json',
   },
 });
+
+
+
+
+
+
 
 // Token manager
 export const tokenManager = {
@@ -66,6 +72,32 @@ api.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
+const formAPI = axios.create({
+  baseURL: API_BASE_URL,
+  // ❌ 'Content-Type' yozmang!
+  headers: {
+    Accept: 'application/json',
+  },
+});
+
+// Tokenni qo‘shish uchun interceptor
+formAPI.interceptors.request.use(
+  (config) => {
+    const token = tokenManager.getAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Faylni yuborish funksiyasi
+export const updateProfileImage = (formData: FormData) => {
+  return formAPI.patch("/accounts/me/update/", formData);
+};
+
 
 // Response interceptor: token muddati tugasa refresh qilib qayta yuborish
 api.interceptors.response.use(
@@ -309,11 +341,16 @@ export const quizAPI = {
 
   recordView: (data: any) => api.post('/quiz/views/', data),
 
-  bookmarkTest: (data: any) => api.post('/quiz/question-bookmarks/', data),
+  bookmarkQuestion: (data: any) => api.post('/quiz/question-bookmarks/', data),
   getBookmarks: () => api.get('/quiz/question-bookmarks/'),
   getBookmarkByQuestion: (questionId: number) =>
     api.get(`/quiz/question-bookmarks/?question=${questionId}`),
-  
+
+  bookmarkTest: (data: any) => api.post('/quiz/test-bookmarks/', data),
+  getBookmarksTest: () => api.get('/quiz/test-bookmarks/'),
+  getBookmarkByTest: (testId: number) =>
+    api.get(`/quiz/test-bookmarks/?test=${testId}`),
+
 
   BlockBookmark: (data: any) => api.post('/quiz/test-bookmarks/', data),
   unblockBookmark: (id: number) => api.delete(`/quiz/test-bookmarks/${id}/`),

@@ -176,15 +176,17 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme, onShowStories }
                     </div>
                     <div>
                       <div className="flex items-center space-x-1">
-                        <span className="font-semibold text-theme-primary text-sm">
-                          {test.user?.username || 'Unknown'}
-                        </span>
+                        <a href={`/profile/${test.user?.username}`} className="hover:underline">
+                          <span className="font-semibold text-theme-primary text-sm">
+                            {test.user?.username || 'Unknown'}
+                          </span>
+                        </a>
                         {test.user?.is_badged && (
                           <CheckCircle size={16} className="text-blue-500" />
                         )}
                       </div>
                       <div className="flex items-center space-x-2 text-xs text-theme-secondary">
-                        <span>{test.category?.name || 'General'}</span>
+                        <span>{test.category?.title || 'General'}</span>
                       </div>
                     </div>
                   </div>
@@ -254,9 +256,11 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme, onShowStories }
                   </div>
                   <div>
                     <div className="flex items-center space-x-1">
+                      <a href={`/profile/${quiz.username}`} className="hover:underline">
                       <span className="font-semibold text-theme-primary text-sm">
                         {quiz.username}
                       </span>
+                      </a>
                       {quiz.verified && (
                         <CheckCircle size={16} className="text-blue-500" />
                       )}

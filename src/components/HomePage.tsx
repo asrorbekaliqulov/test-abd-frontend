@@ -71,10 +71,22 @@ interface Story {
   type: "test" | "question"
 }
 
+// Add interface for grouped stories
+interface GroupedStory {
+  user: {
+    id: number
+    username: string
+    profile_image: string | null
+  }
+  stories: Story[]
+  latestStory: Story
+}
+
 const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, number[]>>(new Map())
   const [answerStates, setAnswerStates] = useState<Map<number, "correct" | "incorrect">>(new Map())
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
+  console.log("HomePage quizzes:", quizzes)
   const [loading, setLoading] = useState(false)
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null)
   const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set())
@@ -84,6 +96,8 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
   const [showStoriesViewer, setShowStoriesViewer] = useState(false)
   const [selectedStoryIndex, setSelectedStoryIndex] = useState(0)
   const [stories, setStories] = useState<Story[]>([])
+  const [groupedStories, setGroupedStories] = useState<GroupedStory[]>([])
+  const [selectedUserStories, setSelectedUserStories] = useState<Story[]>([])
 
   const fetchQuizzes = async (url?: string) => {
     setLoading(true)
@@ -99,7 +113,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     }
   }
 
-  // Update the fetchStories function
+  // fetchStories funksiyasini yangilaymiz - xavfsizlik tekshiruvlari bilan
   const fetchStories = async () => {
     try {
       const response = await authAPI.fetchStories()
@@ -109,33 +123,94 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
       // Combine tests and questions into a single stories array
       const allStories: Story[] = []
 
-      // Add tests
+      // Add tests with safety checks
       if (data.tests && Array.isArray(data.tests)) {
         data.tests.forEach((test: any) => {
-          allStories.push({
-            ...test,
-            type: "test",
-          })
+          // Only add if test has valid user data
+          if (test && test.user && test.user.id) {
+            allStories.push({
+              ...test,
+              type: "test",
+            })
+          } else {
+            console.warn("Test without valid user data:", test)
+          }
         })
       }
 
-      // Add questions
+      // Add questions with safety checks
       if (data.questions && Array.isArray(data.questions)) {
         data.questions.forEach((question: any) => {
-          allStories.push({
-            ...question,
-            type: "question",
-          })
+          // Only add if question has valid user data
+          if (question && question.user && question.user.id) {
+            allStories.push({
+              ...question,
+              type: "question",
+            })
+          } else {
+            console.warn("Question without valid user data:", question)
+          }
         })
       }
 
       // Sort by creation date (newest first)
       allStories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
+      console.log("Processed stories:", allStories)
       setStories(allStories)
+
+      // Group stories by user
+      const grouped = groupStoriesByUser(allStories)
+      setGroupedStories(grouped)
     } catch (error) {
       console.error("Stories yuklashda xatolik:", error)
     }
+  }
+
+  // groupStoriesByUser funksiyasini yangilaymiz - xavfsizlik tekshiruvlari bilan
+  const groupStoriesByUser = (stories: Story[]): GroupedStory[] => {
+    const userStoriesMap = new Map<number, Story[]>()
+
+    // Group stories by user ID with safety checks
+    stories.forEach((story) => {
+      // Double check that story and user exist
+      if (!story || !story.user || typeof story.user.id !== "number") {
+        console.warn("Invalid story structure:", story)
+        return // Skip this story
+      }
+
+      const userId = story.user.id
+      if (!userStoriesMap.has(userId)) {
+        userStoriesMap.set(userId, [])
+      }
+      userStoriesMap.get(userId)!.push(story)
+    })
+
+    // Convert to array and sort each user's stories by date
+    const groupedArray: GroupedStory[] = []
+    userStoriesMap.forEach((userStories, userId) => {
+      if (userStories.length === 0) return // Skip empty arrays
+
+      // Sort user's stories by creation date (newest first)
+      userStories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      // Make sure the first story has valid user data
+      if (userStories[0] && userStories[0].user) {
+        groupedArray.push({
+          user: userStories[0].user, // Use user info from the first story
+          stories: userStories,
+          latestStory: userStories[0], // Most recent story for display
+        })
+      }
+    })
+
+    // Sort groups by the latest story date
+    groupedArray.sort(
+      (a, b) => new Date(b.latestStory.created_at).getTime() - new Date(a.latestStory.created_at).getTime(),
+    )
+
+    console.log("Grouped stories:", groupedArray)
+    return groupedArray
   }
 
   useEffect(() => {
@@ -172,7 +247,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
 
   const saveQuiz = (quizId: number) => {
     quizAPI
-      .bookmarkTest({ question: quizId })
+      .bookmarkQuestion({ question: quizId })
       .then((res) => {
         setQuizzes((prev) =>
           prev.map((quiz) => (quiz.id === quizId ? { ...quiz, is_bookmarked: !quiz.is_bookmarked } : quiz)),
@@ -657,6 +732,13 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     }
   }
 
+  // Function to handle story click
+  const handleStoryClick = (groupedStory: GroupedStory) => {
+    setSelectedUserStories(groupedStory.stories)
+    setSelectedStoryIndex(0) // Start from the first story of this user
+    setShowStoriesViewer(true)
+  }
+
   return (
     <div
       className={`min-h-screen transition-all duration-300 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
@@ -670,7 +752,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <img src="/placeholder.svg?height=32&width=32" alt="TestAbd" className="h-8 w-8 rounded-full" />
+              <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full" />
               <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
             </div>
             <div className="flex items-center space-x-2">
@@ -686,7 +768,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         </div>
       </header>
 
-      {/* Stories Section */}
+      {/* Stories Section - Updated to use grouped stories */}
       <section className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-4">
         <div className="flex space-x-4 overflow-x-auto pb-2">
           {/* Add Story Button */}
@@ -702,41 +784,43 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
             </button>
           </div>
 
-          {/* Stories */}
-          {stories.map((story, index) => (
-            <div key={`${story.type}-${story.id}`} className="flex-shrink-0">
-              <button
-                onClick={() => {
-                  setSelectedStoryIndex(index)
-                  setShowStoriesViewer(true)
-                }}
-                className="flex flex-col items-center space-y-2"
-              >
-                <div
-                  className={`w-16 h-16 rounded-full p-0.5 ${story.type === "test"
-                      ? "bg-gradient-to-tr from-blue-400 to-purple-600"
-                      : "bg-gradient-to-tr from-green-400 to-blue-500"
-                    }`}
-                >
+          {/* Grouped Stories - Now each user appears only once */}
+          {groupedStories.map((groupedStory) => (
+            <div key={`user-${groupedStory.user.id}`} className="flex-shrink-0">
+              <button onClick={() => handleStoryClick(groupedStory)} className="flex flex-col items-center space-y-2">
+                <div className="relative">
                   <div
-                    className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"
+                    className={`w-16 h-16 rounded-full p-0.5 ${groupedStory.latestStory.type === "test"
+                        ? "bg-gradient-to-tr from-blue-400 to-purple-600"
+                        : "bg-gradient-to-tr from-green-400 to-blue-500"
                       }`}
                   >
-                    <img
-                      src={story.user.profile_image || "/placeholder.svg?height=60&width=60"}
-                      alt={story.user.username}
-                      className="w-full h-full object-cover"
-                    />
+                    <div
+                      className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"
+                        }`}
+                    >
+                      <img
+                        src={`https://backend.testabd.uz${groupedStory.user.profile_image || "/placeholder.svg?height=60&width=60"}`}
+                        alt={groupedStory.user.username}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
                   </div>
+                  {/* Story count indicator */}
+                  {groupedStory.stories.length > 1 && (
+                    <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                      {groupedStory.stories.length}
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs text-center max-w-[70px] truncate">{story.user.username}</span>
+                <span className="text-xs text-center max-w-[70px] truncate">{groupedStory.user.username}</span>
                 <div
-                  className={`text-xs px-2 py-0.5 rounded-full ${story.type === "test"
+                  className={`text-xs px-2 py-0.5 rounded-full ${groupedStory.latestStory.type === "test"
                       ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
                       : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300"
                     }`}
                 >
-                  {story.type === "test" ? "Test" : "Savol"}
+                  {groupedStory.latestStory.type === "test" ? "Test" : "Savol"}
                 </div>
               </button>
             </div>
@@ -744,10 +828,10 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         </div>
       </section>
 
-      {/* Stories Viewer Modal */}
+      {/* Stories Viewer Modal - Updated to use selected user stories */}
       {showStoriesViewer && (
         <StoriesViewer
-          stories={stories}
+          stories={selectedUserStories}
           initialIndex={selectedStoryIndex}
           onClose={() => setShowStoriesViewer(false)}
           theme={theme}
@@ -768,11 +852,12 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6">
                 <div className="flex items-center space-x-3">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"
-                        }`}
-                    >
+                  <a href={`/profile/${quiz.user?.username}`} >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"
+                          }`}
+                      >
                       {quiz.user.profile_image ? (
                         <img
                           src={quiz.user.profile_image || "/placeholder.svg?height=40&width=40"}
@@ -792,17 +877,13 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                           {quiz.user.username}
                         </span>
                         {quiz.user.is_badged && <CheckCircle size={16} className="text-blue-500" />}
-                        {quiz.user.is_premium && (
-                          <span className="px-2 py-0.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold rounded-full">
-                            PRO
-                          </span>
-                        )}
                       </div>
                       <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                         {new Date(quiz.created_at).toLocaleDateString("uz-UZ")}
                       </div>
                     </div>
                   </div>
+                  </a>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-3">
                   <div

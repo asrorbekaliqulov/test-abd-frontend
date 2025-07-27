@@ -30,8 +30,8 @@ interface Quiz {
     profile_image: string | null
     is_badged?: boolean
     is_premium?: boolean
+    is_following?: boolean
   }
-  is_following?: boolean
   created_at: string
   round_image: string | null
 }
@@ -52,12 +52,19 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [nextPageUrl, setNextPageUrl] = useState<string | undefined>(undefined)
   const [quizData, setQuizzes] = useState<Quiz[]>([])
+  console.log("Quiz Data:", quizData)
   const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set())
   const [batchIndices, setBatchIndices] = useState<number[]>([])
   const [animateIn, setAnimateIn] = useState(true)
   const [direction, setDirection] = useState<"up" | "down">("up")
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
   const [isScrolling, setIsScrolling] = useState(false)
+
+  // Timer states ni to'liq o'zgartirish
+  const [questionTimers, setQuestionTimers] = useState<Map<number, number>>(new Map())
+  const [questionStartTimes, setQuestionStartTimes] = useState<Map<number, number>>(new Map())
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [currentTimerQuestionId, setCurrentTimerQuestionId] = useState<number | null>(null)
 
   // Preload images function
   const preloadImages = useCallback(
@@ -90,6 +97,67 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
       }
     },
     [quizData, preloadedImages],
+  )
+
+  // startQuestionTimer funksiyasini to'liq qayta yozish
+  const startQuestionTimer = useCallback(
+    (quizId: number) => {
+      // Agar savol allaqachon javob berilgan bo'lsa, timer boshlanmasin
+      if (userInteractions.answerStates.has(quizId)) {
+        return
+      }
+
+      // Avvalgi timerni to'xtatish
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+        timerIntervalRef.current = null
+      }
+
+      // Yangi timer boshlanishi
+      const now = Date.now()
+      setQuestionStartTimes((prev) => new Map(prev).set(quizId, now))
+      setQuestionTimers((prev) => new Map(prev).set(quizId, 0))
+      setCurrentTimerQuestionId(quizId)
+
+      console.log(`Timer started for question ${quizId}`)
+
+      // Har soniyada yangilanuvchi timer
+      timerIntervalRef.current = setInterval(() => {
+        setQuestionTimers((prev) => {
+          const newMap = new Map(prev)
+          const startTime = questionStartTimes.get(quizId)
+          if (startTime) {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000)
+            newMap.set(quizId, elapsed)
+            console.log(`Question ${quizId} timer: ${elapsed}s`)
+          }
+          return newMap
+        })
+      }, 1000)
+    },
+    [userInteractions.answerStates],
+  )
+
+  // stopQuestionTimer funksiyasini yangilash
+  const stopQuestionTimer = useCallback(
+    (quizId: number) => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+        timerIntervalRef.current = null
+      }
+
+      setCurrentTimerQuestionId(null)
+
+      const startTime = questionStartTimes.get(quizId)
+      if (startTime) {
+        const finalDuration = Math.floor((Date.now() - startTime) / 1000)
+        setQuestionTimers((prev) => new Map(prev).set(quizId, finalDuration))
+        console.log(`Timer stopped for question ${quizId}, duration: ${finalDuration}s`)
+        return finalDuration
+      }
+      return 0
+    },
+    [questionStartTimes],
   )
 
   const fetchQuizzes = async (url?: string) => {
@@ -125,9 +193,29 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     if (quizData.length > 0) {
       preloadImages(currentQuizIndex + 1, 3)
     }
-  }, [currentQuizIndex, quizData.length, preloadImages])
+  }, [currentQuizIndex, preloadImages])
 
-  // Improved scroll handling with debouncing
+  // Birinchi savol uchun timer boshlanishi
+  useEffect(() => {
+    if (quizData.length > 0 && currentQuizIndex >= 0 && currentQuizIndex < quizData.length) {
+      const currentQuiz = quizData[currentQuizIndex]
+      if (currentQuiz) {
+        console.log(`Initial timer start for question ${currentQuiz.id}`)
+        startQuestionTimer(currentQuiz.id)
+      }
+    }
+  }, [quizData.length, currentQuizIndex, startQuestionTimer])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+      }
+    }
+  }, [])
+
+  // handleScroll funksiyasida timer logikasini yangilash
   const handleScroll = useCallback(() => {
     if (!containerRef.current || !hasMore) return
 
@@ -145,9 +233,17 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     if (newIndex !== currentQuizIndex && newIndex >= 0 && newIndex < quizData.length) {
       setDirection(newIndex > currentQuizIndex ? "up" : "down")
       setAnimateIn(false)
+
       setTimeout(() => {
         setCurrentQuizIndex(newIndex)
         setAnimateIn(true)
+
+        // Yangi savolga o'tganda timer boshlanishi
+        const newQuiz = quizData[newIndex]
+        if (newQuiz) {
+          console.log(`Switching to question ${newQuiz.id}`)
+          startQuestionTimer(newQuiz.id)
+        }
       }, 30)
     }
 
@@ -167,11 +263,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
       }
     }
-  }, [currentQuizIndex, quizData.length, hasMore, nextPageUrl, batchIndices, loading, isScrolling])
+  }, [currentQuizIndex, quizData, hasMore, nextPageUrl, batchIndices, loading, isScrolling, startQuestionTimer])
 
-  const selectAnswer = async (quizId: number, answerId: number, duration = 0) => {
+  const selectAnswer = async (quizId: number, answerId: number) => {
     const selectedAnswers = userInteractions.selectedAnswers.get(quizId) || []
     if (selectedAnswers.length > 0 || submittingQuestions.has(quizId)) return
+
+    // Stop timer and get duration
+    const duration = stopQuestionTimer(quizId)
 
     setSubmittingQuestions((prev) => new Set(prev).add(quizId))
 
@@ -181,6 +280,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         selected_answer_ids: [answerId],
         duration: duration,
       })
+      console.log("Single choice response:", res.data)
 
       const isCorrect = res.data.is_correct
 
@@ -233,14 +333,18 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const selected = userInteractions.selectedAnswers.get(quizId) || []
     if (selected.length === 0 || submittingQuestions.has(quizId)) return
 
+    // Stop timer and get duration
+    const duration = stopQuestionTimer(quizId)
+
     setSubmittingQuestions((prev) => new Set(prev).add(quizId))
 
     try {
       const response = await quizAPI.submitAnswers({
         question: quizId,
         selected_answer_ids: selected,
-        duration: 2,
+        duration: duration,
       })
+      console.log("Multiple choice response:", response.data)
 
       const isCorrect = response.data.is_correct
 
@@ -275,13 +379,16 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const textAnswer = userInteractions.textAnswers.get(quizId)
     if (!textAnswer?.trim() || submittingQuestions.has(quizId)) return
 
+    // Stop timer and get duration
+    const duration = stopQuestionTimer(quizId)
+
     setSubmittingQuestions((prev) => new Set(prev).add(quizId))
 
     try {
       const response = await quizAPI.submitTextAnswers({
         question: quizId,
         written_answer: textAnswer.trim(),
-        duration: 2,
+        duration: duration,
       })
 
       const isCorrect = response.data.is_correct
@@ -304,6 +411,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
       )
     } catch (error) {
       console.error("Javobni yuborishda xatolik:", error)
+      // Show error message to user
+      alert("Javobni yuborishda xatolik yuz berdi. Qaytadan urinib ko'ring.")
     } finally {
       setSubmittingQuestions((prev) => {
         const newSet = new Set(prev)
@@ -350,7 +459,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
           quiz.user.id === user_id
             ? {
               ...quiz,
-              is_following: !quiz.is_following,
+              user: {
+                ...quiz.user,
+                is_following: !quiz.user.is_following,
+              },
             }
             : quiz,
         ),
@@ -362,7 +474,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
   const handleSave = (quizId: number) => {
     quizAPI
-      .bookmarkTest({ question: quizId })
+      .bookmarkQuestion({ question: quizId })
       .then((res) => {
         setQuizzes((prev) =>
           prev.map((quiz) => (quiz.id === quizId ? { ...quiz, is_bookmarked: !quiz.is_bookmarked } : quiz)),
@@ -414,31 +526,64 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const optionsCount = quiz.answers.length
 
     if (quiz.question_type === "text_input") {
+      const textAnswer = userInteractions.textAnswers.get(quiz.id) || ""
+
       return (
-        <div className="space-y-3">
-          <div className="flex flex-col gap-3">
-            <input
-              type="text"
-              value={userInteractions.textAnswers.get(quiz.id) || ""}
-              onChange={(e) =>
-                setUserInteractions((prev) => ({
-                  ...prev,
-                  textAnswers: new Map(prev.textAnswers).set(quiz.id, e.target.value),
-                }))
-              }
-              placeholder="Javobingizni kiriting..."
-              disabled={hasSelected}
-              className={`w-full px-4 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white placeholder-white/60 focus:outline-none focus:border-white/50 transition-all text-base sm:text-lg md:text-xl shadow-lg`}
-            />
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4">
+            <div className="relative">
+              <textarea
+                value={textAnswer}
+                onChange={(e) =>
+                  setUserInteractions((prev) => ({
+                    ...prev,
+                    textAnswers: new Map(prev.textAnswers).set(quiz.id, e.target.value),
+                  }))
+                }
+                placeholder="Javobingizni bu yerga yozing..."
+                disabled={hasSelected}
+                rows={4}
+                className={`w-full px-4 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white placeholder-white/60 focus:outline-none focus:border-white/70 focus:ring-2 focus:ring-white/20 transition-all text-base sm:text-lg md:text-xl shadow-lg resize-none ${hasSelected ? "opacity-70 cursor-not-allowed" : ""
+                  }`}
+              />
+              {answerState && (
+                <div
+                  className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${answerState === "correct" ? "bg-green-500" : "bg-red-500"
+                    }`}
+                >
+                  {answerState === "correct" ? (
+                    <Check size={16} className="text-white" />
+                  ) : (
+                    <X size={16} className="text-white" />
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => handleTextAnswer(quiz.id)}
-              disabled={!userInteractions.textAnswers.get(quiz.id)?.trim() || hasSelected || isSubmitting}
-              className={`self-end px-6 py-3 sm:px-8 sm:py-4 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center gap-2 transition-all text-base sm:text-lg shadow-lg ${isSubmitting ? "bg-blue-500/40" : "hover:bg-black/50"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              disabled={!textAnswer.trim() || hasSelected || isSubmitting}
+              className={`self-end px-6 py-3 sm:px-8 sm:py-4 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center gap-2 transition-all text-base sm:text-lg shadow-lg ${isSubmitting
+                  ? "bg-blue-500/40 cursor-not-allowed"
+                  : textAnswer.trim() && !hasSelected
+                    ? "hover:bg-black/50 hover:border-white/50 hover:shadow-xl"
+                    : "opacity-50 cursor-not-allowed"
+                }`}
             >
               {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-              <span>Yuborish</span>
+              <span>{isSubmitting ? "Yuborilmoqda..." : "Javobni yuborish"}</span>
             </button>
+
+            {answerState && (
+              <div
+                className={`text-center py-2 px-4 rounded-lg ${answerState === "correct"
+                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                  }`}
+              >
+                {answerState === "correct" ? "✅ To'g'ri javob!" : "❌ Noto'g'ri javob"}
+              </div>
+            )}
           </div>
         </div>
       )
@@ -734,8 +879,24 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 <div
                   className={`absolute top-24 left-4 right-4 sm:top-32 sm:left-6 sm:right-6 bg-black/40 backdrop-blur-lg border border-white/30 rounded-xl p-4 sm:p-6 z-5 shadow-lg`}
                 >
-                  <div className="text-base sm:text-lg font-bold mb-3 text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    Savol
+                  {/* Timer ko'rsatish qismini yangilash - Question Container ichida */}
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="text-base sm:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                      Savol
+                    </div>
+                    {!userInteractions.answerStates.has(quiz.id) && (
+                      <div className="flex items-center gap-2 px-3 py-1 bg-black/30 rounded-full border border-white/20">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-white text-sm font-mono">
+                          {(() => {
+                            const currentTime = questionTimers.get(quiz.id) || 0
+                            const minutes = Math.floor(currentTime / 60)
+                            const seconds = currentTime % 60
+                            return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+                          })()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="text-sm sm:text-base leading-relaxed text-white text-opacity-95">
                     {quiz.question_text}
@@ -751,7 +912,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                         : optionsCount === 4
                           ? "top-[30%]"
                           : "top-[28%]"
-                    } left-4 right-4 sm:left-6 sm:right-6 z-5 ${optionsCount >= 5 ? "max-h-[45vh]" : ""}`}
+                    } left-4 right-8 sm:left-6 sm:right-20 z-5 ${optionsCount >= 5 ? "max-h-[45vh]" : ""}`}
                 >
                   {quiz.answers && quiz.answers.length > 0 ? (
                     renderQuestionContent(quiz)
@@ -768,7 +929,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 {/* Sidebar - Optimized for mobile devices */}
                 <div
                   className={`absolute right-3 mobile-sidebar flex flex-col gap-4 sm:gap-5 z-10`}
-                  style={{ bottom: "20vh" }}
+                  style={{ bottom: "15vh" }}
                 >
                   {/* Profile Section */}
                   <div className="relative flex flex-col items-center">
@@ -776,8 +937,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                       <img
                         src={
                           quiz.user.profile_image ||
-                          "https://static.vecteezy.com/system/resources/previews/009/292/244/non_2x/default-avatar-icon-of-social-media-user-vector.jpg" ||
-                          "/placeholder.svg" ||
+                          "https://backend.testabd.uz/media/defaultuseravatar.png" ||
                           "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
@@ -787,10 +947,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     </a>
                     <button
                       onClick={() => handleFollow(quiz.user.id)}
-                      className={`absolute -bottom-1 follow-btn w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white flex items-center justify-center font-bold transition-all text-xs sm:text-sm ${quiz.is_following ? "bg-green-500 text-white" : "bg-red-500 text-white"
-                        }`}
+                      className={`absolute -bottom-1 follow-btn w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white flex items-center justify-center font-bold transition-all text-xs sm:text-sm ${quiz.user.is_following ? "bg-green-500 text-white" : "bg-red-400 text-white"}`}
                     >
-                      {quiz.is_following ? "✓" : "+"}
+                      {quiz.user.is_following ? "✓" : "+"}
                     </button>
                   </div>
 

@@ -517,9 +517,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'test' && renderTestCreation()}
-        {activeTab === 'questions' && <QuestionCreator theme={''} onClose={function (): void {
-          throw new Error('Function not implemented.');
-        } }  />}
+        {activeTab === 'questions' && <QuestionCreator theme={''} onClose={() => setActiveTab('overview')}/>}
       </div>
     </div>
   );

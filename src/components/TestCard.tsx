@@ -117,6 +117,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, theme, onStartTest, on
                     />
                     <div className="flex-1">
                         <div className="flex items-center space-x-2">
+                            <a href={`/profile/${test.user.username}`} className="font-semibold text-sm hover:underline">
                             <p className={`font-semibold text-sm ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                                 @{test.user.username}
                             </p>
@@ -130,6 +131,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, theme, onStartTest, on
                                     <span className="text-white text-xs">★</span>
                                 </div>
                             )}
+                            </a>
                         </div>
                         <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                             {new Date(test.created_at).toLocaleDateString("uz-UZ")}

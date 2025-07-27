@@ -15,6 +15,7 @@ import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import AdminPanel from './components/admin/AdminPanel';
 import TestCreator from './components/create/TestCreator';
+import TestsPage from './components/TestPage';
 import QuestionCreator from './components/create/QuestionCreator';
 import { StoriesViewer } from './components/stories/StoriesViewer';
 import ProfilePage from './components/ProfilePage';
@@ -75,23 +76,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const mockStories = [
-    {
-      id: 1,
-      user: {
-        username: 'alex_dev',
-        profile_image: 'https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=150'
-      },
-      type: 'test' as const,
-      content: {
-        title: 'Advanced React Patterns',
-        description: 'Learn advanced React patterns and best practices',
-        category: 'Programming',
-        questions_count: 15
-      },
-      created_at: '2024-01-20T10:00:00Z'
-    }
-  ];
 
 
   return (
@@ -119,14 +103,7 @@ const AppContent: React.FC = () => {
         <QuestionCreator theme={theme} onClose={() => setShowQuestionCreator(false)} />
       )}
 
-      {showStories && (
-        <StoriesViewer
-          stories={mockStories}
-          initialIndex={selectedStoryIndex}
-          onClose={() => setShowStories(false)}
-          theme={theme}
-        />
-      )}
+
     </div>
   );
 };
@@ -169,6 +146,7 @@ const App: React.FC = () => {
       <Route path="/profile/:username" element={<OtherUserProfilePage />} />
       <Route path="/verify-email/:token" element={<EmailVerificationPage />} />
       <Route path="/complete-profile" element={<CompleteProfilePage />} />
+      <Route path="/tests" element={<ProtectedRoute><TestsPage theme={theme} /></ProtectedRoute>} />
       <Route path="/tests/:testId" element={<TestDetailPage theme={theme} />} />
       <Route path="/questions/:id" element={<QuestionPage />} />
       <Route path="/quiz" element={<QuizTakingPage theme={theme} />} />{" "}

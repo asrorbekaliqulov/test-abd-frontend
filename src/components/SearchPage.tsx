@@ -177,7 +177,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
 
   const handleTestClick = (test: ApiTest) => {
     // Navigate to test details or start test
-    navigate(`/test/${test.id}`)
+    navigate(`/tests/${test.id}`)
   }
 
   const handleUserClick = (user: ApiUser) => {
@@ -282,11 +282,11 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
               <BookOpen size={12} />
-              <span>Test</span>
+              <span>Blok</span>
             </div>
             <div className="flex items-center space-x-1">
               <Users size={12} />
-              <span>{test.correct_count} completed</span>
+              <span>{test.correct_count} tugatildi</span>
             </div>
             {test.created_at && (
               <div className="flex items-center space-x-1">

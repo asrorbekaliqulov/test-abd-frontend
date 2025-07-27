@@ -562,11 +562,12 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                         {/* Author and Date */}
                         <div className="flex items-center space-x-4 mb-8">
                             <img
-                                src={test.user.profile_image || "/placeholder.svg?height=50&width=50"}
+                                src={`${test.user.profile_image || "/media/defaultuseravatar.png"}`}
                                 alt={test.user.username}
                                 className="w-12 h-12 rounded-full"
                             />
                             <div>
+                                <a href={`/profile/${test.user.username}`} className="text-blue-500">
                                 <div className="flex items-center space-x-2">
                                     <p className={`font-bold text-lg ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                                         @{test.user.username}
@@ -582,6 +583,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                         </div>
                                     )}
                                 </div>
+                                </a>
                                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                                     {new Date(test.created_at).toLocaleDateString("uz-UZ", {
                                         year: "numeric",
@@ -774,6 +776,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                             </div>
                                         </div>
                                         <div>
+                                            <a href={`/profile/${question.user.username}`}>
                                             <div className="flex items-center space-x-2">
                                                 <p className={`text-lg font-bold ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
                                                     {question.user.username}
@@ -789,6 +792,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                                     </div>
                                                 )}
                                             </div>
+                                            </a>
                                             <p className={`text-sm ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
                                                 {new Date(question.created_at).toLocaleDateString("uz-UZ")}
                                             </p>
@@ -992,7 +996,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
 
                                         <div className="flex items-center space-x-3">
                                             <img
-                                                src={relatedTest.user.profile_image || "/placeholder.svg?height=24&width=24"}
+                                                src={relatedTest.user.profile_image || "/media/defaultuseravatar.png"}
                                                 alt={relatedTest.user.username}
                                                 className="w-6 h-6 rounded-full"
                                             />

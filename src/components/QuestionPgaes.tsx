@@ -50,6 +50,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const [question, setQuestion] = useState<Question | null>(null)
+    console.log("QuestionPage rendered with theme:", question)
     const [similarQuestions, setSimilarQuestions] = useState<Question[]>([])
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
@@ -281,7 +282,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
         if (!question) return
 
         try {
-            await quizAPI.bookmarkTest({ question: question.id })
+            await quizAPI.bookmarkQuestion({ question: question.id })
             setQuestion((prev) =>
                 prev
                     ? {

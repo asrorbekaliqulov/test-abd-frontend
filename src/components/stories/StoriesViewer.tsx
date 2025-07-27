@@ -45,6 +45,7 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([])
   const [textAnswer, setTextAnswer] = useState("")
   const [isAnswered, setIsAnswered] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
 
   // Reset answer state when story changes
   useEffect(() => {
@@ -52,10 +53,11 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
     setTextAnswer("")
     setIsAnswered(false)
     setProgress(0)
+    setIsPaused(false)
   }, [currentIndex])
 
   useEffect(() => {
-    if (isAnswered) return // Don't auto-advance if user is answering
+    if (isAnswered || isPaused) return
 
     const timer = setInterval(() => {
       setProgress((prev) => {
@@ -68,12 +70,12 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
             return 100
           }
         }
-        return prev + 1 // Slower progress for questions
+        return prev + 1
       })
     }, 150)
 
     return () => clearInterval(timer)
-  }, [currentIndex, stories.length, onClose, isAnswered])
+  }, [currentIndex, stories.length, onClose, isAnswered, isPaused])
 
   const currentStory = stories[currentIndex]
 
@@ -86,7 +88,6 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
       }
       setIsAnswered(true)
 
-      // Auto advance after 2 seconds
       setTimeout(() => {
         if (currentIndex < stories.length - 1) {
           setCurrentIndex(currentIndex + 1)
@@ -106,8 +107,41 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
       )
     } else {
       setSelectedAnswers([answerId])
-      // Auto submit for single choice
       setTimeout(() => handleQuestionAnswer(), 500)
+    }
+  }
+
+  const handleTestStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsPaused(true)
+    window.location.href = `/tests/${currentStory.id}`
+  }
+
+  const handleContainerClick = (e: React.MouseEvent, side: "left" | "right") => {
+    // Only handle navigation if clicked on empty area (not on buttons or interactive elements)
+    const target = e.target as HTMLElement
+
+    // Check if clicked element or its parent is a button or input
+    if (
+      target.tagName === "BUTTON" ||
+      target.tagName === "INPUT" ||
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest(".interactive-element")
+    ) {
+      return // Don't navigate if clicked on interactive element
+    }
+
+    if (side === "left") {
+      if (currentIndex > 0) {
+        setCurrentIndex(currentIndex - 1)
+      }
+    } else {
+      if (currentIndex < stories.length - 1) {
+        setCurrentIndex(currentIndex + 1)
+      } else {
+        onClose()
+      }
     }
   }
 
@@ -118,7 +152,7 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
           <div className="text-center mb-6">
             <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 border-4 border-white">
               <img
-                src={currentStory.user.profile_image || "/placeholder.svg?height=80&width=80"}
+                src={`https://backend.testabd.uz${currentStory.user.profile_image || "/defaultuseravatar.png"}`}
                 alt={currentStory.user.username}
                 className="w-full h-full object-cover"
               />
@@ -127,10 +161,13 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
             <p className="text-sm text-gray-300 mb-4">Yangi test yaratdi</p>
           </div>
 
-          <div className="bg-black bg-opacity-50 rounded-lg p-6 max-w-sm w-full text-center">
+          <div className="bg-black bg-opacity-50 rounded-lg p-6 max-w-sm w-full text-center interactive-element">
             <h4 className="font-bold text-lg mb-3">{currentStory.title}</h4>
             {currentStory.description && <p className="text-sm text-gray-300 mb-4">{currentStory.description}</p>}
-            <button className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full font-medium transition-colors">
+            <button
+              onClick={handleTestStart}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full font-medium transition-colors"
+            >
               Testni boshlash
             </button>
           </div>
@@ -157,7 +194,7 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
           <h4 className="text-lg font-semibold mb-6 text-center leading-relaxed">{currentStory.question_text}</h4>
 
           {currentStory.question_type === "text_input" ? (
-            <div className="space-y-4">
+            <div className="space-y-4 interactive-element">
               <input
                 type="text"
                 value={textAnswer}
@@ -175,7 +212,7 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 interactive-element">
               {currentStory.answers?.map((answer) => (
                 <button
                   key={answer.id}
@@ -244,28 +281,12 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
 
         {/* Navigation areas */}
         <div className="absolute inset-0 flex">
-          <div
-            className="flex-1 z-10"
-            onClick={() => {
-              if (currentIndex > 0) {
-                setCurrentIndex(currentIndex - 1)
-              }
-            }}
-          />
-          <div
-            className="flex-1 z-10"
-            onClick={() => {
-              if (currentIndex < stories.length - 1) {
-                setCurrentIndex(currentIndex + 1)
-              } else {
-                onClose()
-              }
-            }}
-          />
+          <div className="flex-1" onClick={(e) => handleContainerClick(e, "left")} />
+          <div className="flex-1" onClick={(e) => handleContainerClick(e, "right")} />
         </div>
 
         {/* Story content */}
-        {renderStoryContent()}
+        <div className="relative z-10">{renderStoryContent()}</div>
       </div>
     </div>
   )
