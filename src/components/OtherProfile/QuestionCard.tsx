@@ -21,7 +21,6 @@ interface QuestionCardProps {
 }
 
 export const QuestionCard: React.FC<QuestionCardProps> = ({ question, onQuestionClick }) => {
-    console.log(`QUESTION CARD:`, question);
     const getDifficultyColor = (difficulty_percentage: number) => {
         if (difficulty_percentage < 33) return 'bg-green-100 text-green-800';
         if (difficulty_percentage < 66) return 'bg-yellow-100 text-yellow-800';

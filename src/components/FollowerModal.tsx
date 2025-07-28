@@ -40,19 +40,16 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
     followers
 }) => {
     if (!isOpen) return null;
-    console.log(`FollowersModal isOpen:`, followers);
 
     // const onFollowToggle = (follower_id: number) => {
     //     accountsAPI.toggleFollow(follower_id)
     //         .then(response => {
-    //             console.log(`Toggle follow response:`, response);
     //             // Optionally, you can update the followers state here
     //         })
     //         .catch(error => {
     //             console.error('Error toggling follow:', error);
     //         });
     // }
-    console.log(`FollowersModal followers:`, followers.map(f => f.profile_image));
 
         const handleFollow = async (user_id: number) => {
     

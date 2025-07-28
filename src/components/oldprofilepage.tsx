@@ -278,7 +278,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onShowSettings }) => {
 
   const handleQuestionClick = (testId: number) => {
     // Navigate to quiz page with specific test
-    console.log(`Navigate to quiz with test ID: ${testId}`);
     setSelectedTest(null);
   };
 

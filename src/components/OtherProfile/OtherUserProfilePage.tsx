@@ -124,7 +124,6 @@ export const UserProfilePage: React.FC = () => {
     const { username } = useParams<{ username: string }>();
     const [tests, setTests] = useState<Test | null>(null);
     const [questions, setQuestions] = useState<TestQuestion[]>([]);
-    console.log(`TESTS:`, tests)
     const [activeTab, setActiveTab] = useState<'tests' | 'questions'>('tests');
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [showFollowingModal, setShowFollowingModal] = useState(false);
@@ -136,10 +135,7 @@ export const UserProfilePage: React.FC = () => {
     const [selectedQuestion, setSelectedQuestion] = useState<TestQuestion | null>(null);
     const [followers, setFollowers] = useState<FollowUser[]>([]);
     const [following, setFollowing] = useState<FollowUser[]>([]);
-    console.log(`UserProfilePagedagi followers:`, followers)
-    console.log(`UserProfilePagedagi following:`, following)
     const [user, setUser] = useState<User | null>(null);
-    console.log(`USER:`, user)
     const [stats, setStats] = useState<UserStats | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -147,7 +143,6 @@ export const UserProfilePage: React.FC = () => {
         const fetchData = async () => {
             try {
                 const { user, stats } = await userProfile(username || "asrorbek");
-                console.log(`ProfilePagedagi USER:`, user)
                 setUser(user);
                 setStats(stats);
             } catch (error) {
@@ -227,7 +222,6 @@ export const UserProfilePage: React.FC = () => {
             if (!user) return; // Null check to prevent error
             try {
                 const followersData = await accountsAPI.getUserFollowData(user.id);
-                console.log(`Followers data:`, followersData);
                 setFollowers(followersData.data.followers);
                 setFollowing(followersData.data.following);
             } catch (error) {
@@ -384,34 +378,6 @@ export const UserProfilePage: React.FC = () => {
                 followers={following}
             />
 
-            {/* <TestModal
-                isOpen={showTestModal}
-                onClose={() => setShowTestModal(false)}
-                test={selectedTest}
-                onViewQuestions={handleViewQuestions}
-                onStartTest={handleStartTest}
-            /> */}
-
-            {/* <QuestionsListModal
-                isOpen={showQuestionsListModal}
-                onClose={() => setShowQuestionsListModal(false)}
-                questions={selectedTest?.questions || []}
-                testTitle={selectedTest?.title || ''}
-                onQuestionClick={handleQuestionClick}
-            />
-
-            <QuestionDetailModal
-                isOpen={showQuestionDetailModal}
-                onClose={handleCloseQuestionDetail}
-                question={selectedQuestion}
-            />
-
-            <TikTokStyleTest
-                isOpen={showTikTokTest}
-                onClose={() => setShowTikTokTest(false)}
-                questions={selectedTest?.questions || []}
-                testTitle={selectedTest?.title || ''}
-            /> */}
         </div>
     );
 };

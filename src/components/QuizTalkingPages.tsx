@@ -85,10 +85,8 @@ const QuizTakingPage: React.FC<QuizTakingPageProps> = ({ theme }) => {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const testId = searchParams.get("testId")
-    console.log("Test ID:", testId)
 
     const [test, setTest] = useState<Test | null>(null)
-    console.log("Test data:", test)
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [notification, setNotification] = useState<Notification | null>(null)

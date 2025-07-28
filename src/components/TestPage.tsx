@@ -72,8 +72,6 @@ const TestsPage: React.FC<TestsPageProps> = ({ theme }) => {
                 quizAPI.fetchPublicTests(),
                 quizAPI.fetchCategories(),
             ])
-            console.log("Fetched tests:", testsResponse.data)
-            console.log("Fetched categories:", categoriesResponse.data)
 
             setAllTests(testsResponse.data.results || testsResponse.data || [])
             setCategories(categoriesResponse.data.results || categoriesResponse.data || [])

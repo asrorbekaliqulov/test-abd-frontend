@@ -294,7 +294,6 @@ const EnhancedActivityChart = ({ weeklyData }: { weeklyData: any }) => {
 
     const handleClaimPromocode = () => {
       // This will be connected to your backend later
-      console.log("Claiming promocode:", promocodeData.code)
     }
 
     return (
@@ -854,7 +853,6 @@ const ProfilePage = () => {
   const [myTests, setMyTests] = useState<MyTests[]>([])
   const [recentQuestions, setRecentQuestions] = useState<RecentQuestion[]>([])
   const [savedTests, setSavedTests] = useState<SavedTest[]>([])
-  console.log(`Saved Tests:`, savedTests)
   const [savedQuestions, setSavedQuestions] = useState<SavedQuestion[]>([])
   const [settings, setSettings] = useState<UserSettings>({
     country: 0,
@@ -974,12 +972,10 @@ const ProfilePage = () => {
       try {
         quizAPI.getBookmarksTest().then((res) => {
           setSavedTests(res.data.results)
-          console.log(res.data.results)
         })
 
         quizAPI.getBookmarks().then((res) => {
           setSavedQuestions(res.data.results)
-          console.log(res.data.results)
         })
 
       } catch (err) {
@@ -2478,7 +2474,6 @@ const ProfilePage = () => {
               </CustomButton>
               <CustomButton
                 onClick={() => {
-                  console.log("Updating test:", editingTest)
                   showToast("Test muvaffaqiyatli yangilandi!", "success")
                   setEditingTest(null)
                 }}
@@ -2605,7 +2600,6 @@ const ProfilePage = () => {
               </CustomButton>
               <CustomButton
                 onClick={() => {
-                  console.log("Updating question:", editingQuestion)
                   showToast("Savol muvaffaqiyatli yangilandi!", "success")
                   setEditingQuestion(null)
                 }}

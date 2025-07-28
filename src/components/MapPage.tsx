@@ -89,44 +89,44 @@ const FilterPanel: React.FC<{
         <div className="absolute top-12 right-0 w-80 bg-theme-primary border border-theme-primary rounded-lg shadow-theme-xl p-4 z-[500]">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-theme-primary mb-2">Level Type</label>
+              <label className="block text-sm font-medium text-theme-primary mb-2">Darajaning turi</label>
               <select
                 value={filters.level_type || ""}
                 onChange={(e) => handleFilterChange("level_type", e.target.value)}
                 className="w-full px-3 py-2 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
               >
-                <option value="">All Levels</option>
-                <option value="country">Country</option>
-                <option value="region">Region</option>
-                <option value="district">District</option>
-                <option value="neighborhood">Neighborhood</option>
+                <option value="">Barcha daraja</option>
+                <option value="country">Mamlakat</option>
+                <option value="region">Viloyat</option>
+                <option value="district">Tuman</option>
+                <option value="neighborhood">Mahalla</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme-primary mb-2">Level</label>
+              <label className="block text-sm font-medium text-theme-primary mb-2">Daraja</label>
               <input
                 type="text"
                 value={filters.level || ""}
                 onChange={(e) => handleFilterChange("level", e.target.value)}
-                placeholder="Enter level..."
+                placeholder="Darajani kiriting..."
                 className="w-full px-3 py-2 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme-primary mb-2">Location</label>
+              <label className="block text-sm font-medium text-theme-primary mb-2">Manzil</label>
               <input
                 type="text"
                 value={filters.location || ""}
                 onChange={(e) => handleFilterChange("location", e.target.value)}
-                placeholder="Enter location..."
+                placeholder="Manzilni kiriting..."
                 className="w-full px-3 py-2 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme-primary mb-2">Date</label>
+              <label className="block text-sm font-medium text-theme-primary mb-2">Sana</label>
               <input
                 type="date"
                 value={filters.date || ""}
@@ -140,13 +140,13 @@ const FilterPanel: React.FC<{
                 onClick={() => onFiltersChange({})}
                 className="flex-1 px-3 py-2 border border-theme-primary rounded-lg text-theme-secondary hover:bg-theme-tertiary transition-theme-normal"
               >
-                Clear
+                Tozalash
               </button>
               <button
                 onClick={onToggle}
                 className="flex-1 px-3 py-2 bg-accent-primary text-white rounded-lg hover:bg-accent-secondary transition-theme-normal"
               >
-                Apply
+                Qo'llash
               </button>
             </div>
           </div>
@@ -167,11 +167,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<LeaderboardFilters>({})
   const [showFilters, setShowFilters] = useState(false)
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    avgAccuracy: 0,
-    totalTests: 0,
-  })
+
 
   const fetchLeaderboardData = useCallback(async () => {
     try {
@@ -181,7 +177,6 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
       const [userData] = await Promise.all([
         leaderboardApi.getLeaderboardData(filters),
       ])
-      console.log("Processing user data:", userData) // <-- nuqta-vergul yoki hech narsa
 
       const processedData = processLeaderboardData(userData)
       setAllUsers(processedData)

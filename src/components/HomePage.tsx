@@ -86,7 +86,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<Map<number, number[]>>(new Map())
   const [answerStates, setAnswerStates] = useState<Map<number, "correct" | "incorrect">>(new Map())
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
-  console.log("HomePage quizzes:", quizzes)
   const [loading, setLoading] = useState(false)
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null)
   const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set())
@@ -118,7 +117,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     try {
       const response = await authAPI.fetchStories()
       const data = response.data
-      console.log("Fetched stories:", data)
 
       // Combine tests and questions into a single stories array
       const allStories: Story[] = []
@@ -156,7 +154,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
       // Sort by creation date (newest first)
       allStories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-      console.log("Processed stories:", allStories)
       setStories(allStories)
 
       // Group stories by user
@@ -209,7 +206,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
       (a, b) => new Date(b.latestStory.created_at).getTime() - new Date(a.latestStory.created_at).getTime(),
     )
 
-    console.log("Grouped stories:", groupedArray)
     return groupedArray
   }
 
@@ -270,7 +266,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         selected_answer_ids: [answerId],
         duration: 2,
       })
-      console.log("Single choice response:", response.data)
       const isCorrect = response.data.is_correct
 
       setAnswerStates((prev) => new Map(prev.set(quizId, isCorrect ? "correct" : "incorrect")))
@@ -299,7 +294,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
 
   const handleMultipleChoice = (quizId: number, answerId: number) => {
     if (answerStates.has(quizId)) return
-    console.log(`Multiple choice selected for quiz ${quizId}:`, answerId)
 
     setSelectedAnswers((prev) => {
       const current = prev.get(quizId) || []
@@ -322,7 +316,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         selected_answer_ids: selected,
         duration: 2,
       })
-      console.log("Multiple choice response:", response.data)
 
       const isCorrect = response.data.is_correct
 
@@ -726,7 +719,6 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
           duration: 2,
         })
       }
-      console.log("Story question answered successfully")
     } catch (error) {
       console.error("Story question answer error:", error)
     }

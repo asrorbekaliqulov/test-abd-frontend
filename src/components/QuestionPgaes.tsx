@@ -50,7 +50,6 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const [question, setQuestion] = useState<Question | null>(null)
-    console.log("QuestionPage rendered with theme:", question)
     const [similarQuestions, setSimilarQuestions] = useState<Question[]>([])
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)

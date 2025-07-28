@@ -52,7 +52,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [nextPageUrl, setNextPageUrl] = useState<string | undefined>(undefined)
   const [quizData, setQuizzes] = useState<Quiz[]>([])
-  console.log("Quiz Data:", quizData)
   const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set())
   const [batchIndices, setBatchIndices] = useState<number[]>([])
   const [animateIn, setAnimateIn] = useState(true)
@@ -119,7 +118,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
       setQuestionTimers((prev) => new Map(prev).set(quizId, 0))
       setCurrentTimerQuestionId(quizId)
 
-      console.log(`Timer started for question ${quizId}`)
 
       // Har soniyada yangilanuvchi timer
       timerIntervalRef.current = setInterval(() => {
@@ -129,7 +127,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
           if (startTime) {
             const elapsed = Math.floor((Date.now() - startTime) / 1000)
             newMap.set(quizId, elapsed)
-            console.log(`Question ${quizId} timer: ${elapsed}s`)
           }
           return newMap
         })
@@ -152,7 +149,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
       if (startTime) {
         const finalDuration = Math.floor((Date.now() - startTime) / 1000)
         setQuestionTimers((prev) => new Map(prev).set(quizId, finalDuration))
-        console.log(`Timer stopped for question ${quizId}, duration: ${finalDuration}s`)
         return finalDuration
       }
       return 0
@@ -200,7 +196,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     if (quizData.length > 0 && currentQuizIndex >= 0 && currentQuizIndex < quizData.length) {
       const currentQuiz = quizData[currentQuizIndex]
       if (currentQuiz) {
-        console.log(`Initial timer start for question ${currentQuiz.id}`)
         startQuestionTimer(currentQuiz.id)
       }
     }
@@ -241,7 +236,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         // Yangi savolga o'tganda timer boshlanishi
         const newQuiz = quizData[newIndex]
         if (newQuiz) {
-          console.log(`Switching to question ${newQuiz.id}`)
           startQuestionTimer(newQuiz.id)
         }
       }, 30)
@@ -280,7 +274,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         selected_answer_ids: [answerId],
         duration: duration,
       })
-      console.log("Single choice response:", res.data)
 
       const isCorrect = res.data.is_correct
 
@@ -344,7 +337,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         selected_answer_ids: selected,
         duration: duration,
       })
-      console.log("Multiple choice response:", response.data)
 
       const isCorrect = response.data.is_correct
 
@@ -718,20 +710,21 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
           const showCorrect = answerState && isCorrect
           const showIncorrect = answerState && isSelected && !isCorrect
           const isUserCorrect = isSelected && answerState === "correct"
-
+  
           const getButtonClass = () => {
-            if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30"
-            if (showIncorrect) return "border-red-400/60 bg-red-500/30"
-            if (isSelected) return "border-blue-400/60 bg-blue-500/30"
-            return "border-white/30 hover:bg-black/50 hover:border-white/40"
-          }
+            if (showIncorrect) return "border-red-400/60 bg-red-500/30";
+            if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30";
+            if (isSelected) return "border-blue-400/60 bg-blue-500/30";
+            return "border-white/30 hover:bg-black/50 hover:border-white/40";
+          };
 
           const getCircleClass = () => {
-            if (isUserCorrect || showCorrect) return "bg-green-500 text-white"
-            if (showIncorrect) return "bg-red-500 text-white"
-            if (isSelected) return "bg-blue-500 text-white"
-            return "bg-white/30 text-white"
-          }
+            if (showIncorrect) return "bg-red-500 text-white";
+            if (isUserCorrect || showCorrect) return "bg-green-500 text-white";
+            if (isSelected) return "bg-blue-500 text-white";
+            return "bg-white/30 text-white";
+          };
+          
 
           return (
             <button

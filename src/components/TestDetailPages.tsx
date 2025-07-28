@@ -91,7 +91,6 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
     const { testId } = useParams<{ testId: string }>()
     const navigate = useNavigate()
     const [test, setTest] = useState<TestDetail | null>(null)
-    console.log("Test ID:", test)
     const [relatedTests, setRelatedTests] = useState<TestDetail[]>([])
     const [loading, setLoading] = useState(true)
 

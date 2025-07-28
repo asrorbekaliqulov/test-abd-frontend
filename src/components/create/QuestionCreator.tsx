@@ -78,7 +78,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({ theme, onClose }) => 
     try {
       const response = await quizAPI.fetchMyTest()
       const testsData = response.data.results || response.data
-      console.log("Loaded tests:", testsData) // Debug log
 
       // Map tests with correct visibility info
       const mappedTests = testsData.map((test: any) => ({
@@ -172,10 +171,8 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({ theme, onClose }) => 
           answer_text: answer.answer_text,
           is_correct: answer.is_correct,
         }))
-        console.log("Answers to send:", questionData.answers)
       }
 
-      console.log("Question data to send:", questionData)
 
       // If there's a media file, use FormData, otherwise use JSON
       if (mediaFile) {
@@ -194,11 +191,9 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({ theme, onClose }) => 
         formDataToSend.append("media", mediaFile)
 
         const questionResponse = await quizAPI.createQuestion(formDataToSend)
-        console.log("Question created with media:", questionResponse.data)
       } else {
         // Send as JSON
         const questionResponse = await quizAPI.createQuestion(questionData)
-        console.log("Question created as JSON:", questionResponse.data)
       }
 
       onClose()
@@ -451,7 +446,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({ theme, onClose }) => 
                 <option value="single">Bitta tanlov</option>
                 <option value="multiple">Ko'p tanlov</option>
                 <option value="true_false">To'g'ri/Noto'g'ri</option>
-                <option value="text_input">Matn kiritish</option>
+                {/* <option value="text_input">Matn kiritish</option> */}
               </select>
             </div>
 

@@ -40,7 +40,6 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
   // const navigate = useNavigate();
 
 
-  // console.log(categories);
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -70,9 +69,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
     };
 
     try {
-      console.log(payload);
       const response = await quizAPI.createTest(payload);
-      // console.log('Test yaratildi:', response.data);
       alert('Test muvaffaqiyatli yaratildi!');
       
       setActiveTab('overview'); // Yaratilgandan so‘ng asosiy sahifaga qaytamiz
@@ -196,7 +193,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           <h3 className="text-xl font-bold text-gray-900 mb-3">Savol Qo‘shish</h3>
           <p className="text-gray-600 mb-4">
             Blok ichiga savol qo‘shing.
-            <b>Bitta javobli, Ko'p javobli, To‘g‘ri/Noto'g'ri</b> yoki <b>Matnli</b> turdagi savollar yaratishingiz mumkin.
+            <b>Bitta javobli, Ko'p javobli, To‘g‘ri/Noto'g'ri</b> turdagi savollar yaratishingiz mumkin.
             Kerak bo‘lsa, har bir savolga tushuntirish ham yozing.
           </p>
           <div className="flex items-center text-purple-600 font-medium">
