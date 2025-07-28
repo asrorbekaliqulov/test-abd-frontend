@@ -181,7 +181,7 @@ export const StoriesViewer: React.FC<StoriesViewerProps> = ({
         <div className="text-center mb-4">
           <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3 border-2 border-white">
             <img
-              src={currentStory.user.profile_image || "/placeholder.svg?height=64&width=64"}
+              src={currentStory.user.profile_image || "/media/defaultuseravatar.png"}
               alt={currentStory.user.username}
               className="w-full h-full object-cover"
             />

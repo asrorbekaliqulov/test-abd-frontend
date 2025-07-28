@@ -800,7 +800,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                         }`}
                     >
                       <img
-                        src={`https://backend.testabd.uz${groupedStory.user.profile_image || "/placeholder.svg?height=60&width=60"}`}
+                        src={`https://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
                         alt={groupedStory.user.username}
                         className="w-full h-full object-cover"
                       />
@@ -860,7 +860,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                       >
                       {quiz.user.profile_image ? (
                         <img
-                          src={quiz.user.profile_image || "/placeholder.svg?height=40&width=40"}
+                          src={quiz.user.profile_image || "/media/defaultuseravatar.png"}
                           alt="avatar"
                           className="object-cover w-full h-full"
                         />

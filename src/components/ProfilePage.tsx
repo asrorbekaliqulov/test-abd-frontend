@@ -189,7 +189,7 @@ interface SavedTest {
 
 interface SavedQuestion {
   id: number;
-  question: {
+  question_detail: {
     id: number;
     question_text: string;
     question_type: string;
@@ -854,6 +854,7 @@ const ProfilePage = () => {
   const [myTests, setMyTests] = useState<MyTests[]>([])
   const [recentQuestions, setRecentQuestions] = useState<RecentQuestion[]>([])
   const [savedTests, setSavedTests] = useState<SavedTest[]>([])
+  console.log(`Saved Tests:`, savedTests)
   const [savedQuestions, setSavedQuestions] = useState<SavedQuestion[]>([])
   const [settings, setSettings] = useState<UserSettings>({
     country: 0,
@@ -1793,14 +1794,14 @@ const ProfilePage = () => {
                 >
                   <div className="flex justify-between items-start mb-3">
                     <CustomBadge variant="secondary">
-                      {test.test.category.emoji} {test.test.category.title}
+                      {test.test_detail.category.emoji} {test.test_detail.category.title}
                     </CustomBadge>
-                    <div className="flex items-center text-yellow-500 text-sm">⭐ {test.test.difficulty_percentage.toFixed(1)}%</div>
+                    <div className="flex items-center text-yellow-500 text-sm">⭐ {test.test_detail.difficulty_percentage.toFixed(1) || 0}%</div>
                   </div>
-                  <h5 className="font-semibold mb-2 dark:text-white line-clamp-2">{test.test.title}</h5>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{test.test.description}</p>
+                  <h5 className="font-semibold mb-2 dark:text-white line-clamp-2">{test.test_detail.title}</h5>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{test.test_detail.description}</p>
                   <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 mb-3">
-                    <span>{test.test.total_questions} savollar</span>
+                    <span>{test.test_detail.total_questions} savollar</span>
                     <span>@{test.user.username}</span>
                   </div>
                   <div className="text-xs text-gray-400 dark:text-gray-500">Saqlangan: {formatDate(test.created_at)}</div>
@@ -1841,21 +1842,21 @@ const ProfilePage = () => {
                   className="flex-shrink-0 w-72 bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="flex justify-between items-start mb-3">
-                    <CustomBadge variant="secondary">{question.question.question_type}</CustomBadge>
+                    <CustomBadge variant="secondary">{question.question_detail.question_type}</CustomBadge>
                     <CustomBadge
                       variant={
-                        question.question.difficulty_percentage <= 35
+                        question.question_detail.difficulty_percentage <= 35
                           ? "success"
-                          : question.question.difficulty_percentage >= 36 && question.question.difficulty_percentage <= 70
+                          : question.question_detail.difficulty_percentage >= 36 && question.question_detail.difficulty_percentage <= 70
                             ? "warning"
                             : "danger"
                       }
                     >
-                      {question.question.difficulty_percentage.toFixed(1)}%
+                      {question.question_detail.difficulty_percentage.toFixed(1) || 0}%
                     </CustomBadge>
                   </div>
-                  <h5 className="font-semibold mb-2 dark:text-white line-clamp-2">{question.question.question_text}</h5>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{question.question.test_title}</p>
+                  <h5 className="font-semibold mb-2 dark:text-white line-clamp-2">{question.question_detail.question_text}</h5>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{question.question_detail.test_title}</p>
                   <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 mb-3">
                     {/* <span>
                       {question.category?.emoji} {question.category?.title || "Kategoriyasiz"}
@@ -1907,12 +1908,12 @@ const ProfilePage = () => {
           {/* Desktop Sidebar */}
           <div className="hidden md:block w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
             <div className="p-6">
-              <h2 className="text-lg font-semibold mb-2 dark:text-white">Settings</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Manage your account and preferences</p>
+              <h2 className="text-lg font-semibold mb-2 dark:text-white">Sozlamalar</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Hisobingiz va afzalliklaringizni boshqaring</p>
 
               <nav className="space-y-2">
                 {[
-                  { id: "profile", icon: User, text: "Profile" },
+                  { id: "profile", icon: User, text: "Profil" },
                   { id: "preferences", icon: Cog, text: "Afzalliklar" },
                   { id: "referral", icon: Users, text: "Referral" },
                   { id: "logout", icon: LogOut, text: "Chiqish" },
@@ -1936,9 +1937,9 @@ const ProfilePage = () => {
             {activeTab === "profile" && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-2 dark:text-white">Profile Settings</h3>
+                  <h3 className="text-lg font-semibold mb-2 dark:text-white">Profil Sozlamalari</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                    Update your personal information and profile picture
+                    Shaxsiy ma'lumotlaringizni va profil rasmingizni yangilang
                   </p>
                 </div>
 
@@ -1989,31 +1990,31 @@ const ProfilePage = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <CustomInput
-                    label="First Name"
+                    label="Ism"
                     value={mestats?.first_name || ""}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setMestats((prev) => (prev ? { ...prev, first_name: e.target.value } : null))
                     }
-                    placeholder="Enter your first name"
+                    placeholder="Ismingizni kiriting"
                   />
                   <CustomInput
-                    label="Last Name"
+                    label="Familiya"
                     value={mestats?.last_name || ""}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setMestats((prev) => (prev ? { ...prev, last_name: e.target.value } : null))
                     }
-                    placeholder="Enter your last name"
+                    placeholder="Familyangizni kiriting"
                   />
                 </div>
 
-                <CustomInput
+                {/* <CustomInput
                   label="Username"
                   value={mestats?.username || ""}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setMestats((prev) => (prev ? { ...prev, username: e.target.value } : null))
                   }
-                  placeholder="Choose a unique username"
-                />
+                  placeholder="Foydalanuvchi nomini tanlang"
+                /> */}
 
                 <CustomInput
                   label="Email"
@@ -2022,21 +2023,21 @@ const ProfilePage = () => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setMestats((prev) => (prev ? { ...prev, email: e.target.value } : null))
                   }
-                  placeholder="Enter your email"
+                  placeholder="Emailingizni kiriting"
                 />
 
                 <CustomInput
-                  label="Phone Number"
+                  label="Telefon raqami"
                   value={mestats?.phone_number || ""}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setMestats((prev) => (prev ? { ...prev, phone_number: e.target.value } : null))
                   }
-                  placeholder="Enter your phone number"
+                  placeholder="Telefon raqamingizni kiriting"
                 />
 
                 <CustomTextarea
                   label="Bio"
-                  placeholder="Tell us about yourself..."
+                  placeholder="O'zingiz haqingizda ma'lumot bering..."
                   rows={4}
                   value={mestats?.bio || ""}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -2044,7 +2045,7 @@ const ProfilePage = () => {
                   }
                 />
 
-                <div className="flex gap-4">
+                {/* <div className="flex gap-4">
                   <CustomButton onClick={handleSaveProfile} disabled={isLoading}>
                     {isLoading ? (
                       <>
@@ -2055,68 +2056,74 @@ const ProfilePage = () => {
                       "Save Changes"
                     )}
                   </CustomButton>
-                  <CustomButton variant="outline">Reset</CustomButton>
-                </div>
+                  <CustomButton variant="outline">Qayta tiklash</CustomButton>
+                </div> */}
               </div>
             )}
 
             {activeTab === "preferences" && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-2 dark:text-white">Preferences</h3>
+                  <h3 className="text-lg font-semibold mb-2 dark:text-white">Afzalliklar</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                    Customize your experience and app settings
+                    Tajribangiz va ilova sozlamalaringizni moslashtiring
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <CustomSelect
-                    label="Country"
-                    value={settings.country}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                      handleSettingChange("country", "", Number(e.target.value))
+                    label="Davlat"
+                    value={settings.country || 0}
+                    onChange={(e) =>
+                      handleSettingChange(
+                        "country",
+                        null,
+                        countries.find((country) => country.id === Number(e.target.value)) || 0
+                      )
                     }
                     options={[
-                      { value: 0, label: "Select Country" },
+                      { value: 0, label: "Davlatni tanlash" },
                       ...countries.map((country) => ({ value: country.id, label: country.name })),
                     ]}
                   />
 
+
+
                   <CustomSelect
-                    label="Region/State"
+                    label="Viloyat"
                     value={settings.region}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                       handleSettingChange("region", "", Number(e.target.value))
                     }
                     disabled={!settings.country}
                     options={[
-                      { value: 0, label: "Select Region" },
+                      { value: 0, label: "Mintaqani tanlash" },
                       ...regions.map((region) => ({ value: region.id, label: region.name })),
                     ]}
                   />
 
                   <CustomSelect
-                    label="District"
+                    label="Tuman"
                     value={settings.district}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                       handleSettingChange("district", "", Number(e.target.value))
                     }
                     disabled={!settings.region}
                     options={[
-                      { value: 0, label: "Select District" },
+                      { value: 0, label: "Tumanni tanlash" },
                       ...districts.map((district) => ({ value: district.id, label: district.name })),
                     ]}
                   />
 
                   <CustomSelect
-                    label="Settlement"
+                    label="Mahalla"
                     value={settings.settlement}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                       handleSettingChange("settlement", "", Number(e.target.value))
                     }
                     disabled={!settings.district}
                     options={[
-                      { value: 0, label: "Select Settlement" },
+                      { value: 0, label: "Selni tanlash" },
                       ...settlements.map((settlement) => ({ value: settlement.id, label: settlement.name })),
                     ]}
                   />
@@ -2125,12 +2132,12 @@ const ProfilePage = () => {
                 <hr className="border-gray-200 dark:border-gray-700" />
 
                 <div>
-                  <div className="text-base font-medium mb-4 dark:text-white">Theme</div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Mavzu</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[
-                      { code: "light", icon: "☀️", name: "Light" },
-                      { code: "dark", icon: "🌙", name: "Dark" },
-                      { code: "auto", icon: "🔄", name: "Auto" },
+                      { code: "light", icon: "☀️", name: "Yorug'" },
+                      { code: "dark", icon: "🌙", name: "Qorong'u" },
+                      // { code: "auto", icon: "🔄", name: "Avtomatik" },
                     ].map((theme) => (
                       <CustomButton
                         key={theme.code}
@@ -2158,8 +2165,8 @@ const ProfilePage = () => {
 
                 <hr className="border-gray-200 dark:border-gray-700" />
 
-                <div>
-                  <div className="text-base font-medium mb-4 dark:text-white">Notifications</div>
+                {/* <div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Bildirishnoma</div>
                   <div className="space-y-4">
                     <CustomSwitch
                       checked={settings.notifications.push}
@@ -2185,25 +2192,25 @@ const ProfilePage = () => {
                 <hr className="border-gray-200 dark:border-gray-700" />
 
                 <div>
-                  <div className="text-base font-medium mb-4 dark:text-white">Privacy</div>
+                  <div className="text-base font-medium mb-4 dark:text-white">Maxfiylik</div>
                   <div className="space-y-4">
                     <CustomSwitch
                       checked={settings.privacy.publicProfile}
                       onChange={(checked) => handleSettingChange("privacy", "publicProfile", checked)}
-                      label="Public Profile"
-                      description="Make your profile visible to everyone"
+                      label="Ommaviy Profil"
+                      description="Profilingizni hammaga ko‘rinadigan qilib qo‘ying"
                     />
                     <CustomSwitch
                       checked={settings.privacy.showOnlineStatus}
                       onChange={(checked) => handleSettingChange("privacy", "showOnlineStatus", checked)}
-                      label="Show Online Status"
-                      description="Let others see when you're online"
+                      label="Onlayn Holatni Ko‘rsatish"
+                      description="Boshqalar siz onlayn bo‘lganingizni ko‘rishsin"
                     />
                   </div>
-                </div>
+                </div> */}
 
                 <div className="flex justify-end gap-4">
-                  <CustomButton variant="outline">Reset</CustomButton>
+                  <CustomButton variant="outline">Qayta tiklash</CustomButton>
                   <CustomButton onClick={handleSaveSettings} disabled={settingsLoading}>
                     {settingsLoading ? (
                       <>
@@ -2256,14 +2263,14 @@ const ProfilePage = () => {
               <CustomCard key={test.id} className="p-4 hover:shadow-lg transition-shadow">
                 <div className="flex justify-between items-start mb-3">
                   <CustomBadge variant="secondary">
-                    {test.test.category.emoji} {test.test.category.title}
+                    {test.test_detail.category.emoji} {test.test_detail.category.title}
                   </CustomBadge>
-                  <div className="flex items-center text-yellow-500 text-sm">⭐ {test.test.difficulty_percentage.toFixed(1)}%</div>
+                  <div className="flex items-center text-yellow-500 text-sm">⭐ {test.test_detail.difficulty_percentage.toFixed(1)}%</div>
                 </div>
-                <h4 className="text-lg font-semibold mb-2 dark:text-white">{test.test.title}</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">{test.test.description}</p>
+                <h4 className="text-lg font-semibold mb-2 dark:text-white">{test.test_detail.title}</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">{test.test_detail.description}</p>
                 <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  <span>{test.test.total_questions} savollar</span>
+                  <span>{test.test_detail.total_questions} savollar</span>
                   <span>@{test.user.username}</span>
                 </div>
                 <div className="text-xs text-gray-400 dark:text-gray-500 mb-3">
@@ -2271,7 +2278,7 @@ const ProfilePage = () => {
                 </div>
                 <div className="flex gap-2">
                   <CustomButton size="sm" className="flex-1" onClick={() => {
-                    window.location.href = `/tests/${test.test.id}`
+                    window.location.href = `/tests/${test.test_detail.id}`
                   }}>
                     Testni boshlash
                   </CustomButton>
@@ -2304,21 +2311,21 @@ const ProfilePage = () => {
             {savedQuestions.map((question) => (
               <CustomCard key={question.id} className="p-4 hover:shadow-lg transition-shadow">
                 <div className="flex justify-between items-start mb-3">
-                  <CustomBadge variant="secondary">{question.question.question_type}</CustomBadge>
+                  <CustomBadge variant="secondary">{question.question_detail.question_type}</CustomBadge>
                   <CustomBadge
                     variant={
-                      question.question.difficulty_percentage <= 35
+                      question.question_detail.difficulty_percentage <= 35
                         ? "success"
-                        : question.question.difficulty_percentage >= 36 && question.question.difficulty_percentage <= 70
+                        : question.question_detail.difficulty_percentage >= 36 && question.question_detail.difficulty_percentage <= 70
                           ? "warning"
                           : "danger"
                     }
                   >
-                    {question.question.difficulty_percentage.toFixed(1)}%
+                    {question.question_detail.difficulty_percentage.toFixed(1)}%
                   </CustomBadge>
                 </div>
-                <h4 className="text-lg font-semibold mb-2 line-clamp-2 dark:text-white">{question.question.question_text}</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{question.question.test_title}</p>
+                <h4 className="text-lg font-semibold mb-2 line-clamp-2 dark:text-white">{question.question_detail.question_text}</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{question.question_detail.test_title}</p>
                 <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
                   {/* <span>
                     {question.category?.emoji} {question.category?.title || "Kategoriyasiz"}
@@ -2326,11 +2333,11 @@ const ProfilePage = () => {
                   <span>@{question.user.username}</span>
                 </div>
                 <div className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-                  Saqlangan: {formatDate(question.question.created_at)}
+                  Saqlangan: {formatDate(question.question_detail.created_at)}
                 </div>
                 <div className="flex gap-2">
                   <CustomButton size="sm" className="flex-1" onClick={() => {
-                    window.location.href = `/questions/${question.question.id}`
+                    window.location.href = `/questions/${question.question_detail.id}`
                   }}>
                     Savolni ko'rish
                   </CustomButton>
@@ -2640,12 +2647,12 @@ const ProfilePage = () => {
                     {user.is_following ? (
                       <>
                         <UserMinus size={16} className="mr-1" />
-                        Unfollow
+                        Kuzatmaslik
                       </>
                     ) : (
                       <>
                         <UserPlus size={16} className="mr-1" />
-                        Follow
+                        Kuzatish
                       </>
                     )}
                   </CustomButton>

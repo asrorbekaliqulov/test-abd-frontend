@@ -73,7 +73,7 @@ export const TestModal: React.FC<TestModalProps> = ({
     const scorePercentage = (test.score / test.maxScore) * 100
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 animate-fade-in">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-8 animate-fade-in">
             <div
                 className={`${theme === "dark" ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"} rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden border animate-slide-up`}
             >
@@ -227,14 +227,14 @@ export const TestModal: React.FC<TestModalProps> = ({
                             <Eye className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                             View Questions
                         </button>
-                        <button
+                        {/* <button
                             onClick={onStartTest}
                             className={`flex-1 flex items-center justify-center px-4 sm:px-6 py-3 ${theme === "dark" ? "bg-green-600 hover:bg-green-700" : "bg-green-600 hover:bg-green-700"} text-white rounded-xl transition-all duration-200 font-medium text-sm sm:text-base hover:scale-105 animate-fade-in-up`}
                             style={{ animationDelay: "1s" }}
                         >
                             <Play className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                             Start Test
-                        </button>
+                        </button> */}
                     </div>
                 </div>
             </div>

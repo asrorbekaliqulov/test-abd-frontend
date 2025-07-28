@@ -91,6 +91,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
     const { testId } = useParams<{ testId: string }>()
     const navigate = useNavigate()
     const [test, setTest] = useState<TestDetail | null>(null)
+    console.log("Test ID:", test)
     const [relatedTests, setRelatedTests] = useState<TestDetail[]>([])
     const [loading, setLoading] = useState(true)
 
@@ -109,223 +110,13 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
             const response = await quizAPI.fetchTestById(Number.parseInt(testId))
 
             // Mock questions data since API might not include them
-            const mockQuestions: Question[] = [
-                {
-                    id: 1,
-                    question_text: "JavaScript-da 'let' va 'var' o'rtasidagi asosiy farq nima?",
-                    question_type: "single",
-                    order_index: 1,
-                    media: null,
-                    created_at: "2024-01-15T10:30:00Z",
-                    updated_at: "2024-01-15T10:30:00Z",
-                    difficulty_percentage: 65,
-                    answers: [
-                        { id: 1, letter: "A", answer_text: "let block scope, var function scope", is_correct: true },
-                        { id: 2, letter: "B", answer_text: "Farq yo'q", is_correct: false },
-                        { id: 3, letter: "C", answer_text: "var yangi, let eski", is_correct: false },
-                        { id: 4, letter: "D", answer_text: "let faqat raqamlar uchun", is_correct: false },
-                    ],
-                    user: {
-                        id: 1,
-                        username: "dev_master",
-                        profile_image: "/placeholder.svg?height=40&width=40",
-                        is_badged: true,
-                        is_premium: true,
-                    },
-                },
-                {
-                    id: 2,
-                    question_text: "React-da useState hook qanday ishlaydi?",
-                    question_type: "multiple",
-                    order_index: 2,
-                    media: null,
-                    created_at: "2024-01-14T15:20:00Z",
-                    updated_at: "2024-01-14T15:20:00Z",
-                    difficulty_percentage: 45,
-                    answers: [
-                        { id: 5, letter: "A", answer_text: "State yaratadi", is_correct: true },
-                        { id: 6, letter: "B", answer_text: "State yangilaydi", is_correct: true },
-                        { id: 7, letter: "C", answer_text: "DOM manipulyatsiya qiladi", is_correct: false },
-                        { id: 8, letter: "D", answer_text: "API chaqiradi", is_correct: false },
-                    ],
-                    user: {
-                        id: 2,
-                        username: "react_guru",
-                        profile_image: "/placeholder.svg?height=40&width=40",
-                        is_badged: true,
-                        is_premium: false,
-                    },
-                },
-                {
-                    id: 3,
-                    question_text: "Node.js server-side JavaScript runtime hisoblanadimi?",
-                    question_type: "true_false",
-                    order_index: 3,
-                    media: null,
-                    created_at: "2024-01-13T09:45:00Z",
-                    updated_at: "2024-01-13T09:45:00Z",
-                    difficulty_percentage: 20,
-                    answers: [
-                        { id: 9, letter: "A", answer_text: "To'g'ri", is_correct: true },
-                        { id: 10, letter: "B", answer_text: "Noto'g'ri", is_correct: false },
-                    ],
-                    user: {
-                        id: 3,
-                        username: "backend_pro",
-                        profile_image: "/placeholder.svg?height=40&width=40",
-                        is_badged: false,
-                        is_premium: true,
-                    },
-                },
-                {
-                    id: 4,
-                    question_text: "CSS Grid va Flexbox o'rtasidagi asosiy farqni tushuntiring.",
-                    question_type: "text_input",
-                    order_index: 4,
-                    media: null,
-                    correct_answer_text: "Grid 2D layout, Flexbox 1D layout",
-                    answer_language: "uz",
-                    created_at: "2024-01-12T14:30:00Z",
-                    updated_at: "2024-01-12T14:30:00Z",
-                    difficulty_percentage: 75,
-                    answers: [],
-                    user: {
-                        id: 4,
-                        username: "css_master",
-                        profile_image: "/placeholder.svg?height=40&width=40",
-                        is_badged: true,
-                        is_premium: false,
-                    },
-                },
-            ]
+    
 
             setTest({
                 ...response.data,
-                questions: mockQuestions,
             })
         } catch (error) {
             console.error("Test detaillarini yuklashda xatolik:", error)
-            // Mock data fallback
-            setTest({
-                id: Number.parseInt(testId),
-                title: "JavaScript ES6+ Xususiyatlari",
-                description:
-                    "Zamonaviy JavaScript xususiyatlari: arrow functions, destructuring, async/await va boshqalar haqida to'liq test",
-                category: {
-                    id: 1,
-                    title: "Dasturlash",
-                    slug: "programming",
-                    description: "Dasturlash tillari va texnologiyalar",
-                    emoji: "💻",
-                },
-                visibility: "public",
-                created_at: "2024-01-15T10:30:00Z",
-                total_questions: 25,
-                total_attempts: 1250,
-                average_score: 78.5,
-                average_time: 1800,
-                wrong_count: 340,
-                correct_count: 910,
-                difficulty_percentage: 65,
-                user: {
-                    id: 1,
-                    username: "dev_master",
-                    profile_image: "/placeholder.svg?height=40&width=40",
-                    is_badged: true,
-                    is_premium: true,
-                },
-                is_bookmarked: false,
-                thumbnail: "/placeholder.svg?height=300&width=600&text=JavaScript+ES6",
-                questions: [
-                    {
-                        id: 1,
-                        question_text: "JavaScript-da 'let' va 'var' o'rtasidagi asosiy farq nima?",
-                        question_type: "single",
-                        order_index: 1,
-                        media: null,
-                        created_at: "2024-01-15T10:30:00Z",
-                        updated_at: "2024-01-15T10:30:00Z",
-                        difficulty_percentage: 65,
-                        answers: [
-                            { id: 1, letter: "A", answer_text: "let block scope, var function scope", is_correct: true },
-                            { id: 2, letter: "B", answer_text: "Farq yo'q", is_correct: false },
-                            { id: 3, letter: "C", answer_text: "var yangi, let eski", is_correct: false },
-                            { id: 4, letter: "D", answer_text: "let faqat raqamlar uchun", is_correct: false },
-                        ],
-                        user: {
-                            id: 1,
-                            username: "dev_master",
-                            profile_image: "/placeholder.svg?height=40&width=40",
-                            is_badged: true,
-                            is_premium: true,
-                        },
-                    },
-                    {
-                        id: 2,
-                        question_text: "React-da useState hook qanday ishlaydi?",
-                        question_type: "multiple",
-                        order_index: 2,
-                        media: null,
-                        created_at: "2024-01-14T15:20:00Z",
-                        updated_at: "2024-01-14T15:20:00Z",
-                        difficulty_percentage: 45,
-                        answers: [
-                            { id: 5, letter: "A", answer_text: "State yaratadi", is_correct: true },
-                            { id: 6, letter: "B", answer_text: "State yangilaydi", is_correct: true },
-                            { id: 7, letter: "C", answer_text: "DOM manipulyatsiya qiladi", is_correct: false },
-                            { id: 8, letter: "D", answer_text: "API chaqiradi", is_correct: false },
-                        ],
-                        user: {
-                            id: 2,
-                            username: "react_guru",
-                            profile_image: "/placeholder.svg?height=40&width=40",
-                            is_badged: true,
-                            is_premium: false,
-                        },
-                    },
-                    {
-                        id: 3,
-                        question_text: "Node.js server-side JavaScript runtime hisoblanadimi?",
-                        question_type: "true_false",
-                        order_index: 3,
-                        media: null,
-                        created_at: "2024-01-13T09:45:00Z",
-                        updated_at: "2024-01-13T09:45:00Z",
-                        difficulty_percentage: 20,
-                        answers: [
-                            { id: 9, letter: "A", answer_text: "To'g'ri", is_correct: true },
-                            { id: 10, letter: "B", answer_text: "Noto'g'ri", is_correct: false },
-                        ],
-                        user: {
-                            id: 3,
-                            username: "backend_pro",
-                            profile_image: "/placeholder.svg?height=40&width=40",
-                            is_badged: false,
-                            is_premium: true,
-                        },
-                    },
-                    {
-                        id: 4,
-                        question_text: "CSS Grid va Flexbox o'rtasidagi asosiy farqni tushuntiring.",
-                        question_type: "text_input",
-                        order_index: 4,
-                        media: null,
-                        correct_answer_text: "Grid 2D layout, Flexbox 1D layout",
-                        answer_language: "uz",
-                        created_at: "2024-01-12T14:30:00Z",
-                        updated_at: "2024-01-12T14:30:00Z",
-                        difficulty_percentage: 75,
-                        answers: [],
-                        user: {
-                            id: 4,
-                            username: "css_master",
-                            profile_image: "/placeholder.svg?height=40&width=40",
-                            is_badged: true,
-                            is_premium: false,
-                        },
-                    },
-                ],
-            })
         } finally {
             setLoading(false)
         }
@@ -337,57 +128,6 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
             setRelatedTests(response.data.results?.slice(0, 3) || [])
         } catch (error) {
             console.error("O'xshash testlarni yuklashda xatolik:", error)
-            // Mock related tests
-            setRelatedTests([
-                {
-                    id: 2,
-                    title: "React Hooks va State Management",
-                    description: "React hooks, useState, useEffect, useContext va Redux bilan state management",
-                    category: { id: 1, title: "Dasturlash", slug: "programming", description: "Dasturlash tillari", emoji: "💻" },
-                    visibility: "public",
-                    created_at: "2024-01-14T15:20:00Z",
-                    total_questions: 30,
-                    total_attempts: 890,
-                    average_score: 82.3,
-                    average_time: 2100,
-                    wrong_count: 267,
-                    correct_count: 623,
-                    difficulty_percentage: 45,
-                    user: {
-                        id: 2,
-                        username: "react_guru",
-                        profile_image: "/placeholder.svg?height=40&width=40",
-                        is_badged: true,
-                    },
-                    is_bookmarked: false,
-                    thumbnail: "/placeholder.svg?height=200&width=400&text=React",
-                    questions: [],
-                },
-                {
-                    id: 3,
-                    title: "Node.js va Express.js Backend",
-                    description: "Node.js bilan backend dasturlash va Express.js framework",
-                    category: { id: 1, title: "Dasturlash", slug: "programming", description: "Dasturlash tillari", emoji: "💻" },
-                    visibility: "public",
-                    created_at: "2024-01-13T09:45:00Z",
-                    total_questions: 28,
-                    total_attempts: 650,
-                    average_score: 75.8,
-                    average_time: 2400,
-                    wrong_count: 195,
-                    correct_count: 455,
-                    difficulty_percentage: 55,
-                    user: {
-                        id: 3,
-                        username: "backend_pro",
-                        profile_image: "/placeholder.svg?height=40&width=40",
-                        is_badged: false,
-                    },
-                    is_bookmarked: true,
-                    thumbnail: "/placeholder.svg?height=200&width=400&text=Node.js",
-                    questions: [],
-                },
-            ])
         }
     }
 
@@ -401,7 +141,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
         if (!test) return
 
         try {
-            await quizAPI.BlockBookmark({ test: test.id })
+            await quizAPI.bookmarkTest({ test: test.id })
             setTest((prev) => (prev ? { ...prev, is_bookmarked: !prev.is_bookmarked } : null))
         } catch (error) {
             console.error("Bookmark xatolik:", error)
@@ -572,7 +312,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                     <p className={`font-bold text-lg ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                                         @{test.user.username}
                                     </p>
-                                    {test.user.is_badged && (
+                                    {/* {test.user.is_badged && (
                                         <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                                             <span className="text-white text-xs">✓</span>
                                         </div>
@@ -581,7 +321,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                         <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
                                             <span className="text-white text-xs">★</span>
                                         </div>
-                                    )}
+                                    )} */}
                                 </div>
                                 </a>
                                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
@@ -615,7 +355,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                     </div>
                                 </div>
                                 <p className={`text-3xl font-bold mb-1 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                                    {test.total_attempts}
+                                    {test.participant_count || 0}
                                 </p>
                                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>Ishtirokchilar</p>
                             </div>
@@ -627,7 +367,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                     </div>
                                 </div>
                                 <p className={`text-3xl font-bold mb-1 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                                    {Math.round(test.average_score)}%
+                                    {test.average_question_difficulty}%
                                 </p>
                                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>O'rtacha ball</p>
                             </div>
@@ -639,14 +379,14 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                     </div>
                                 </div>
                                 <p className={`text-3xl font-bold mb-1 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                                    {Math.round(test.average_time / 60)}
+                                    {Math.round(test.average_time / 60) || '∞'}
                                 </p>
                                 <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>Daqiqa</p>
                             </div>
                         </div>
 
                         {/* Success Rate */}
-                        <div className={`p-6 rounded-2xl mb-8 ${theme === "dark" ? "bg-gray-700" : "bg-gray-50"}`}>
+                        {/* <div className={`p-6 rounded-2xl mb-8 ${theme === "dark" ? "bg-gray-700" : "bg-gray-50"}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                                     Muvaffaqiyat darajasi
@@ -671,7 +411,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                     </span>
                                 </div>
                             </div>
-                        </div>
+                        </div> */}
 
                         {/* Action Buttons */}
                         <div className="flex flex-col sm:flex-row gap-4">
@@ -693,7 +433,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                     }`}
                             >
                                 <Bookmark size={20} className={test.is_bookmarked ? "fill-current" : ""} />
-                                <span>Saqlash</span>
+                                <span>{test.is_bookmarked ? "Saqlangan" : "Saqlash"}</span>
                             </button>
 
                             <button
@@ -752,19 +492,14 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                 <div className="flex items-start justify-between mb-6">
                                     <div className="flex items-center space-x-4">
                                         <div className="flex items-center space-x-3">
-                                            <span
-                                                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold ${theme === "dark" ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-600"
-                                                    }`}
-                                            >
-                                                {question.order_index}
-                                            </span>
+                                           
                                             <div
                                                 className={`w-12 h-12 rounded-2xl overflow-hidden ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"
                                                     }`}
                                             >
                                                 {question.user.profile_image ? (
                                                     <img
-                                                        src={question.user.profile_image || "/placeholder.svg"}
+                                                        src={question.user.profile_image || "/media/defaultuseravatar.png"}
                                                         alt="avatar"
                                                         className="object-cover w-full h-full"
                                                     />
@@ -869,7 +604,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                                 }`}
                                         >
                                             <p className={`text-sm font-medium ${theme === "dark" ? "text-green-300" : "text-green-700"}`}>
-                                                Namuna javob: {question.correct_answer_text}
+                                                Javob qo'lda kiritilishi kerak
                                             </p>
                                         </div>
                                     </div>
@@ -883,7 +618,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                                 <span className="text-white text-xs font-bold">✓</span>
                                             </div>
                                             <span className={`text-sm font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
-                                                To'g'ri javoblar
+                                                To'g'ri javoblar <span className="text-green-500 font-bold">{question.correct_count}</span>
                                             </span>
                                         </div>
                                         <div className="flex items-center space-x-2">
@@ -891,7 +626,7 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                                 <span className="text-white text-xs font-bold">✗</span>
                                             </div>
                                             <span className={`text-sm font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
-                                                Noto'g'ri javoblar
+                                                Noto'g'ri javoblar <span className="text-red-500 font-bold">{question.wrong_count}</span>
                                             </span>
                                         </div>
                                     </div>

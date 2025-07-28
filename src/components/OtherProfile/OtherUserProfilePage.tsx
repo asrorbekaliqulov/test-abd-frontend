@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { href, Navigate, useNavigate } from 'react-router-dom';
 import { ProfileHeader } from './ProfileHeader';
 import { TestCard } from './TestCard';
 import { QuestionCard } from './QuestionCard';
@@ -12,7 +12,7 @@ import { BookOpen, HelpCircle, Users, UserCheck } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import ProfilePage from '../ProfilePage';
 import BottomNavigation from '../BottomNavigation';
-import { userProfile, accountsAPI } from '../../utils/api'
+import { userProfile, accountsAPI, quizAPI } from '../../utils/api'
 import { useAuth } from '../../contexts/AuthContext';
 
 export interface User {
@@ -79,104 +79,8 @@ export interface TestQuestion {
 }
 
 
-const mockTestQuestions: TestQuestion[] = [
-    {
-        id: 1,
-        question: 'What is the correct way to declare a variable in JavaScript?',
-        options: ['var x = 5;', 'variable x = 5;', 'v x = 5;', 'declare x = 5;'],
-        correctAnswer: 0,
-        explanation: 'In JavaScript, variables can be declared using var, let, or const keywords. var is the traditional way.',
-        difficulty: 'Easy'
-    },
-    {
-        id: 2,
-        question: 'Which method is used to add an element to the end of an array?',
-        options: ['append()', 'push()', 'add()', 'insert()'],
-        correctAnswer: 1,
-        explanation: 'The push() method adds one or more elements to the end of an array and returns the new length.',
-        difficulty: 'Easy'
-    },
-    {
-        id: 3,
-        question: 'What does the "this" keyword refer to in JavaScript?',
-        options: ['The current function', 'The global object', 'The current object', 'The parent object'],
-        correctAnswer: 2,
-        explanation: 'The "this" keyword refers to the object that is currently executing the code.',
-        difficulty: 'Medium'
-    }
-];
 
-const mockTests: Test[] = [
-    {
-        id: 1,
-        title: 'JavaScript Fundamentals',
-        description: 'Test your knowledge of JavaScript basics including variables, functions, and control structures.',
-        questionsCount: 25,
-        difficulty: 'Medium',
-        category: 'Programming',
-        completedAt: '2 days ago',
-        score: 22,
-        maxScore: 25,
-        questions: mockTestQuestions
-    },
-    {
-        id: 2,
-        title: 'React Hooks Deep Dive',
-        description: 'Advanced concepts in React Hooks including useEffect, useContext, and custom hooks.',
-        questionsCount: 30,
-        difficulty: 'Hard',
-        category: 'Frontend',
-        completedAt: '1 week ago',
-        score: 24,
-        maxScore: 30,
-        questions: mockTestQuestions
-    },
-    {
-        id: 3,
-        title: 'CSS Grid Layout',
-        description: 'Master CSS Grid with practical examples and real-world scenarios.',
-        questionsCount: 20,
-        difficulty: 'Easy',
-        category: 'CSS',
-        completedAt: '2 weeks ago',
-        score: 18,
-        maxScore: 20,
-        questions: mockTestQuestions
-    }
-];
 
-const mockQuestions: Question[] = [
-    {
-        id: 1,
-        title: 'What is the difference between let and var in JavaScript?',
-        description: 'Explain the key differences between let and var declarations in JavaScript, including scope and hoisting behavior.',
-        difficulty: 'Medium',
-        category: 'JavaScript',
-        createdAt: '3 days ago',
-        likes: 45,
-        answers: 12
-    },
-    {
-        id: 2,
-        title: 'How to implement a binary search algorithm?',
-        description: 'Provide a step-by-step implementation of binary search algorithm with time complexity analysis.',
-        difficulty: 'Hard',
-        category: 'Algorithms',
-        createdAt: '1 week ago',
-        likes: 78,
-        answers: 23
-    },
-    {
-        id: 3,
-        title: 'CSS Flexbox vs Grid: When to use which?',
-        description: 'Compare CSS Flexbox and Grid layouts and explain when to use each one for different scenarios.',
-        difficulty: 'Easy',
-        category: 'CSS',
-        createdAt: '2 weeks ago',
-        likes: 32,
-        answers: 8
-    }
-];
 
 export const OtherUserProfilePage: React.FC = () => {
     const [currentPage, setCurrentPage] = useState('home');
@@ -216,8 +120,11 @@ export const OtherUserProfilePage: React.FC = () => {
 };
 
 export const UserProfilePage: React.FC = () => {
+    const navigate = useNavigate();
     const { username } = useParams<{ username: string }>();
-
+    const [tests, setTests] = useState<Test | null>(null);
+    const [questions, setQuestions] = useState<TestQuestion[]>([]);
+    console.log(`TESTS:`, tests)
     const [activeTab, setActiveTab] = useState<'tests' | 'questions'>('tests');
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [showFollowingModal, setShowFollowingModal] = useState(false);
@@ -253,6 +160,33 @@ export const UserProfilePage: React.FC = () => {
         fetchData();
     }, [username]);
     
+    useEffect(() => {
+        const fetchTests = async () => {
+            if (!user) return; // Null check to prevent error
+            try {
+                const response = await quizAPI.fetchTestByUser(user.id);
+                setTests(response.data.results || response.data);
+            } catch (error) {
+                console.error('Failed to fetch tests:', error);
+            }
+        };
+
+        fetchTests();
+    }, [user]);
+
+    useEffect(() => {
+        const fetchQuestions = async () => {
+            if (!user) return; // Null check to prevent error
+            try {
+                const response = await quizAPI.fetchQuestionsByUser(user.id);
+                setQuestions(response.data.results || response.data);
+            } catch (error) {
+                console.error('Failed to fetch questions:', error);
+            }
+        };
+
+        fetchQuestions();
+    }, [user]);
 
     const handleFollow = async () => {
         if (!user) return; // Null check
@@ -334,13 +268,11 @@ export const UserProfilePage: React.FC = () => {
     // };
 
     const handleTestClick = (test: Test) => {
-        setSelectedTest(test);
-        setShowTestModal(true);
+        navigate(`/tests/${test.id}`);
     };
 
-    const handleViewQuestions = () => {
-        setShowTestModal(false);
-        setShowQuestionsListModal(true);
+    const handleViewQuestions = (question: Question) => {
+        navigate(`/questions/${question.id}`);
     };
 
     const handleStartTest = () => {
@@ -404,7 +336,7 @@ export const UserProfilePage: React.FC = () => {
                                     }`}
                             >
                                 <BookOpen className="w-5 h-5 mr-2" />
-                                Completed Tests ({mockTests.length})
+                                Bloklar ({tests?.length})
                             </button>
                             <button
                                 onClick={() => setActiveTab('questions')}
@@ -414,7 +346,7 @@ export const UserProfilePage: React.FC = () => {
                                     }`}
                             >
                                 <HelpCircle className="w-5 h-5 mr-2" />
-                                Questions Asked ({mockQuestions.length})
+                                Savollar ({questions?.length})
                             </button>
                         </nav>
                     </div>
@@ -422,14 +354,14 @@ export const UserProfilePage: React.FC = () => {
                     <div className="p-6">
                         {activeTab === 'tests' ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {mockTests.map((test) => (
+                                {(tests || []).map((test) => (
                                     <TestCard key={test.id} test={test} onTestClick={handleTestClick} />
                                 ))}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {mockQuestions.map((question) => (
-                                    <QuestionCard key={question.id} question={question} />
+                                {(questions || []).map((question) => (
+                                    <QuestionCard key={question.id} question={question} onQuestionClick={handleViewQuestions} />
                                 ))}
                             </div>
                         )}
@@ -452,15 +384,15 @@ export const UserProfilePage: React.FC = () => {
                 followers={following}
             />
 
-            <TestModal
+            {/* <TestModal
                 isOpen={showTestModal}
                 onClose={() => setShowTestModal(false)}
                 test={selectedTest}
                 onViewQuestions={handleViewQuestions}
                 onStartTest={handleStartTest}
-            />
+            /> */}
 
-            <QuestionsListModal
+            {/* <QuestionsListModal
                 isOpen={showQuestionsListModal}
                 onClose={() => setShowQuestionsListModal(false)}
                 questions={selectedTest?.questions || []}
@@ -479,7 +411,7 @@ export const UserProfilePage: React.FC = () => {
                 onClose={() => setShowTikTokTest(false)}
                 questions={selectedTest?.questions || []}
                 testTitle={selectedTest?.title || ''}
-            />
+            /> */}
         </div>
     );
 };

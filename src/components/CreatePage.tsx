@@ -3,6 +3,7 @@ import { Plus, FileText, HelpCircle, ArrowLeft } from 'lucide-react';
 import { quizAPI } from '../utils/api';
 import ProfilePage from './ProfilePage'
 import QuestionCreator from './create/QuestionCreator';
+import { Navigate } from 'react-router-dom';
 
 interface CreatePageProps {
   onNavigate: (page: string) => void;
@@ -73,6 +74,8 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
       const response = await quizAPI.createTest(payload);
       // console.log('Test yaratildi:', response.data);
       alert('Test muvaffaqiyatli yaratildi!');
+      
+      setActiveTab('overview'); // Yaratilgandan so‘ng asosiy sahifaga qaytamiz
     } catch (error: any) {
       console.error('Xatolik:', error.response?.data || error.message);
       alert('Xatolik yuz berdi!');
@@ -124,7 +127,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
     try {
       await quizAPI.createQuestion(payload);
       alert('Savol muvaffaqiyatli yaratildi!');
-      form.reset(); // Formani tozalash
+       // Yana asosiy sahifaga qaytish
     } catch (error) {
       console.error('Failed to create question:', error);
       alert('Xatolik yuz berdi!');
@@ -193,7 +196,7 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
           <h3 className="text-xl font-bold text-gray-900 mb-3">Savol Qo‘shish</h3>
           <p className="text-gray-600 mb-4">
             Blok ichiga savol qo‘shing.
-            <b>Bitta javobli</b> yoki <b>to‘g‘ri/yolg‘on</b> turdagi savollar yaratishingiz mumkin.
+            <b>Bitta javobli, Ko'p javobli, To‘g‘ri/Noto'g'ri</b> yoki <b>Matnli</b> turdagi savollar yaratishingiz mumkin.
             Kerak bo‘lsa, har bir savolga tushuntirish ham yozing.
           </p>
           <div className="flex items-center text-purple-600 font-medium">
@@ -204,20 +207,20 @@ const CreatePage: React.FC<CreatePageProps> = ({  }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 text-center">
           <div className="text-2xl font-bold text-blue-600 mb-2">0</div>
           <div className="text-sm text-blue-700">Blok yaratildi</div>
         </div>
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 text-center">
           <div className="text-2xl font-bold text-green-600 mb-2">0</div>
-          <div className="text-sm text-green-700">Test qo'shildi</div>
+          <div className="text-sm text-green-700">Savol qo'shildi</div>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 text-center">
           <div className="text-2xl font-bold text-purple-600 mb-2">0</div>
           <div className="text-sm text-purple-700">Barcha urinishlar</div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 

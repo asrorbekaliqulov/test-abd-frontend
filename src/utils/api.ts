@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'https://backend.testabd.uz';
+const API_BASE_URL = 'http://192.168.100.14:8000';
 
 
 
@@ -24,12 +24,6 @@ const api = axios.create({
     Accept: 'application/json',
   },
 });
-
-
-
-
-
-
 
 // Token manager
 export const tokenManager = {
@@ -308,7 +302,10 @@ export const quizAPI = {
   createTest: (data: any) => api.post('/quiz/tests/', data),
   fetchMyBookmarks: () => api.get('/quiz/tests/my_bookmarks/'),
   fetchMyTest: () => api.get('/quiz/tests/my_tests/'),
+  fetchTestByUser: (user_id: number) => api.get(`/quiz/tests/by_user/${user_id}/`),
 
+  fetchQuestionsByUser: (user_id: number) =>
+    api.get(`/quiz/questions/user_questions/?user_id=${user_id}`),
   fetchQuestions: (url?: string) =>
     url ? api.get(url) : api.get('/quiz/questions/'),
 

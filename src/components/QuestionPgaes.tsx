@@ -237,16 +237,16 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
         }
     }
 
-    const handleTrueFalseAnswer = async (answer: "true" | "false") => {
+    const handleTrueFalseAnswer = async (answerId: number) => {
         if (!question || submitting || isAnswered) return
 
         setSubmitting(true)
-        setTrueFalseSelection(answer)
+        setTrueFalseSelection(answerId === question.answers[0].id ? "true" : "false")
 
         try {
-            const response = await quizAPI.submitTextAnswers({
+            const response = await quizAPI.submitAnswers({
                 question: question.id,
-                written_answer: answer === "true" ? "to'g'ri" : "xato",
+                selected_answer_ids: [answerId],
                 duration: 2,
             })
 
@@ -571,7 +571,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         {/* To'g'ri button */}
                         <button
-                            onClick={() => handleTrueFalseAnswer("true")}
+                            onClick={() => handleTrueFalseAnswer(question.answers[0].id)}
                             disabled={isAnswered || submitting}
                             className={getTrueFalseButtonStyle("true", trueFalseSelection === "true")}
                         >
@@ -590,7 +590,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
 
                         {/* Xato button */}
                         <button
-                            onClick={() => handleTrueFalseAnswer("false")}
+                            onClick={() => handleTrueFalseAnswer(question.answers[1].id)}
                             disabled={isAnswered || submitting}
                             className={getTrueFalseButtonStyle("false", trueFalseSelection === "false")}
                         >
@@ -678,7 +678,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
                                     >
                                         {similarQuestion.user.profile_image ? (
                                             <img
-                                                src={similarQuestion.user.profile_image || "/placeholder.svg"}
+                                                src={similarQuestion.user.profile_image || "/media/defaultuseravatar.png"}
                                                 alt="avatar"
                                                 className="object-cover w-full h-full"
                                             />
@@ -802,7 +802,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
                             <ArrowLeft size={20} />
                         </button>
                         <div className="flex items-center space-x-2 ml-4">
-                            <img src="/placeholder.svg?height=32&width=32" alt="TestAbd" className="h-8 w-8 rounded-full" />
+                            <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full" />
                             <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
                         </div>
                     </div>
@@ -825,7 +825,7 @@ const QuestionPage: React.FC<QuestionPagesProps> = ({ theme }) => {
                                 >
                                     {question.user.profile_image ? (
                                         <img
-                                            src={question.user.profile_image || "/placeholder.svg?height=40&width=40"}
+                                            src={question.user.profile_image || "/media/defaultuseravatar.png"}
                                             alt="avatar"
                                             className="object-cover w-full h-full"
                                         />

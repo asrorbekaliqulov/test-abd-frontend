@@ -1,17 +1,20 @@
 import React from 'react';
 // import { Test } from '../types/user';
-import { BookOpen, Award, Calendar } from 'lucide-react';
+import { HelpCircle, Calendar } from 'lucide-react';
 
 export interface Test {
     id: string;
     title: string;
     description: string;
     questionsCount: number;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
-    category: string;
-    completedAt: string;
+    difficulty_percentage: number;
+    category: {
+        id: string;
+        title: string;
+    };
+    created_at: string;
     score: number;
-    maxScore: number;
+    total_questions: number;
     questions: TestQuestion[];
 }
 
@@ -21,7 +24,7 @@ export interface TestQuestion {
     options: string[];
     correctAnswer: number;
     explanation: string;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
+    difficulty_percentage: number;
 }
 
 interface TestCardProps {
@@ -30,21 +33,13 @@ interface TestCardProps {
 }
 
 export const TestCard: React.FC<TestCardProps> = ({ test, onTestClick }) => {
-    const getDifficultyColor = (difficulty: string) => {
-        switch (difficulty.toLowerCase()) {
-            case 'easy': return 'bg-green-100 text-green-800';
-            case 'medium': return 'bg-yellow-100 text-yellow-800';
-            case 'hard': return 'bg-red-100 text-red-800';
-            default: return 'bg-gray-100 text-gray-800';
-        }
-    };
+    const getDifficultyColor = (difficulty_percentage: number) => {
+        if (difficulty_percentage < 33) return 'bg-green-100 text-green-800';
+        if (difficulty_percentage < 66) return 'bg-yellow-100 text-yellow-800';
+        return 'bg-red-100 text-red-800';
+    }
 
-    const getScoreColor = (score: number, maxScore: number) => {
-        const percentage = (score / maxScore) * 100;
-        if (percentage >= 80) return 'text-green-600';
-        if (percentage >= 60) return 'text-yellow-600';
-        return 'text-red-600';
-    };
+
 
     return (
         <div
@@ -53,8 +48,8 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onTestClick }) => {
         >
             <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{test.title}</h3>
-                <div className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(test.difficulty)}`}>
-                    {test.difficulty}
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(test.difficulty_percentage)}`}>
+                    {test.difficulty_percentage.toFixed(2)}%
                 </div>
             </div>
 
@@ -62,23 +57,23 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onTestClick }) => {
 
             <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
                 <div className="flex items-center">
-                    <BookOpen className="w-4 h-4 mr-1" />
-                    {test.questionsCount} questions
+                    <HelpCircle className="w-4 h-4 mr-1" />
+                    {test.total_questions} questions
                 </div>
                 <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />
-                    {test.completedAt}
+                    {test.created_at.slice(0, 10)}
                 </div>
             </div>
 
             <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">{test.category}</span>
-                <div className="flex items-center">
+                <span className="text-sm font-medium text-gray-700">{test.category.title}</span>
+                {/* <div className="flex items-center">
                     <Award className="w-4 h-4 mr-1 text-indigo-600" />
                     <span className={`font-bold ${getScoreColor(test.score, test.maxScore)}`}>
                         {test.score}/{test.maxScore}
                     </span>
-                </div>
+                </div> */}
             </div>
         </div>
     );

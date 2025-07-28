@@ -485,10 +485,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
       })
   }
 
-  const handleVisitAd = () => {
-    console.log("Visit Ad clicked")
-    alert("Reklama sahifasiga o'tish")
-  }
+  // const handleVisitAd = () => {
+  //   console.log("Visit Ad clicked")
+  //   alert("Reklama sahifasiga o'tish")
+  // }
 
   // Throttled scroll event listener
   useEffect(() => {
@@ -852,14 +852,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
 
                 {/* Visit Ad Button */}
-                <button
+                {/* <button
                   onClick={handleVisitAd}
                   className={`absolute top-4 right-4 sm:top-6 sm:right-6 z-20 px-4 py-2 sm:px-5 sm:py-2.5 bg-yellow-500 text-black rounded-full font-bold flex items-center gap-2 shadow-lg hover:bg-yellow-400 transition-colors animate-pulse-custom text-sm sm:text-base ${isCurrentQuestion && animateIn ? "animate-fade-in" : ""
                     }`}
                 >
                   <ExternalLink size={16} />
                   <span>Visit Ad</span>
-                </button>
+                </button> */}
 
                 {/* User Info Section */}
                 <div className={`absolute top-12 left-4 sm:top-16 sm:left-6 flex items-center space-x-3 z-10`}>
@@ -937,9 +937,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                       <img
                         src={
                           quiz.user.profile_image ||
-                          "https://backend.testabd.uz/media/defaultuseravatar.png" ||
-                          "/placeholder.svg" ||
-                          "/placeholder.svg"
+                          "https://backend.testabd.uz/media/defaultuseravatar.png"
                         }
                         alt="Profile"
                         className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-white cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"

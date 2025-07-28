@@ -111,7 +111,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, theme, onStartTest, on
                 {/* Header */}
                 <div className="flex items-center space-x-3 mb-4">
                     <img
-                        src={test.user.profile_image || "/placeholder.svg?height=32&width=32"}
+                        src={test.user.profile_image || "/media/defaultuseravatar.png"}
                         alt={test.user.username}
                         className="w-8 h-8 rounded-full"
                     />
@@ -121,16 +121,6 @@ export const TestCard: React.FC<TestCardProps> = ({ test, theme, onStartTest, on
                             <p className={`font-semibold text-sm ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                                 @{test.user.username}
                             </p>
-                            {test.user.is_badged && (
-                                <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-xs">✓</span>
-                                </div>
-                            )}
-                            {test.user.is_premium && (
-                                <div className="w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-xs">★</span>
-                                </div>
-                            )}
                             </a>
                         </div>
                         <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>

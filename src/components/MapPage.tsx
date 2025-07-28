@@ -159,7 +159,7 @@ const FilterPanel: React.FC<{
 const MapPage: React.FC<MapPageProps> = ({ theme }) => {
   const [selectedUser, setSelectedUser] = useState<ProcessedUserData | null>(null)
   const [showFullscreen, setShowFullscreen] = useState(false)
-  const [currentZoom, setCurrentZoom] = useState(6)
+  const [currentZoom, setCurrentZoom] = useState(5)
   const [allUsers, setAllUsers] = useState<ProcessedUserData[]>([])
   const [visibleUsers, setVisibleUsers] = useState<ProcessedUserData[]>([])
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
@@ -244,7 +244,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
       <div className="min-h-screen bg-theme-secondary pt-20 pb-20 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-theme-primary">Loading map data...</p>
+          <p className="text-theme-primary">Xarita ma'lumotlarini yuklanmoqda...</p>
         </div>
       </div>
     )
@@ -262,7 +262,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
             onClick={fetchLeaderboardData}
             className="px-4 py-2 bg-accent-primary text-white rounded-lg hover:bg-accent-secondary transition-theme-normal"
           >
-            Retry
+            Qayta urinib ko‘rish
           </button>
         </div>
       </div>
@@ -277,8 +277,8 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
           <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
             <Globe size={32} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-theme-primary mb-2">Interactive Quiz Map</h1>
-          <p className="text-theme-secondary">Explore top performers across Uzbekistan</p>
+          <h1 className="text-3xl font-bold text-theme-primary mb-2">Interaktiv Test Xaritası</h1>
+          <p className="text-theme-secondary">O‘zbekiston bo‘ylab eng yaxshi natijalarni ko‘ring</p>
         </div>
 
         {/* Filters */}
@@ -296,13 +296,13 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
           <div className="lg:col-span-2">
             <div className="bg-theme-primary rounded-2xl p-6 border border-theme-primary">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-theme-primary">Interactive Map</h3>
+                <h3 className="text-lg font-semibold text-theme-primary">Interaktiv Xarita</h3>
                 <div className="flex items-center space-x-4">
                   <div className="text-sm text-theme-secondary">
-                    Zoom: <span className="font-semibold">{currentZoom}</span>
+                    Kattalashtirish: <span className="font-semibold">{currentZoom}</span>
                   </div>
                   <div className="text-sm text-theme-secondary">
-                    Users: <span className="font-semibold">{visibleUsers.length}</span>
+                    Foydalanuvchilar: <span className="font-semibold">{visibleUsers.length}</span>
                   </div>
                   <button
                     onClick={() => setShowFullscreen(true)}
@@ -347,7 +347,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
                           />
                           <h4 className="font-semibold">{user.name}</h4>
                           <p className="text-sm text-gray-600">{getLocationText(user)}</p>
-                          <p className="text-sm font-medium text-blue-600">{user.stats.accuracy}% accuracy</p>
+                          <p className="text-sm font-medium text-blue-600">{user.stats.accuracy}% aniqlik</p>
                         </div>
                       </Popup>
                     </Marker>
@@ -361,15 +361,15 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               <div className="mt-4 flex justify-center">
                 <div className="bg-theme-secondary px-4 py-2 rounded-lg border border-theme-primary">
                   <span className="text-sm text-theme-secondary">
-                    Showing:{" "}
+                    Koʻrsatilmoqda:{" "}
                     <span className="font-semibold text-theme-primary">
                       {currentZoom < 6
-                        ? "Country Level"
+                        ? "Mamlakat Darajasi"
                         : currentZoom < 9
-                          ? "Region Level"
+                          ? "Mintaqa Darajasi"
                           : currentZoom < 12
-                            ? "District Level"
-                            : "Neighborhood Level"}
+                            ? "Tuman Darajasi"
+                            : "Mahalla Darajasi"}
                     </span>
                   </span>
                 </div>
@@ -381,15 +381,15 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
           <div className="lg:col-span-1">
             <div className="bg-theme-primary rounded-2xl p-6 border border-theme-primary">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-theme-primary">Top Performers</h3>
+                <h3 className="text-lg font-semibold text-theme-primary">Eng Yaxshi Natijalar</h3>
                 <div className="text-xs text-theme-secondary">
                   {currentZoom < 6
-                    ? "Country"
+                    ? "Mamlakat"
                     : currentZoom < 9
-                      ? "Region"
+                      ? "Mintaqa"
                       : currentZoom < 12
-                        ? "District"
-                        : "Neighborhood"}
+                        ? "Tuman"
+                        : "Mahalla"}
                 </div>
               </div>
 
@@ -417,7 +417,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-accent-primary">{user.stats.accuracy}%</div>
-                      <div className="text-xs text-theme-secondary">{user.stats.totalTests} tests</div>
+                      <div className="text-xs text-theme-secondary">{user.stats.totalTests} savol</div>
                     </div>
                   </div>
                 ))}
@@ -435,7 +435,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               </div>
               <div>
                 <div className="text-2xl font-bold text-theme-primary">{stats.totalUsers}</div>
-                <div className="text-sm text-theme-secondary">Total Users</div>
+                <div className="text-sm text-theme-secondary">Jami foydalanuvchilar</div>
               </div>
             </div>
           </div>
@@ -447,7 +447,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               </div>
               <div>
                 <div className="text-2xl font-bold text-theme-primary">{stats.avgAccuracy}%</div>
-                <div className="text-sm text-theme-secondary">Avg Accuracy</div>
+                <div className="text-sm text-theme-secondary">O‘rtacha To‘g‘rilik</div>
               </div>
             </div>
           </div>
@@ -459,7 +459,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               </div>
               <div>
                 <div className="text-2xl font-bold text-theme-primary">{stats.totalTests.toLocaleString()}</div>
-                <div className="text-sm text-theme-secondary">Total Tests</div>
+                <div className="text-sm text-theme-secondary">Jami Bloklar</div>
               </div>
             </div>
           </div>
@@ -471,7 +471,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               </div>
               <div>
                 <div className="text-2xl font-bold text-theme-primary">{visibleUsers.length}</div>
-                <div className="text-sm text-theme-secondary">Visible Users</div>
+                <div className="text-sm text-theme-secondary">Ko‘rinadigan Foydalanuvchilar</div>
               </div>
             </div>
           </div>
@@ -483,7 +483,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-3">
           <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-md w-full">
             <div className="flex justify-between items-center p-6 border-b border-theme-primary">
-              <h3 className="text-xl font-bold text-theme-primary">User Profile</h3>
+              <h3 className="text-xl font-bold text-theme-primary">Foydalanuvchi Profili</h3>
               <button
                 onClick={() => setSelectedUser(null)}
                 className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
@@ -511,25 +511,25 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="text-center p-4 bg-theme-secondary rounded-lg">
                   <div className="text-2xl font-bold text-accent-primary">{selectedUser.stats.totalTests}</div>
-                  <div className="text-sm text-theme-secondary">Total Tests</div>
+                  <div className="text-sm text-theme-secondary">Jami Bloklar</div>
                 </div>
                 <div className="text-center p-4 bg-theme-secondary rounded-lg">
                   <div className="text-2xl font-bold text-green-500">{selectedUser.stats.accuracy}%</div>
-                  <div className="text-sm text-theme-secondary">Accuracy</div>
+                  <div className="text-sm text-theme-secondary">To‘g‘rilik</div>
                 </div>
                 <div className="text-center p-4 bg-theme-secondary rounded-lg">
                   <div className="text-2xl font-bold text-blue-500">{selectedUser.stats.correctAnswers}</div>
-                  <div className="text-sm text-theme-secondary">Correct</div>
+                  <div className="text-sm text-theme-secondary">To‘g‘ri</div>
                 </div>
                 <div className="text-center p-4 bg-theme-secondary rounded-lg">
                   <div className="text-2xl font-bold text-red-500">{selectedUser.stats.wrongAnswers}</div>
-                  <div className="text-sm text-theme-secondary">Wrong</div>
+                  <div className="text-sm text-theme-secondary">Noto‘g‘ri</div>
                 </div>
               </div>
 
 
               <a href={`/profile/${selectedUser.username}`}><button className="w-full bg-accent-primary text-white py-3 rounded-lg hover:bg-accent-secondary transition-theme-normal">
-                View Full Profile
+                Toʻliq profilni koʻrish
               </button></a>
             </div>
           </div>
@@ -541,7 +541,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
         <div className="fixed inset-0 bg-theme-secondary z-[9998]">
           <div className="h-full flex flex-col">
             <div className="flex justify-between items-center p-4 bg-theme-primary border-b border-theme-primary">
-              <h3 className="text-xl font-bold text-theme-primary">Interactive Map - Full Screen</h3>
+              <h3 className="text-xl font-bold text-theme-primary">Interaktiv xarita - to'liq ekran</h3>
               <button
                 onClick={() => setShowFullscreen(false)}
                 className="p-2 hover:bg-theme-tertiary rounded-lg transition-theme-normal"
@@ -583,7 +583,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
                         />
                         <h4 className="font-semibold">{user.name}</h4>
                         <p className="text-sm text-gray-600">{getLocationText(user)}</p>
-                        <p className="text-sm font-medium text-blue-600">{user.stats.accuracy}% accuracy</p>
+                        <p className="text-sm font-medium text-blue-600">{user.stats.accuracy}% aniqlik</p>
                       </div>
                     </Popup>
                   </Marker>
@@ -595,22 +595,22 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               {/* Fullscreen Map Info */}
               <div className="absolute bottom-4 left-4 bg-theme-primary p-4 rounded-lg border border-theme-primary shadow-theme-lg z-[400]">
                 <div className="text-sm text-theme-secondary mb-2">
-                  Zoom Level: <span className="font-semibold text-theme-primary">{currentZoom}</span>
+                  Kattalashtirish darajasi: <span className="font-semibold text-theme-primary">{currentZoom}</span>
                 </div>
                 <div className="text-sm text-theme-secondary mb-2">
-                  Showing:{" "}
+                  Koʻrsatilmoqda:{" "}
                   <span className="font-semibold text-theme-primary">
                     {currentZoom < 6
-                      ? "Country Level"
+                      ? "Mamlakat Darajasi"
                       : currentZoom < 9
-                        ? "Region Level"
+                        ? "Hudud Darajasi"
                         : currentZoom < 12
-                          ? "District Level"
-                          : "Neighborhood Level"}
+                          ? "Tuman Darajasi"
+                          : "Mahalla Darajasi"}
                   </span>
                 </div>
                 <div className="text-sm text-theme-secondary">
-                  Users: <span className="font-semibold text-theme-primary">{visibleUsers.length}</span>
+                  Foydalanuvchilar: <span className="font-semibold text-theme-primary">{visibleUsers.length}</span>
                 </div>
               </div>
             </div>

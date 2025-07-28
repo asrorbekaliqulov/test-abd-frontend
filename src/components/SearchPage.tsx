@@ -172,7 +172,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
 
   const handleQuestionClick = (question: ApiQuestion) => {
     // Navigate to quiz page with the specific question
-    navigate(`/quiz?questionId=${question.id}`)
+    navigate(`/questions/${question.id}`)
   }
 
   const handleTestClick = (test: ApiTest) => {
@@ -196,9 +196,9 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
   }
 
   const getDifficultyText = (difficulty: number) => {
-    if (difficulty < 33) return "Easy"
-    if (difficulty < 66) return "Medium"
-    return "Hard"
+    if (difficulty < 33) return "Oson"
+    if (difficulty < 66) return "O'rtacha"
+    return "Qiyin"
   }
 
   const renderQuestion = (question: ApiQuestion, index: number) => {
@@ -318,9 +318,8 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
         <div className="relative">
           <img
             src={
-              user.profile_image ||
-              "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png" ||
-              "/placeholder.svg"
+              `https://backend.testabd.uz/${user.profile_image ||
+              "/media/defaultuseravatar.png"}`
             }
             alt={user.username}
             className="w-12 h-12 rounded-full object-cover border-2 border-indigo-200"
@@ -441,7 +440,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addToHistory(searchQuery)}
-              placeholder="Search tests, users, questions..."
+              placeholder="Testlar, foydalanuvchilar, savollarni qidirish..."
               className={`w-full pl-10 pr-10 py-3 border-2 rounded-lg transition-all duration-200 focus:outline-none ${theme === "dark"
                   ? "bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-indigo-500"
                   : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-indigo-500"
@@ -478,7 +477,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
           >
             <div className="flex justify-between items-center mb-6">
               <h3 className={`text-xl font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                Advanced Filters
+                Kengaytirilgan filtrlar
               </h3>
               <button
                 onClick={() => setShowFilters(false)}
@@ -495,13 +494,13 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                 <label
                   className={`block text-sm font-semibold mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}
                 >
-                  Content Type
+                  Kontent Turi
                 </label>
                 <div className="space-y-2">
                   {[
-                    { id: "test", name: "Tests", icon: "📝" },
-                    { id: "user", name: "Users", icon: "👤" },
-                    { id: "question", name: "Questions", icon: "❓" },
+                    { id: "test", name: "Blok", icon: "📝" },
+                    { id: "user", name: "Foydalanuvchilar", icon: "👤" },
+                    { id: "question", name: "Savollar", icon: "❓" },
                   ].map((type) => (
                     <label key={type.id} className="flex items-center space-x-3 cursor-pointer">
                       <input
@@ -532,7 +531,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                 <label
                   className={`block text-sm font-semibold mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}
                 >
-                  Sort By
+                  Saralash turi
                 </label>
                 <select
                   value={sortBy}
@@ -542,11 +541,11 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                       : "bg-white border-gray-300 text-gray-900"
                     }`}
                 >
-                  <option value="popular">Most Popular</option>
-                  <option value="newest">Newest First</option>
-                  <option value="oldest">Oldest First</option>
-                  <option value="rating">Highest Rated</option>
-                  <option value="participants">Most Participants</option>
+                  <option value="popular">Eng mashhur</option>
+                  <option value="newest">Eng yangi</option>
+                  <option value="oldest">Eng eski</option>
+                  <option value="rating">Eng yuqori baholangan</option>
+                  <option value="participants">Eng ko'p ishtirokchilar</option>
                   <option value="alphabetical">A-Z</option>
                 </select>
               </div>
@@ -556,7 +555,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                 <label
                   className={`block text-sm font-semibold mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}
                 >
-                  Date Range
+                  Davr oralig'i
                 </label>
                 <select
                   value={dateRange}
@@ -566,11 +565,11 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                       : "bg-white border-gray-300 text-gray-900"
                     }`}
                 >
-                  <option value="all">All Time</option>
-                  <option value="day">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
-                  <option value="year">This Year</option>
+                  <option value="all">Barcha vaqt</option>
+                  <option value="day">Bugun</option>
+                  <option value="week">Bu hafta</option>
+                  <option value="month">Bu oy</option>
+                  <option value="year">Bu yil</option>
                 </select>
               </div>
             </div>
@@ -603,7 +602,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                   )}
                   {dateRange !== "all" && (
                     <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-medium flex items-center space-x-1">
-                      <span>Period: {dateRange}</span>
+                      <span>Davri: {dateRange}</span>
                       <button onClick={() => setDateRange("all")}>
                         <X size={12} />
                       </button>
@@ -621,7 +620,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
             <div className="flex items-center space-x-2">
               <div className="w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded"></div>
               <h2 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                Categories
+                Kategoriyalar
               </h2>
             </div>
 
@@ -671,7 +670,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                         {/* Large Background Image */}
                         <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-500">
                           <img
-                            src={category.image || "/placeholder.svg?height=200&width=200"}
+                            src={category.image || "/media/defaultuseravatar.png"}
                             alt={category.title}
                             className="w-full h-full object-cover"
                           />
@@ -742,7 +741,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
               </h2>
               {searchResults.total > 0 && (
                 <span className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-                  {searchResults.total} results found
+                  {searchResults.total} natijalar topildi
                 </span>
               )}
             </div>
@@ -753,12 +752,12 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
               </div>
             ) : error ? (
               <div className="text-center py-8">
-                <div className={`text-red-500 mb-2`}>Error: {error}</div>
+                <div className={`text-red-500 mb-2`}>Xatolik: {error}</div>
                 <button
                   onClick={() => performSearch()}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                 >
-                  Try Again
+                  Qayta urinib ko'rish
                 </button>
               </div>
             ) : searchResults.total > 0 ? (
@@ -767,7 +766,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                 {searchResults.questions.length > 0 && (
                   <div>
                     <h3 className={`text-md font-semibold mb-4 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                      Questions ({searchResults.questions.length})
+                      Savollar ({searchResults.questions.length})
                     </h3>
                     <div className="space-y-3">
                       {searchResults.questions.map((question, index) => renderQuestion(question, index))}
@@ -779,7 +778,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                 {searchResults.tests.length > 0 && (
                   <div>
                     <h3 className={`text-md font-semibold mb-4 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                      Tests ({searchResults.tests.length})
+                      Bloklar ({searchResults.tests.length})
                     </h3>
                     <div className="space-y-3">{searchResults.tests.map((test, index) => renderTest(test, index))}</div>
                   </div>
@@ -789,7 +788,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
                 {searchResults.users.length > 0 && (
                   <div>
                     <h3 className={`text-md font-semibold mb-4 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                      Users ({searchResults.users.length})
+                      Foydalanuvchilar ({searchResults.users.length})
                     </h3>
                     <div className="space-y-3">{searchResults.users.map((user, index) => renderUser(user, index))}</div>
                   </div>
@@ -798,9 +797,9 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
             ) : (
               <div className="text-center py-8">
                 <Search size={48} className={`mx-auto mb-4 ${theme === "dark" ? "text-gray-600" : "text-gray-400"}`} />
-                <p className={theme === "dark" ? "text-gray-400" : "text-gray-600"}>No results found</p>
+                <p className={theme === "dark" ? "text-gray-400" : "text-gray-600"}>Natijalar topilmadi</p>
                 <p className={`text-sm mt-2 ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
-                  Try adjusting your search terms or filters
+                  Qidiruv so'zlaringizni yoki filtrlaringizni o'zgartirib ko'ring
                 </p>
               </div>
             )}
@@ -812,7 +811,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ theme = "light" }) => {
               <div className="flex items-center space-x-2 mb-4">
                 <TrendingUp size={20} className={theme === "dark" ? "text-gray-400" : "text-gray-600"} />
                 <h2 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                  Trending
+                  Trendlar
                 </h2>
               </div>
               <div className="grid grid-cols-2 gap-2">

@@ -23,7 +23,7 @@ export function StoryRing({ username, avatar, hasNewStory = false, isLive = fals
                     )}
                 >
                     <Avatar className="w-14 h-14 border-2 border-background">
-                        <AvatarImage src={avatar || "/placeholder.svg"} />
+                        <AvatarImage src={avatar || "/media/defaultuseravatar.png"} />
                         <AvatarFallback className="text-sm font-bold bg-purple-100 text-purple-600">
                             {(username ?? "").slice(0, 2).toUpperCase()}
                         </AvatarFallback>

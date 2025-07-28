@@ -376,7 +376,7 @@ const TestsPage: React.FC<TestsPageProps> = ({ theme }) => {
                 <div className="max-w-6xl mx-auto px-4 sm:px-6">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
-                            <img src="/placeholder.svg?height=32&width=32" alt="TestAbd" className="h-8 w-8 rounded-full" />
+                            <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full" />
                             <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
                             <span className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>/ Testlar</span>
                         </div>
