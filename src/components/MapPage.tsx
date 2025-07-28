@@ -422,7 +422,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
+        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
           <div className="bg-theme-primary p-6 rounded-lg border border-theme-primary">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -470,7 +470,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* User Profile Modal - Fixed z-index */}
