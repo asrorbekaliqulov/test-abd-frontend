@@ -123,13 +123,14 @@ const CompleteProfilePage: React.FC = () => {
                 first_name: formData.first_name,
                 last_name: formData.last_name,
                 phone_number: formData.phone_number || undefined,
-                country: formData.country ? parseInt(formData.country) : undefined,
-                region: formData.region ? parseInt(formData.region) : undefined,
-                district: formData.district ? parseInt(formData.district) : undefined,
-                settlement: formData.settlement ? parseInt(formData.settlement) : undefined
+                country_id: formData.country ? parseInt(formData.country) : undefined,
+                region_id: formData.region ? parseInt(formData.region) : undefined,
+                district_id: formData.district ? parseInt(formData.district) : undefined,
+                settlement_id: formData.settlement ? parseInt(formData.settlement) : undefined
             };
 
             await authAPI.updateProfile(completeData);
+            alert('Profil muvaffaqiyatli yaratildi!');
             navigate('/');
         } catch (err: any) {
             setError(err.message || 'Profilni to\'ldirishda xatolik yuz berdi');

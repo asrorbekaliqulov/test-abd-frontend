@@ -1170,10 +1170,10 @@ const ProfilePage = () => {
       formData.append("bio", mestats.bio)
       formData.append("email", mestats.email)
       formData.append("phone_number", mestats.phone_number)
-      formData.append("country", String(settings.country))
-      formData.append("region", String(settings.region))
-      formData.append("district", String(settings.district))
-      formData.append("settlement", String(settings.settlement))
+      formData.append("country_id", String(settings.country))
+      formData.append("region_id", String(settings.region))
+      formData.append("district_id", String(settings.district))
+      formData.append("settlement_id", String(settings.settlement))
       await authAPI.updateProfile(formData)
       showToast("Profil muvaffaqiyatli saqlandi!", "success")
     } catch (error) {
@@ -1206,10 +1206,10 @@ const ProfilePage = () => {
     setSettingsLoading(true)
     try {
       await authAPI.updateProfile({
-        country: settings.country,
-        region: settings.region,
-        district: settings.district,
-        settlement: settings.settlement,
+        country_id: settings.country,
+        region_id: settings.region,
+        district_id: settings.district,
+        settlement_id: settings.settlement,
       })
       showToast("Sozlamalar muvaffaqiyatli saqlandi!", "success")
     } catch (error) {
