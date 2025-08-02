@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, User, Mail, Lock, Phone, ArrowRight, AlertCircle, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
-import { checkUsername, authAPI } from '../../utils/api';
+import { Eye, EyeOff, User, Mail, Lock, Phone, ArrowRight, AlertCircle, CheckCircle, ExternalLink, Loader2, X } from 'lucide-react';
+import { checkUsername, checkReferral, authAPI, checkEmail } from '../../utils/api';
 
 interface Country {
   id: number;
@@ -25,6 +25,30 @@ interface Settlement {
   id: number;
   name: string;
   district: number;
+}
+
+// Toast Component
+const Toast = ({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose()
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div
+      className={`fixed top-8 right-4 z-50 p-4 rounded-lg shadow-lg ${type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+        } animate-slide-in`}
+    >
+      <div className="flex items-center justify-between">
+        <span>{message}</span>
+        <button onClick={onClose} className="ml-4 text-white hover:text-gray-200">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  )
 }
 
 const RegisterPage: React.FC = () => {
@@ -54,14 +78,25 @@ const RegisterPage: React.FC = () => {
   const [emailSent, setEmailSent] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'not_valid' | 'error'>('idle');
-  // const [usernameCheckTimeout, setUsernameCheckTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Refrral states
+  const [hasReferral, setHasReferral] = useState(false);
+  const [referral, setReferral] = useState('');
+  const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid' | 'error'>('idle');
+  const [referralCheckTimeout, setReferralCheckTimeout] = useState<NodeJS.Timeout | null>(null);
+
   // Location data
   const [countries, setCountries] = useState<Country[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const navigate = useNavigate();
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type })
+  }
 
   // Load countries on component mount
   useEffect(() => {
@@ -73,7 +108,7 @@ const RegisterPage: React.FC = () => {
         console.error('Error loading countries:', err);
       });
   }, []);
-  
+
   // Load regions when country changes
   useEffect(() => {
     if (formData.country) {
@@ -150,9 +185,6 @@ const RegisterPage: React.FC = () => {
 
     return true;
   };
-  
-
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +199,7 @@ const RegisterPage: React.FC = () => {
         setError('Parol kamida 8 ta belgidan iborat bo\'lishi kerak');
         return;
       }
-      if (passwordStrength < 75){
+      if (passwordStrength < 75) {
         setError("Ushbu parol juda kuchsiz boshqasini yarating");
         return;
       }
@@ -177,6 +209,14 @@ const RegisterPage: React.FC = () => {
       }
       if (!isValidUsername(formData.username)) {
         setError("Foydalanuvchi nomida faqat harflar, raqamlar, '.' va '_' bo'lishi mumkin. Ketma-ket yoki noto‘g‘ri joylashgan belgilarga ruxsat yo‘q.");
+        return;
+      }
+      if (await checkEmail(formData.email) === false) {
+        setError("Ushbu email allaqachon ro'yxatdan o'tgan");
+        return;
+      }
+      if (hasReferral && referral && referralStatus !== 'valid') {
+        setError("Promocod yaroqsiz yoki tekshirilmagan");
         return;
       }
 
@@ -189,13 +229,12 @@ const RegisterPage: React.FC = () => {
           username: formData.username,
           email: formData.email,
           password: formData.password,
-          verification_token: verificationToken || undefined
+          verification_token: verificationToken || undefined,
+          referral_code: hasReferral && referral ? referral : undefined
         };
-        // if (verificationToken !== undefined) {
-        //   data.verification_token = verificationToken;
-        // }
         const res = await authAPI.register(data);
         setEmailSent(true);
+        showToast("Siz ro'yxatdan o'tganligingiz uchun 5 coin hisobingizga o'tqazildi", "success")
       } catch (err: any) {
         setError(err.response?.message || 'Ro\'yxatdan o\'tishda xatolik yuz berdi');
       } finally {
@@ -256,7 +295,25 @@ const RegisterPage: React.FC = () => {
       );
     }
   };
-  
+
+  const checkReferralStatus = async (code: string) => {
+    if (code.length < 3) {
+      setReferralStatus('idle');
+      return;
+    }
+
+    setReferralStatus('checking');
+
+    try {
+      const isValid = await checkReferral(code);
+
+      setReferralStatus(isValid ? 'valid' : 'invalid');
+    } catch (error) {
+      console.error('Error checking referral code:', error);
+      setReferralStatus('error');
+    }
+  };
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
@@ -276,20 +333,41 @@ const RegisterPage: React.FC = () => {
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      const { name, value } = e.target;
-      setFormData(prev => ({
-          ...prev,
-          [name]: value
-      }));
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
 
-      if (name === 'password') {
-          setPasswordStrength(calculatePasswordStrength(value));
-      }
-      if (name === 'username') {
-        checkUsernameStatus(value)
-      }
+    if (name === 'password') {
+      setPasswordStrength(calculatePasswordStrength(value));
+    }
+    if (name === 'username') {
+      checkUsernameStatus(value)
+    }
 
-      if (error) setError('');
+    if (error) setError('');
+  };
+
+  const handleReferralChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setReferral(value);
+
+    // Clear previous timeout
+    if (referralCheckTimeout) {
+      clearTimeout(referralCheckTimeout);
+    }
+
+    // Set new timeout for 1 second delay
+    const timeout = setTimeout(() => {
+      if (value.trim()) {
+        checkReferralStatus(value.trim());
+      } else {
+        setReferralStatus('idle');
+      }
+    }, 1000);
+
+    setReferralCheckTimeout(timeout);
   };
   const getPasswordStrengthColor = () => {
     if (passwordStrength < 25) return 'bg-red-500';
@@ -339,10 +417,42 @@ const RegisterPage: React.FC = () => {
     }
   };
 
+  const getReferralStatusIcon = () => {
+    switch (referralStatus) {
+      case 'checking':
+        return <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />;
+      case 'valid':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'invalid':
+        return <AlertCircle className="h-5 w-5 text-red-500" />;
+      case 'error':
+        return <AlertCircle className="h-5 w-5 text-orange-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getReferralStatusMessage = () => {
+    switch (referralStatus) {
+      case 'checking':
+        return <span className="text-sm text-gray-500">Taklif havolasi tekshirilmoqda...</span>;
+      case 'valid':
+        return <span className="text-sm text-green-600">Taklif havola yaroqli!</span>;
+      case 'invalid':
+        return <span className="text-sm text-red-600">Taklif havola topilmadi</span>;
+      case 'error':
+        return <span className="text-sm text-orange-600">Taklif havolani tekshirishda xatolik yuz berdi</span>;
+      default:
+        return null;
+    }
+  };
+
   // Step 1: Email sent confirmation
   if (step === 1 && emailSent) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center p-4">
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="w-20 h-20 bg-gradient-to-br from-green-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -407,6 +517,8 @@ const RegisterPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center p-4">
+
+
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
@@ -465,9 +577,9 @@ const RegisterPage: React.FC = () => {
                       value={formData.username}
                       onChange={handleInputChange}
                       className={`block w-full pl-3 pr-10 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${usernameStatus === 'available' ? 'border-green-300' :
-                          usernameStatus === 'taken' ? 'border-red-300' :
-                            usernameStatus === 'error' ? 'border-orange-300' :
-                              usernameStatus === 'not_valid' ? 'border-red-300' :
+                        usernameStatus === 'taken' ? 'border-red-300' :
+                          usernameStatus === 'error' ? 'border-orange-300' :
+                            usernameStatus === 'not_valid' ? 'border-red-300' :
                               'border-gray-300'
                         }`}
                       placeholder="Noyob foydalanuvchi nomini tanlang"
@@ -501,92 +613,146 @@ const RegisterPage: React.FC = () => {
                 </div>
 
                 {/* Password Fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Password */}
-                      <div>
-                          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                              Parol *
-                          </label>
-                          <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <Lock className="h-5 w-5 text-gray-400" />
-                              </div>
-                              <input
-                                  id="password"
-                                  name="password"
-                                  type={showPassword ? 'text' : 'password'}
-                                  required
-                                  value={formData.password}
-                                  onChange={handleInputChange}
-                                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                                  placeholder="Kuchli parol yarating"
-                              />
-                              <button
-                                  type="button"
-                                  onClick={() => setShowPassword(!showPassword)}
-                                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                              >
-                                  {showPassword ? (
-                                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                                  ) : (
-                                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                                  )}
-                              </button>
-                          </div>
-                          {formData.password && (
-                              <div className="mt-2">
-                                  <div className="flex items-center gap-2 mb-1">
-                                      <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                          <div
-                                              className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor()}`}
-                                              style={{ width: `${passwordStrength}%` }}
-                                          />
-                                      </div>
-                                      <span className="text-xs text-gray-600">{getPasswordStrengthText()}</span>
-                                  </div>
-                              </div>
-                          )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Password */}
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                      Parol *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-gray-400" />
                       </div>
-
-                      {/* Confirm Password */}
-                      <div>
-                          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                              Parolni tasdiqlang *
-                          </label>
-                          <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <Lock className="h-5 w-5 text-gray-400" />
-                              </div>
-                              <input
-                                  id="confirmPassword"
-                                  name="confirmPassword"
-                                  type={showConfirmPassword ? 'text' : 'password'}
-                                  required
-                                  value={formData.confirmPassword}
-                                  onChange={handleInputChange}
-                                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                                  placeholder="Parolingizni tasdiqlang"
-                              />
-                              <button
-                                  type="button"
-                                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                              >
-                                  {showConfirmPassword ? (
-                                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                                  ) : (
-                                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                                  )}
-                              </button>
+                      <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                        placeholder="Kuchli parol yarating"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    {formData.password && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor()}`}
+                              style={{ width: `${passwordStrength}%` }}
+                            />
                           </div>
-                          {formData.confirmPassword && formData.password === formData.confirmPassword && (
-                              <div className="mt-2 flex items-center gap-2">
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                  <span className="text-sm text-green-600">Parollar mos keladi</span>
-                              </div>
-                          )}
+                          <span className="text-xs text-gray-600">{getPasswordStrengthText()}</span>
+                        </div>
                       </div>
+                    )}
                   </div>
+
+                  {/* Confirm Password */}
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                      Parolni tasdiqlang *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                        placeholder="Parolingizni tasdiqlang"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    {formData.confirmPassword && formData.password === formData.confirmPassword && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span className="text-sm text-green-600">Parollar mos keladi</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Referral Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      id="hasReferral"
+                      type="checkbox"
+                      checked={hasReferral}
+                      onChange={(e) => {
+                        setHasReferral(e.target.checked);
+                        if (!e.target.checked) {
+                          setReferral('');
+                          setReferralStatus('idle');
+                          if (referralCheckTimeout) {
+                            clearTimeout(referralCheckTimeout);
+                          }
+                        }
+                      }}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    />
+                    <label htmlFor="hasReferral" className="text-sm font-medium text-gray-700">
+                      Menda referral cod bor
+                    </label>
+                  </div>
+
+                  {hasReferral && (
+                    <div className="animate-slide-down">
+                      <label htmlFor="referral" className="block text-sm font-medium text-gray-700 mb-2">
+                        Referral cod
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="referral"
+                          name="referral"
+                          type="text"
+                          value={referral}
+                          onChange={handleReferralChange}
+                          className={`block w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${referralStatus === 'valid' ? 'border-green-300 bg-green-50' :
+                              referralStatus === 'invalid' ? 'border-red-300 bg-red-50' :
+                                referralStatus === 'error' ? 'border-orange-300 bg-orange-50' :
+                                  'border-gray-300'
+                            }`}
+                          placeholder="Referral codni kiriting"
+                        />
+                        {referral && (
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            {getReferralStatusIcon()}
+                          </div>
+                        )}
+                      </div>
+                      {referral && getReferralStatusMessage()}
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -748,7 +914,7 @@ const RegisterPage: React.FC = () => {
           </form>
 
           {/* Social Login - only show on first step */}
-          
+
 
           {/* Login Link */}
           <div className="mt-8 text-center">

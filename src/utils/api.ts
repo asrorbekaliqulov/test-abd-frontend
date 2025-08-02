@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'https://backend.testabd.uz';
+const API_BASE_URL = 'http://192.168.100.14:8000';
 
 
 
@@ -146,6 +146,18 @@ export const checkUsername = async (username: string) => {
   const response = await publicApi.get(`/accounts/check-username/?username=${username}`);
   const data = await response.data;
   return data.available;
+};
+
+export const checkEmail = async (email: string) => {
+  const response = await publicApi.get(`/accounts/check-email/?email=${email}`);
+  const data = await response.data;
+  return data.available;
+}
+
+export const checkReferral = async (referral: string) => {
+  const response = await publicApi.get(`/accounts/check-referral/?referral-code=${referral}`);
+  const data = await response.data
+  return data.available
 };
 
 export const userProfile = async (username: string) => {

@@ -11,7 +11,7 @@ import {
   Cog,
   UserMinus,
   User,
-  Zap,
+  Coins,
   BarChart3,
   Edit,
   Upload,
@@ -97,6 +97,8 @@ interface UserData {
   settlement: number
   streak_day: number
   streak_days: number
+  coin_percentage: number
+  coins: number
   weekly_test_count: {
     Dush: number
     Sesh: number
@@ -835,7 +837,7 @@ const Toast = ({ message, type, onClose }: { message: string; type: "success" | 
 
   return (
     <div
-      className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+      className={`fixed top-8 right-4 z-50 p-4 rounded-lg shadow-lg ${type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
         } animate-slide-in`}
     >
       <div className="flex items-center justify-between">
@@ -1556,8 +1558,8 @@ const ProfilePage = () => {
                     Qoʻshildi {formatDate(mestats?.join_date || "")}
                   </div>
                   <div className="flex items-center text-orange-500 text-sm">
-                    <Zap size={16} className="mr-1" />
-                    {mestats?.streak_day || 0} kunlik chiziq
+                    <Coins size={16} className="mr-1" />
+                    {mestats?.coins || 0} TestCoin
                   </div>
 
                   {mestats?.bio && <p className="text-gray-600 dark:text-gray-400 max-w-2xl">{mestats.bio}</p>}
@@ -1568,20 +1570,24 @@ const ProfilePage = () => {
         </CustomCard>
 
         {/* Statistics Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <CustomCard className="p-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <CustomCard className="p-4">
+            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Dasturdagi ulushi</div>
+            <div className="text-2xl font-bold text-orange-600">{mestats?.coin_percentage || 0}%</div>
+          </CustomCard>
+          <CustomCard className="p-4">
             <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Testlarda ishtirok etildi</div>
             <div className="text-2xl font-bold text-blue-600">{mestats?.tests_solved || 0}</div>
           </CustomCard>
 
-          <CustomCard className="p-6">
+          <CustomCard className="p-4">
             <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
               Savollarga nisbatan aniqlik darajasi
             </div>
             <div className="text-2xl font-bold text-green-600">{accuracy}%</div>
           </CustomCard>
 
-          <CustomCard className="p-6">
+          <CustomCard className="p-4">
             <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Kunlik chiziq</div>
             <div className="text-2xl font-bold text-orange-600">{mestats?.streak_days || 0}</div>
           </CustomCard>
