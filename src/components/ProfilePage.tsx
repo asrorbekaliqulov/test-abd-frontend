@@ -1572,7 +1572,7 @@ const ProfilePage = () => {
         {/* Statistics Section */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <CustomCard className="p-4">
-            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Dasturdagi ulushi</div>
+            <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Daromaddagi ulushingiz</div>
             <div className="text-2xl font-bold text-orange-600">{mestats?.coin_percentage || 0}%</div>
           </CustomCard>
           <CustomCard className="p-4">

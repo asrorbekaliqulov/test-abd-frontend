@@ -1,7 +1,7 @@
 "use client"
-
+import { useNavigate } from "react-router-dom"
 import type React from "react"
-import { UserPlus, Share2, Calendar, Award, TrendingUp } from "lucide-react"
+import { UserPlus, Share2, Calendar, Award, TrendingUp, ArrowLeft } from "lucide-react"
 
 export interface User {
     id: number
@@ -57,11 +57,19 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFol
                     : "bg-gray-100 text-gray-800 border-gray-200"
         }
     }
+    const navigate = useNavigate()
 
     return (
         <div
             className={`${theme === "dark" ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"} rounded-2xl shadow-xl p-6 sm:p-8 mb-6 sm:mb-8 border animate-fade-in`}
         >
+            <button
+                onClick={() => navigate("/")}
+                className={`p-2 rounded-lg transition-colors ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
+                    }`}
+            >
+                <ArrowLeft size={24} />
+            </button>
             <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
                 {/* Left panel - image and name */}
                 <div className="flex flex-col items-center lg:items-start animate-fade-in-up">

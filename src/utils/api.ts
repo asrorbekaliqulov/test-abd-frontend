@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'http://192.168.100.14:8000';
+const API_BASE_URL = 'https://backend.testabd.uz';
 
 
 
@@ -369,7 +369,9 @@ export const quizAPI = {
 
   fetchUserStats: (userId: number) => api.get(`/quiz/user-stats/${userId}/`),
 
-  fetchRecommendedTests: (pageNum: number) => api.get(`/quiz/recommended/?page=${pageNum}`),
+  // fetchRecommendedTests: (pageNum: number) => api.get(`/quiz/recommended/?page=${pageNum}`),
+  fetchRecommendedTests: (url?: string) =>
+    url ? api.get(url) : api.get('/quiz/recommended/'),
 };
 
 interface FollowUser {

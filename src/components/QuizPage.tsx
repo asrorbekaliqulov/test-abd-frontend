@@ -160,7 +160,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     if (loading) return
     setLoading(true)
     try {
-      const response = await quizAPI.fetchQuestions(url)
+      const response = await quizAPI.fetchRecommendedTests(url)
       const data = response.data
 
       const newBatchStart = quizData.length

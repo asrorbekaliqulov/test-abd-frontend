@@ -12,6 +12,7 @@ import {
     Star,
     BookOpen,
     Trophy,
+    ArrowLeft,
     FlameIcon as Fire,
     Calendar,
 } from "lucide-react"
@@ -374,8 +375,15 @@ const TestsPage: React.FC<TestsPageProps> = ({ theme }) => {
                 <div className="max-w-6xl mx-auto px-4 sm:px-6">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => navigate("/")}
+                                className={`p-2 rounded-lg transition-colors ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
+                                    }`}
+                            >
+                                <ArrowLeft size={24} />
+                            </button>
                             <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full" />
-                            <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
+                                <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
                             <span className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>/ Testlar</span>
                         </div>
                     </div>
