@@ -16,7 +16,11 @@ import {
   Edit,
   Upload,
   Moon,
+  ExternalLink,
   Sun,
+  Sparkles,
+  Zap,
+  Bot,
   X,
   ChevronRight,
   Bookmark,
@@ -674,6 +678,11 @@ const ReferralSection = () => {
     earnings: 0,
     pending: 0,
   })
+  const getTelegramBotUrl = () => {
+    const accessToken = localStorage.getItem('access_token');
+    const refreshToken = localStorage.getItem('refresh_token');
+    return `https://t.me/TestAbdUzBot/?start=access_token=${accessToken}&refresh_token=${refreshToken}`;
+  };
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(referralCode)
@@ -692,6 +701,54 @@ const ReferralSection = () => {
 
   return (
     <div className="space-y-6">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 p-6 text-white shadow-xl">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="relative z-10">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Bot size={28} className="text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-1">🚀 Telegram Bot orqali boshqaring!</h3>
+                <p className="text-blue-100 text-sm">Referral malumotlaringizni yanada qulay boshqaring</p>
+              </div>
+            </div>
+            <div className="flex space-x-1">
+              <Sparkles size={20} className="text-yellow-300 animate-pulse" />
+              <Zap size={20} className="text-yellow-300 animate-bounce" />
+            </div>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4">
+            <h4 className="font-semibold mb-2 flex items-center">
+              <span className="mr-2">✨</span>
+              Telegram botimizning afzalliklari:
+            </h4>
+            <ul className="text-sm space-y-1 text-blue-100">
+              <li className="flex items-center"><span className="mr-2">🔥</span>Referral cod yaratish</li>
+              <li className="flex items-center"><span className="mr-2">📱</span>Tushunarli interfeys</li>
+              <li className="flex items-center"><span className="mr-2">🔔</span>Taklif qilgan do'stlaringiz ro'yxati</li>
+              <li className="flex items-center"><span className="mr-2">⚡</span>Bir necha sekundda sozlash</li>
+            </ul>
+          </div>
+
+          <a
+            href={getTelegramBotUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-6 py-3 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+          >
+            <Bot size={20} className="mr-2" />
+            <span className="mr-2">@TestAbdUzBot</span>
+            <ExternalLink size={16} />
+          </a>
+        </div>
+
+        {/* Decorative elements */}
+        <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+        <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+      </div>
       <div>
         <h3 className="text-lg font-semibold mb-2 dark:text-white">Referral Dasturi</h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
@@ -1234,6 +1291,11 @@ const ProfilePage = () => {
       window.location.href = "/login"
     }
   }
+  const getTelegramBotUrl = () => {
+    const accessToken = localStorage.getItem('access_token');
+    const refreshToken = localStorage.getItem('refresh_token');
+    return `https://t.me/TestAbdUzBot/?start=access_token=${accessToken}&refresh_token=${refreshToken}`;
+  };
 
   const accuracy =
     mestats && mestats.correct_count + mestats.wrong_count > 0
@@ -1938,6 +2000,56 @@ const ProfilePage = () => {
           <div className="flex-1 p-6 overflow-y-auto">
             {activeTab === "profile" && (
               <div className="space-y-6">
+                {/* Telegram Bot Integration Banner */}
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 p-6 text-white shadow-xl">
+                  <div className="absolute inset-0 bg-black/10"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                          <Bot size={28} className="text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold mb-1">🚀 Telegram Bot orqali boshqaring!</h3>
+                          <p className="text-blue-100 text-sm">Profil ma'lumotlaringizni yanada qulay boshqaring</p>
+                        </div>
+                      </div>
+                      <div className="flex space-x-1">
+                        <Sparkles size={20} className="text-yellow-300 animate-pulse" />
+                        <Zap size={20} className="text-yellow-300 animate-bounce" />
+                      </div>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4">
+                      <h4 className="font-semibold mb-2 flex items-center">
+                        <span className="mr-2">✨</span>
+                        Telegram botimizning afzalliklari:
+                      </h4>
+                      <ul className="text-sm space-y-1 text-blue-100">
+                        <li className="flex items-center"><span className="mr-2">🔥</span>Tezkor profil yangilash</li>
+                        <li className="flex items-center"><span className="mr-2">📱</span>Mobil qurilmada qulay foydalanish</li>
+                        <li className="flex items-center"><span className="mr-2">🔔</span>Real vaqtda bildirishnomalar</li>
+                        <li className="flex items-center"><span className="mr-2">⚡</span>Bir necha sekundda sozlash</li>
+                      </ul>
+                    </div>
+
+                    <a
+                      href={getTelegramBotUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-6 py-3 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <Bot size={20} className="mr-2" />
+                      <span className="mr-2">@TestAbdUzBot</span>
+                      <ExternalLink size={16} />
+                    </a>
+                  </div>
+
+                  {/* Decorative elements */}
+                  <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+                  <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+                </div>
+
                 <div>
                   <h3 className="text-lg font-semibold mb-2 dark:text-white">Profil Sozlamalari</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
@@ -2009,15 +2121,6 @@ const ProfilePage = () => {
                   />
                 </div>
 
-                {/* <CustomInput
-                  label="Username"
-                  value={mestats?.username || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setMestats((prev) => (prev ? { ...prev, username: e.target.value } : null))
-                  }
-                  placeholder="Foydalanuvchi nomini tanlang"
-                /> */}
-
                 <CustomInput
                   label="Email"
                   type="email"
@@ -2046,25 +2149,58 @@ const ProfilePage = () => {
                     setMestats((prev) => (prev ? { ...prev, bio: e.target.value } : null))
                   }
                 />
-
-                {/* <div className="flex gap-4">
-                  <CustomButton onClick={handleSaveProfile} disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Saqlanmoqda...
-                      </>
-                    ) : (
-                      "Save Changes"
-                    )}
-                  </CustomButton>
-                  <CustomButton variant="outline">Qayta tiklash</CustomButton>
-                </div> */}
               </div>
             )}
 
             {activeTab === "preferences" && (
               <div className="space-y-6">
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 p-6 text-white shadow-xl">
+                  <div className="absolute inset-0 bg-black/10"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                          <Bot size={28} className="text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold mb-1">🚀 Telegram Bot orqali boshqaring!</h3>
+                          <p className="text-blue-100 text-sm">Profil ma'lumotlaringizni yanada qulay boshqaring</p>
+                        </div>
+                      </div>
+                      <div className="flex space-x-1">
+                        <Sparkles size={20} className="text-yellow-300 animate-pulse" />
+                        <Zap size={20} className="text-yellow-300 animate-bounce" />
+                      </div>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4">
+                      <h4 className="font-semibold mb-2 flex items-center">
+                        <span className="mr-2">✨</span>
+                        Telegram botimizning afzalliklari:
+                      </h4>
+                      <ul className="text-sm space-y-1 text-blue-100">
+                        <li className="flex items-center"><span className="mr-2">🔥</span>Profile malumotlaridan qulay xabardor bo'lish</li>
+                        <li className="flex items-center"><span className="mr-2">📱</span>Bir necha bosish bilan malumotlaringizni ko'ring</li>
+                        <li className="flex items-center"><span className="mr-2">⚡</span>Bir necha sekundda sozlash</li>
+                      </ul>
+                    </div>
+
+                    <a
+                      href={getTelegramBotUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-6 py-3 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      <Bot size={20} className="mr-2" />
+                      <span className="mr-2">@TestAbdUzBot</span>
+                      <ExternalLink size={16} />
+                    </a>
+                  </div>
+
+                  {/* Decorative elements */}
+                  <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+                  <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+                </div>
                 <div>
                   <h3 className="text-lg font-semibold mb-2 dark:text-white">Afzalliklar</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
@@ -2088,8 +2224,6 @@ const ProfilePage = () => {
                       ...countries.map((country) => ({ value: country.id, label: country.name })),
                     ]}
                   />
-
-
 
                   <CustomSelect
                     label="Viloyat"
@@ -2139,7 +2273,6 @@ const ProfilePage = () => {
                     {[
                       { code: "light", icon: "☀️", name: "Yorug'" },
                       { code: "dark", icon: "🌙", name: "Qorong'u" },
-                      // { code: "auto", icon: "🔄", name: "Avtomatik" },
                     ].map((theme) => (
                       <CustomButton
                         key={theme.code}
@@ -2166,50 +2299,6 @@ const ProfilePage = () => {
                 </div>
 
                 <hr className="border-gray-200 dark:border-gray-700" />
-
-                {/* <div>
-                  <div className="text-base font-medium mb-4 dark:text-white">Bildirishnoma</div>
-                  <div className="space-y-4">
-                    <CustomSwitch
-                      checked={settings.notifications.push}
-                      onChange={(checked) => handleSettingChange("notifications", "push", checked)}
-                      label="Push Notifications"
-                      description="Receive push notifications"
-                    />
-                    <CustomSwitch
-                      checked={settings.notifications.email}
-                      onChange={(checked) => handleSettingChange("notifications", "email", checked)}
-                      label="Email Notifications"
-                      description="Receive email notifications"
-                    />
-                    <CustomSwitch
-                      checked={settings.notifications.sound}
-                      onChange={(checked) => handleSettingChange("notifications", "sound", checked)}
-                      label="Sound Notifications"
-                      description="Play sound for notifications"
-                    />
-                  </div>
-                </div>
-
-                <hr className="border-gray-200 dark:border-gray-700" />
-
-                <div>
-                  <div className="text-base font-medium mb-4 dark:text-white">Maxfiylik</div>
-                  <div className="space-y-4">
-                    <CustomSwitch
-                      checked={settings.privacy.publicProfile}
-                      onChange={(checked) => handleSettingChange("privacy", "publicProfile", checked)}
-                      label="Ommaviy Profil"
-                      description="Profilingizni hammaga ko‘rinadigan qilib qo‘ying"
-                    />
-                    <CustomSwitch
-                      checked={settings.privacy.showOnlineStatus}
-                      onChange={(checked) => handleSettingChange("privacy", "showOnlineStatus", checked)}
-                      label="Onlayn Holatni Ko‘rsatish"
-                      description="Boshqalar siz onlayn bo‘lganingizni ko‘rishsin"
-                    />
-                  </div>
-                </div> */}
 
                 <div className="flex justify-end gap-4">
                   <CustomButton variant="outline">Qayta tiklash</CustomButton>
