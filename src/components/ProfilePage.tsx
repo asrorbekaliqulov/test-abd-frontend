@@ -681,7 +681,7 @@ const ReferralSection = () => {
   const getTelegramBotUrl = () => {
     const accessToken = localStorage.getItem('access_token');
     const refreshToken = localStorage.getItem('refresh_token');
-    return `https://t.me/TestAbdUzBot/?start=access_token=${accessToken}&refresh_token=${refreshToken}`;
+    return `https://t.me/TestAbdUzBot?start=access_token=${accessToken}&refresh_token=${refreshToken}`;
   };
 
   const handleCopyCode = () => {
@@ -1294,7 +1294,7 @@ const ProfilePage = () => {
   const getTelegramBotUrl = () => {
     const accessToken = localStorage.getItem('access_token');
     const refreshToken = localStorage.getItem('refresh_token');
-    return `https://t.me/TestAbdUzBot/?start=access_token=${accessToken}&refresh_token=${refreshToken}`;
+    return `https://t.me/TestAbdUzBot?start=access_token=${accessToken}&refresh_token=${refreshToken}`;
   };
 
   const accuracy =
