@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 const API_BASE_URL = 'https://backend.testabd.uz';
 
-axios.defaults.withCredentials = true;
+// axios.defaults.withCredentials = true;
 
 
 
