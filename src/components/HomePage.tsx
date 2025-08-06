@@ -688,7 +688,7 @@ const useNotifications = () => {
 
   const playNotificationSound = useCallback(() => {
     try {
-      const audio = new Audio('../../public/notification-sound.mp3')
+      const audio = new Audio('/notification-sound.mp3')
       audio.volume = 0.5
       audio.play().catch(console.error)
     } catch (error) {

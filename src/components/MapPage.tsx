@@ -3,11 +3,13 @@
 import type React from "react"
 import { useEffect, useState, useCallback } from "react"
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet"
-import { Globe, Users, TrendingUp, Maximize2, X, Award, Target, ZoomIn, ZoomOut, Filter } from "lucide-react"
+import { Globe, Maximize2, X, ZoomIn, ZoomOut, Filter } from "lucide-react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { leaderboardApi, type LeaderboardFilters } from "../utils/api"
 import { processLeaderboardData, filterUsersByZoom, createCustomIcon, type ProcessedUserData } from "../utils/maputils"
+import { format, subDays } from "date-fns"
+import { toZonedTime } from "date-fns-tz"
 
 interface MapPageProps {
   theme: string
@@ -20,6 +22,13 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 })
+
+// Function to get yesterday's date in Tashkent time (UTC+5)
+const getYesterdayDate = () => {
+  const nowInTashkent = toZonedTime(new Date(), "Asia/Tashkent")
+  const yesterday = subDays(nowInTashkent, 1)
+  return format(yesterday, "yyyy-MM-dd")
+}
 
 // Map event handler component
 const MapEventHandler: React.FC<{
@@ -129,7 +138,7 @@ const FilterPanel: React.FC<{
               <label className="block text-sm font-medium text-theme-primary mb-2">Sana</label>
               <input
                 type="date"
-                value={filters.date || ""}
+                value={filters.date || getYesterdayDate()}
                 onChange={(e) => handleFilterChange("date", e.target.value)}
                 className="w-full px-3 py-2 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
               />
@@ -137,7 +146,7 @@ const FilterPanel: React.FC<{
 
             <div className="flex space-x-2">
               <button
-                onClick={() => onFiltersChange({})}
+                onClick={() => onFiltersChange({ date: getYesterdayDate() })}
                 className="flex-1 px-3 py-2 border border-theme-primary rounded-lg text-theme-secondary hover:bg-theme-tertiary transition-theme-normal"
               >
                 Tozalash
@@ -165,9 +174,8 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<LeaderboardFilters>({})
+  const [filters, setFilters] = useState<LeaderboardFilters>({ date: getYesterdayDate() })
   const [showFilters, setShowFilters] = useState(false)
-
 
   const fetchLeaderboardData = useCallback(async () => {
     try {
@@ -180,7 +188,6 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
 
       const processedData = processLeaderboardData(userData)
       setAllUsers(processedData)
-
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch data")
       console.error("Error fetching leaderboard data:", err)
@@ -188,7 +195,6 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
       setLoading(false)
     }
   }, [filters])
-  
 
   // Update visible users based on zoom level
   useEffect(() => {
@@ -420,57 +426,6 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
             </div>
           </div>
         </div>
-
-        {/* Statistics Cards */}
-        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
-          <div className="bg-theme-primary p-6 rounded-lg border border-theme-primary">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Users size={24} className="text-blue-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-theme-primary">{stats.totalUsers}</div>
-                <div className="text-sm text-theme-secondary">Jami foydalanuvchilar</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-theme-primary p-6 rounded-lg border border-theme-primary">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <TrendingUp size={24} className="text-green-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-theme-primary">{stats.avgAccuracy}%</div>
-                <div className="text-sm text-theme-secondary">O‘rtacha To‘g‘rilik</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-theme-primary p-6 rounded-lg border border-theme-primary">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Target size={24} className="text-purple-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-theme-primary">{stats.totalTests.toLocaleString()}</div>
-                <div className="text-sm text-theme-secondary">Jami Bloklar</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-theme-primary p-6 rounded-lg border border-theme-primary">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <Award size={24} className="text-yellow-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-theme-primary">{visibleUsers.length}</div>
-                <div className="text-sm text-theme-secondary">Ko‘rinadigan Foydalanuvchilar</div>
-              </div>
-            </div>
-          </div>
-        </div> */}
       </div>
 
       {/* User Profile Modal - Fixed z-index */}
@@ -522,10 +477,11 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
                 </div>
               </div>
 
-
-              <a href={`/profile/${selectedUser.username}`}><button className="w-full bg-accent-primary text-white py-3 rounded-lg hover:bg-accent-secondary transition-theme-normal">
-                Toʻliq profilni koʻrish
-              </button></a>
+              <a href={`/profile/${selectedUser.username}`}>
+                <button className="w-full bg-accent-primary text-white py-3 rounded-lg hover:bg-accent-secondary transition-theme-normal">
+                  Toʻliq profilni koʻrish
+                </button>
+              </a>
             </div>
           </div>
         </div>
@@ -572,7 +528,7 @@ const MapPage: React.FC<MapPageProps> = ({ theme }) => {
                     <Popup>
                       <div className="text-center p-2">
                         <img
-                          src={user.profilePic || "/media/defaultprofileavatar.jpg"}
+                          src={user.profilePic || "/defaultprofileavatar.jpg"}
                           alt={user.name}
                           className="w-12 h-12 rounded-full mx-auto mb-2"
                         />
