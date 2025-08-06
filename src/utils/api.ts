@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'http://172.20.10.2:8000';
+const API_BASE_URL = 'https://backend.testabd.uz';
 
 
 
