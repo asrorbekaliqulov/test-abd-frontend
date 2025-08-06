@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'https://backend.testabd.uz';
+const API_BASE_URL = 'http://172.20.10.2:8000';
 
 
 
@@ -303,6 +303,15 @@ export const authAPI = {
 
   resetPassword: (token: string, password: string) =>
     publicApi.post('/accounts/reset-password/', { token, password }),
+  
+  fetchNotifications: () =>
+    api.get(`/accounts/notifications/`),
+
+  markNotificationAsRead: (notificationId: number) =>
+    api.patch(`/accounts/notifications/${notificationId}/`, { is_read: true }),
+
+  markAllNotificationsAsRead: () =>
+    api.post(`/accounts/notifications/mark-all-read/`),
 };
 
 // Quiz API

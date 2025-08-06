@@ -2720,14 +2720,16 @@ const ProfilePage = () => {
                   key={user.id}
                   className="flex items-center space-x-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
                 >
+                  
                   <img
                     src={`https://backend.testabd.uz${user.profile_image || "/media/defaultuseravatar.png"}`}
                     alt={user.username}
                     className="w-12 h-12 rounded-full object-cover"
                   />
+                  <a href={`/profile/${user.username}`}>
                   <div className="flex-1">
                     <h4 className="font-semibold dark:text-white">@{user.username}</h4>
-                  </div>
+                    </div></a>
                   <CustomButton
                     size="sm"
                     variant={user.is_following ? "outline" : "primary"}
@@ -2766,14 +2768,16 @@ const ProfilePage = () => {
             {Array.isArray(follow?.following) && follow.following.length > 0 ? (
               follow.following.map((user) => (
                 <div key={user.id} className="flex items-center space-x-4 p-3 rounded-lg border border-gray-200">
+                  
                   <img
                     src={user.profile_image || "/media/defaultuseravatar.png"}
                     alt={user.username}
                     className="w-12 h-12 rounded-full object-cover"
                   />
+                  <a href={`/profile/${user.username}`}>
                   <div className="flex-1">
                     <h4 className="font-semibold">{user.username}</h4>
-                  </div>
+                  </div></a>
                   <CustomButton size="sm" variant="outline" onClick={() => handleFollow(user.id)}>
                     <UserMinus size={16} className="mr-1" />
                     Unfollow

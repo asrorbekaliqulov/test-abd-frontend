@@ -567,23 +567,11 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                                             {question.answers.slice(0, 4).map((answer) => (
                                                 <div
                                                     key={answer.id}
-                                                    className={`p-4 rounded-xl border transition-all ${answer.is_correct
-                                                            ? theme === "dark"
-                                                                ? "bg-green-900/20 border-green-600 text-green-300"
-                                                                : "bg-green-50 border-green-300 text-green-700"
-                                                            : theme === "dark"
-                                                                ? "bg-gray-700 border-gray-600 text-gray-300"
-                                                                : "bg-gray-50 border-gray-200 text-gray-700"
-                                                        }`}
+                                                    className={`p-4 rounded-xl border transition-all `}
                                                 >
                                                     <div className="flex items-center space-x-3">
                                                         <span
-                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${answer.is_correct
-                                                                    ? "bg-green-500 text-white"
-                                                                    : theme === "dark"
-                                                                        ? "bg-gray-600 text-gray-300"
-                                                                        : "bg-gray-200 text-gray-600"
-                                                                }`}
+                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold `}
                                                         >
                                                             {answer.letter}
                                                         </span>
