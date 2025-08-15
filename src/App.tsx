@@ -17,7 +17,8 @@ import AdminPanel from './components/admin/AdminPanel';
 import TestCreator from './components/create/TestCreator';
 import TestsPage from './components/TestPage';
 import QuestionCreator from './components/create/QuestionCreator';
-import { StoriesViewer } from './components/stories/StoriesViewer';
+// import { StoriesViewer } from './components/stories/StoriesViewer';
+import RealTimeQuizPage from './pages/RealTimeQuizPage';
 import ProfilePage from './components/ProfilePage';
 import QuestionPage from './components/QuestionPgaes';
 import EmailVerificationPage from './components/auth/EmailVerificationPgae';
@@ -26,6 +27,9 @@ import { OtherUserProfilePage } from './components/OtherProfile/OtherUserProfile
 import LogoutPage from './components/auth/LogOutPage';
 import TestDetailPage from './components/TestDetailPages';
 import QuizTakingPage from './components/QuizTalkingPages';
+import CreateLiveQuiz from './components/live_quiz';
+import ChatApp from "./pages/ChatApp";
+import NotFound from "./pages/not-found";
 
 // interface ProfilePageProps {
 //   onShowSettings: () => void;
@@ -150,10 +154,16 @@ const App: React.FC = () => {
       <Route path="/tests/:testId" element={<TestDetailPage theme={theme} />} />
       <Route path="/questions/:id" element={<QuestionPage />} />
       <Route path="/quiz" element={<QuizTakingPage theme={theme} />} />{" "}
+      <Route path="/create-live-quiz" element={<CreateLiveQuiz theme={theme} toggleTheme={toggleTheme} /> } />
+      <Route path="/live-quiz/:quiz_id" element={<RealTimeQuizPage />} />
       <Route path="/logout" element={<LogoutPage  />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/admin" element={<ProtectedRoute><AdminPanel theme="light" /></ProtectedRoute>} />
+      <Route path="/chat" element={<ChatApp />} />
+      <Route path="/chat-private" element={<ChatApp />} />
+      <Route path="/chat/:roomId" element={<ChatApp />} />
       <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+      <Route element={<NotFound />} />
     </Routes>
   );
 };

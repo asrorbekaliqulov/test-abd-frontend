@@ -13,7 +13,7 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login, socialLogin } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,7 +25,7 @@ const LoginPage: React.FC = () => {
       await login(formData.username, formData.password);
       navigate('/home');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed. Please try again.');
+      setError(err.response?.data?.non_field_errors || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

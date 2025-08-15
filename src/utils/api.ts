@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'https://backend.testabd.uz';
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
 // axios.defaults.withCredentials = true;
 
@@ -414,8 +414,13 @@ export const accountsAPI = {
   getSubscriptions: () =>
     api.get('/accounts/subscriptions/'),
 
+  searchUsers: (query: string) => 
+    api.get('/accounts/search/', { params: { q: query } }),
+
   createSubscription: (data: any) =>
-    api.post('/accounts/subscriptions/', data)
+    api.post('/accounts/subscriptions/', data),
+
+  getNotifications: () => api.get('/accounts/notifications/'),
 };
 
 // System API (Admin only)
@@ -438,5 +443,227 @@ export const systemAPI = {
   updateRole: (id: number, data: any) =>
     api.patch(`/systemroles/${id}/`, data)
 };
+
+export const chatAPI = {
+  // Chat rooms
+  getChatRooms: () => api.get('/chat/chatrooms/'),
+  
+  createOneOnOneChat: (userId: number) => 
+    api.post('/chat/chatrooms/create-one-on-one/', { user_id: userId }),
+  
+  createGroupChat: (data: { name: string; participants: number[] }) =>
+    api.post('/chat/chatrooms/create-group/', data),
+  
+  getChatRoom: (id: number) => api.get(`/chat/chatrooms/${id}/`),
+  
+  updateChatRoom: (id: number, data: any) => 
+    api.patch(`/chat/chatrooms/${id}/`, data),
+  
+  deleteChatRoom: (id: number) => api.delete(`/chat/chatrooms/${id}/`),
+  
+  addParticipant: (roomId: number, userId: number) =>
+    api.post(`/chat/chatrooms/${roomId}/add-participant/`, { user_id: userId }),
+  
+  removeParticipant: (roomId: number, userId: number) =>
+    api.post(`/chat/chatrooms/${roomId}/remove-participant/`, { user_id: userId }),
+  
+  pinMessage: (roomId: number, messageId: number) =>
+    api.post(`/chat/chatrooms/${roomId}/pin-message/`, { message_id: messageId }),
+  
+  // Messages
+  getMessages: (params?: { page?: number; page_size?: number; chatroom?: number }) =>
+    api.get('/chat/messages/', { params }),
+  
+  sendMessage: (data: {
+    chatroom: number;
+    content?: string;
+    message_type?: 'text' | 'file' | 'quiz' | 'system';
+    reply_to?: number;
+    file?: File;
+  }) => {
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined) {
+        if (key === 'file' && value instanceof File) {
+          formData.append(key, value);
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+    });
+    return api.post('/chat/messages/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  
+  getMessage: (id: number) => api.get(`/chat/messages/${id}/`),
+  
+  updateMessage: (id: number, data: any) => 
+    api.patch(`/chat/messages/${id}/`, data),
+  
+  deleteMessage: (id: number) => api.delete(`/chat/messages/${id}/`),
+  
+  deleteMessageForAll: (id: number) => 
+    api.delete(`/chat/messages/${id}/delete-for-all/`),
+  
+  forwardMessage: (id: number, chatroomIds: number[]) =>
+    api.post(`/chat/messages/${id}/forward/`, { chatroom_ids: chatroomIds }),
+  
+  reactToMessage: (id: number, emoji: string) =>
+    api.post(`/chat/messages/${id}/react/`, { emoji }),
+  
+  // Quiz attempts in chat
+  getQuizAttempts: () => api.get('/chat/quiz-attempts/'),
+  
+  createQuizAttempt: (data: {
+    message: number;
+    answers: { question_id: number; selected_options: number[] }[];
+  }) => api.post('/chat/quiz-attempts/', data),
+  
+  // Blocked users
+  getBlockedUsers: () => api.get('/chat/blocked-users/'),
+  
+  blockUser: (userId: number) => 
+    api.post('/chat/blocked-users/', { blocked_user: userId }),
+  
+  unblockUser: (id: number) => api.delete(`/chat/blocked-users/${id}/`),
+  
+  // Drafts
+  getDrafts: () => api.get('/chat/drafts/'),
+  
+  createDraft: (data: { chatroom: number; content: string }) =>
+    api.post('/chat/drafts/', data),
+  
+  updateDraft: (id: number, data: { content: string }) =>
+    api.patch(`/chat/drafts/${id}/`, data),
+  
+  deleteDraft: (id: number) => api.delete(`/chat/drafts/${id}/`),
+};
+
+
+
+export class ChatWebSocket {
+  private ws: WebSocket | null = null;
+  private url: string;
+  private token: string | null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  
+  constructor() {
+    this.url = 'ws://127.0.0.1:5000/ws/chat/';
+    this.token = localStorage.getItem('access_token');
+  }
+  
+  connect(onMessage: (data: any) => void, onError?: (error: Event) => void) {
+    if (this.ws?.readyState === WebSocket.OPEN) return;
+    
+    try {
+      const wsUrl = this.token 
+        ? `${this.url}?token=${this.token}`
+        : this.url;
+      
+      this.ws = new WebSocket(wsUrl);
+      
+      this.ws.onopen = () => {
+        console.log('WebSocket connected');
+        this.reconnectAttempts = 0;
+      };
+      
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          onMessage(data);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      this.ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        this.reconnect(onMessage, onError);
+      };
+      
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        onError?.(error);
+      };
+      
+    } catch (error) {
+      console.error('Error creating WebSocket connection:', error);
+      onError?.(error as Event);
+    }
+  }
+  
+  private reconnect(onMessage: (data: any) => void, onError?: (error: Event) => void) {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      setTimeout(() => {
+        console.log(`Reconnecting... attempt ${this.reconnectAttempts}`);
+        this.connect(onMessage, onError);
+      }, 1000 * this.reconnectAttempts);
+    }
+  }
+  
+  send(data: any) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+  
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+  
+  sendMessage(chatroomId: number, content: string, messageType = 'text') {
+    this.send({
+      type: 'chat_message',
+      chatroom_id: chatroomId,
+      message: content,
+      message_type: messageType
+    });
+  }
+  
+  joinRoom(chatroomId: number) {
+    this.send({
+      type: 'join_room',
+      chatroom_id: chatroomId
+    });
+  }
+  
+  leaveRoom(chatroomId: number) {
+    this.send({
+      type: 'leave_room',
+      chatroom_id: chatroomId
+    });
+  }
+  
+  sendTyping(chatroomId: number, isTyping: boolean) {
+    this.send({
+      type: 'typing',
+      chatroom_id: chatroomId,
+      is_typing: isTyping
+    });
+  }
+  
+  startQuiz(chatroomId: number, testId: number) {
+    this.send({
+      type: 'start_quiz',
+      chatroom_id: chatroomId,
+      test_id: testId
+    });
+  }
+  
+  submitQuizAnswer(chatroomId: number, questionId: number, answer: any) {
+    this.send({
+      type: 'quiz_answer',
+      chatroom_id: chatroomId,
+      question_id: questionId,
+      answer: answer
+    });
+  }
+}
 
 export default api;

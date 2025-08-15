@@ -13,7 +13,6 @@ import {
   Check,
   ThumbsUp,
   ThumbsDown,
-  Plus,
   Bell,
   User,
   Gift,
@@ -25,6 +24,8 @@ import {
   Info,
 } from "lucide-react"
 import { quizAPI, authAPI } from "../utils/api"
+import AnimatedLiveProfile from './AnimatedLiveProfile';
+import { useNavigate } from 'react-router-dom';
 import { StoriesViewer } from "./stories/StoriesViewer"
 
 interface HomePageProps {
@@ -76,7 +77,7 @@ interface Story {
     profile_image: string | null
   }
   created_at: string
-  type: "test" | "question"
+  type: "test" | "live_quiz" 
 }
 
 interface GroupedStory {
@@ -751,7 +752,7 @@ const useNotifications = () => {
       return;
     }
     try {
-      const wsUrl = `wss://backend.testabd.uz/ws/notifications/${userId}/`;
+      const wsUrl = `ws://127.0.0.1:8000/ws/notifications/${userId}/`;
       console.log('WebSocket ulanish urinilmoqda:', wsUrl); // Debug uchun
       const newSocket = new WebSocket(wsUrl);
 
@@ -932,6 +933,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     }
   }
 
+
   const fetchStories = async () => {
     try {
       const response = await authAPI.fetchStories()
@@ -951,15 +953,17 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
         })
       }
 
-      if (data.questions && Array.isArray(data.questions)) {
-        data.questions.forEach((question: any) => {
-          if (question && question.user && question.user.id) {
+      // Add live quizzes to stories
+      if (data.live_quiz && Array.isArray(data.live_quiz)) {
+        data.live_quiz.forEach((liveQuiz: any) => {
+          console.log("Live quiz data:", liveQuiz) // Debug uchun
+          if (liveQuiz && liveQuiz.user && liveQuiz.user.id && liveQuiz.is_active) {
             allStories.push({
-              ...question,
-              type: "question",
+              ...liveQuiz,
+              type: "live_quiz",
             })
           } else {
-            console.warn("Question without valid user data:", question)
+            console.warn("Live quiz without valid user data:", liveQuiz)
           }
         })
       }
@@ -1004,6 +1008,11 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     )
     return groupedArray
   }
+  const navigate = useNavigate();
+
+  const handleLiveQuizClick = (liveQuizId: number) => {
+    navigate(`/live-quiz/${liveQuizId}`);
+  };
 
   useEffect(() => {
     fetchQuizzes()
@@ -1504,6 +1513,44 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
     }
   }
 
+  
+  const handleCreateLiveQuiz = () => {
+    window.location.href = '/create-live-quiz'
+  }
+
+  const getRandomLetter = () => {
+    const letters = ['A', 'B', 'C', 'D']
+    return letters[Math.floor(Math.random() * letters.length)]
+  }
+
+  const [floatingLetters, setFloatingLetters] = useState<
+    Array<{ id: number; letter: string; x: number; y: number; opacity: number }>
+  >([])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFloatingLetters((prev) => {
+        const newLetters = [...prev]
+        if (Math.random() > 0.7 && newLetters.length < 5) {
+          newLetters.push({
+            id: Date.now(),
+            letter: getRandomLetter(),
+            x: Math.random() * 60,
+            y: Math.random() * 60,
+            opacity: 1,
+          })
+        }
+        return newLetters.map((letter) => ({
+          ...letter,
+          y: letter.y - 0.5,
+          opacity: letter.opacity - 0.02,
+        })).filter((letter) => letter.opacity > 0 && letter.y > -10)
+      })
+    }, 500)
+    return () => clearInterval(interval)
+  }, [])
+
+
   return (
     <div
       className={`min-h-screen transition-all duration-300 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
@@ -1525,7 +1572,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                 className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
                   }`}
               >
-                {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
+                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
               </button>
               <button
                 onClick={() => setShowNotifications(true)}
@@ -1553,57 +1600,85 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
       <section className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-4">
         <div className="flex space-x-4 overflow-x-auto pb-2">
           <div className="flex-shrink-0">
-            <button className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200">
-              <div
+            <button 
+              onClick={handleCreateLiveQuiz}
+              className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
+            >
+                <div
                 className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center transition-all duration-200 hover:border-blue-500 ${theme === "dark" ? "border-gray-600 bg-gray-800" : "border-gray-300 bg-gray-100"
                   }`}
-              >
-                <Plus size={24} className={theme === "dark" ? "text-gray-400" : "text-gray-500"} />
-              </div>
-              <span className="text-xs text-center max-w-[70px] truncate">Qo'shish</span>
+                >
+                <img
+                  src="/live-quiz.png"
+                  alt="Jonli viktorina"
+                  className="w-15 h-15 object-contain"
+                />
+                </div>
+              <span className="text-xs text-center max-w-[70px] truncate">Jonli</span>
             </button>
           </div>
           {groupedStories.map((groupedStory, index) => (
             <div key={`user-${groupedStory.user.id}`} className="flex-shrink-0">
-              <button
-                onClick={() => handleStoryClick(groupedStory)}
-                className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="relative animate-slideInDown">
-                  <div
-                    className={`w-16 h-16 rounded-full p-0.5 ${groupedStory.latestStory.type === "test"
-                        ? "bg-gradient-to-tr from-blue-400 to-purple-600"
-                        : "bg-gradient-to-tr from-green-400 to-blue-500"
-                      }`}
-                  >
+              {groupedStory.latestStory.type === "live_quiz" ? (
+                <button
+                  onClick={() => handleLiveQuizClick(groupedStory.latestStory.id)}
+                  className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="relative animate-slideInDown">
+                    <AnimatedLiveProfile
+                      profileImage={`http://127.0.0.1:8000${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
+                      username={groupedStory.user.username}
+                      size={64}
+                    />
+                    {groupedStory.stories.length > 1 && (
+                      <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-bounce">
+                        {groupedStory.stories.length}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs text-center max-w-[70px] truncate">{groupedStory.user.username}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleStoryClick(groupedStory)}
+                  className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="relative animate-slideInDown">
                     <div
-                      className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"
+                      className={`w-16 h-16 rounded-full p-0.5 ${groupedStory.latestStory.type === "test"
+                          ? "bg-gradient-to-tr from-blue-400 to-purple-600"
+                          : "bg-gradient-to-tr from-green-400 to-blue-500"
                         }`}
                     >
-                      <img
-                        src={`https://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
-                        alt={groupedStory.user.username}
-                        className="w-full h-full object-cover"
-                      />
+                      <div
+                        className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"}`}
+                      >
+                        <img
+                          src={`http://127.0.0.1:8000${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
+                          alt={groupedStory.user.username}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     </div>
+                    {groupedStory.stories.length > 1 && (
+                      <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-bounce">
+                        {groupedStory.stories.length}
+                      </div>
+                    )}
                   </div>
-                  {groupedStory.stories.length > 1 && (
-                    <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-bounce">
-                      {groupedStory.stories.length}
-                    </div>
-                  )}
-                </div>
-                <span className="text-xs text-center max-w-[70px] truncate">{groupedStory.user.username}</span>
-                <div
-                  className={`text-xs px-2 py-0.5 rounded-full ${groupedStory.latestStory.type === "test"
-                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300"
-                    }`}
-                >
-                  {groupedStory.latestStory.type === "test" ? "Test" : "Savol"}
-                </div>
-              </button>
+                  <span className="text-xs text-center max-w-[70px] truncate">{groupedStory.user.username}</span>
+                  <div
+                    className={`text-xs px-2 py-0.5 rounded-full ${groupedStory.latestStory.type === "test"
+                        ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                        : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300"
+                      }`}
+                  >
+                    {groupedStory.latestStory.type === "test" ? "Test" : "Savol"}
+                  </div>
+                </button>
+              )}
             </div>
           ))}
         </div>
