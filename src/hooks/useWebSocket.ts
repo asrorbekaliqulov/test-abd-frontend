@@ -1,156 +1,112 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 
-export const useWebSocket = (url: string | null) => {
-  const ws = useRef<WebSocket | null>(null)
+interface UseWebSocketReturn {
+  isConnected: boolean
+  sendMessage: (message: any) => void
+  lastMessage: string | null
+  error: string | null
+}
+
+export const useWebSocket = (url: string | null): UseWebSocketReturn => {
   const [isConnected, setIsConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState<string | null>(null)
-  const shouldConnect = useRef(true)
-  const isConnecting = useRef(false)
-  const isMounted = useRef(true)
-  const connectionAttempts = useRef(0)
-  const maxConnectionAttempts = 5
+  const [error, setError] = useState<string | null>(null)
+  const ws = useRef<WebSocket | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectAttempts = useRef(0)
+  const maxReconnectAttempts = 5
+
+  const getSecureWebSocketUrl = (wsUrl: string): string => {
+    // If we're on HTTPS, convert ws:// to wss://
+    if (typeof window !== "undefined" && window.location.protocol === "https:") {
+      return wsUrl.replace(/^ws:\/\//, "wss://")
+    }
+    return wsUrl
+  }
 
   const connect = useCallback(() => {
-    if (!url || !shouldConnect.current || isConnecting.current || !isMounted.current) {
-      console.log("[WebSocket] Skipping connection - conditions not met", {
-        url: !!url,
-        shouldConnect: shouldConnect.current,
-        isConnecting: isConnecting.current,
-        isMounted: isMounted.current,
-      })
-      return
-    }
-
-    if (connectionAttempts.current >= maxConnectionAttempts) {
-      console.error("[WebSocket] Max connection attempts reached")
-      return
-    }
-
-    // Clear any existing connection
-    if (ws.current?.readyState === WebSocket.OPEN || ws.current?.readyState === WebSocket.CONNECTING) {
-      console.log("[WebSocket] Connection already exists, skipping")
-      return
-    }
-
-    isConnecting.current = true
-    connectionAttempts.current++
+    if (!url) return
 
     try {
-      console.log(`[WebSocket] Connecting to: ${url} (attempt ${connectionAttempts.current})`)
-      ws.current = new WebSocket(url)
+      const secureUrl = getSecureWebSocketUrl(url)
+      console.log("[WebSocket] Attempting to connect to:", secureUrl)
+
+      ws.current = new WebSocket(secureUrl)
 
       ws.current.onopen = () => {
-        if (!isMounted.current) return
         console.log("[WebSocket] Connected successfully")
         setIsConnected(true)
-        isConnecting.current = false
-        connectionAttempts.current = 0
+        setError(null)
+        reconnectAttempts.current = 0
       }
 
       ws.current.onmessage = (event) => {
-        console.log("[WebSocket] Message received:", event.data)
-        if (!isMounted.current) return
         setLastMessage(event.data)
       }
 
       ws.current.onclose = (event) => {
-        if (!isMounted.current) return
-        console.log("[WebSocket] Connection closed:", event.code, event.reason)
+        console.log("[WebSocket] Disconnected:", event.code, event.reason)
         setIsConnected(false)
-        isConnecting.current = false
 
-        // Only reconnect if not intentionally closed and should still connect
-        if (
-          shouldConnect.current &&
-          ![1000, 4000, 4001].includes(event.code) &&
-          connectionAttempts.current < maxConnectionAttempts
-        ) {
-          console.log(
-            `[WebSocket] Reconnecting in 3s... (attempt ${connectionAttempts.current + 1}/${maxConnectionAttempts})`,
-          )
-          setTimeout(() => {
-            if (shouldConnect.current && isMounted.current) {
-              connect()
-            }
-          }, 3000)
+        if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts && url) {
+          const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)
+          console.log(`[WebSocket] Reconnecting in ${timeout}ms (attempt ${reconnectAttempts.current + 1})`)
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttempts.current++
+            connect()
+          }, timeout)
+        } else if (reconnectAttempts.current >= maxReconnectAttempts) {
+          setError("Failed to reconnect after multiple attempts")
         }
       }
 
-      ws.current.onerror = (error) => {
-        if (!isMounted.current) return
-        console.error("[WebSocket] Connection error:", error)
-        isConnecting.current = false
+      ws.current.onerror = (event) => {
+        console.error("[WebSocket] Connection error:", event)
+        setError("WebSocket connection failed")
       }
-    } catch (error) {
-      console.error("[WebSocket] Failed to create connection:", error)
-      isConnecting.current = false
+    } catch (err) {
+      console.error("[WebSocket] Connection failed:", err)
+      setError("Failed to establish WebSocket connection")
     }
   }, [url])
 
-  const sendMessage = useCallback((message: object) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN && isMounted.current) {
-      console.log("[WebSocket] Sending message:", message)
-      ws.current.send(JSON.stringify(message))
-      return true
+  const sendMessage = useCallback((message: any) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      try {
+        ws.current.send(JSON.stringify(message))
+        console.log("[WebSocket] Message sent:", message)
+      } catch (err) {
+        console.error("[WebSocket] Send error:", err)
+        setError("Failed to send message")
+      }
     } else {
-      console.warn("[WebSocket] Cannot send message - not connected")
-      return false
+      console.warn("[WebSocket] Cannot send message - connection not open")
+      setError("WebSocket not connected")
     }
   }, [])
 
   useEffect(() => {
-    isMounted.current = true
-
-    // Reset connection attempts when URL changes
-    connectionAttempts.current = 0
-
     if (url) {
-      shouldConnect.current = true
-      // Small delay to prevent React Strict Mode double mounting issues
-      const connectTimer = setTimeout(() => {
-        if (isMounted.current && shouldConnect.current) {
-          connect()
-        }
-      }, 100)
-
-      return () => {
-        clearTimeout(connectTimer)
-      }
+      connect()
     }
 
     return () => {
-      isMounted.current = false
-      shouldConnect.current = false
-
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
       if (ws.current) {
-        if (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING) {
-          ws.current.close(1000, "Component unmount")
-        }
-        ws.current = null
+        ws.current.close(1000, "Component unmounting")
       }
     }
   }, [url, connect])
-
-  useEffect(() => {
-    return () => {
-      console.log("[WebSocket] Component unmounting, cleaning up...")
-      isMounted.current = false
-      shouldConnect.current = false
-
-      if (ws.current) {
-        if (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING) {
-          ws.current.close(1000, "Component unmount")
-        }
-        ws.current = null
-      }
-    }
-  }, [])
 
   return {
     isConnected,
     sendMessage,
     lastMessage,
+    error,
   }
 }

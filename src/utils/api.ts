@@ -5,6 +5,31 @@ const API_BASE_URL = 'http://127.0.0.1:8000';
 
 // axios.defaults.withCredentials = true;
 
+const csrfManager = {
+  getToken: () => {
+    const match = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("csrftoken="))
+    return match ? decodeURIComponent(match.split("=")[1]) : null
+  },
+
+  // LocalStorage ishlatmaymiz ❌
+  setToken: () => {},
+
+  fetchToken: async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/system/csrf/`, {
+        withCredentials: true,
+      })
+      // Backend @ensure_csrf_cookie bilan cookie yuboradi,
+      // biz faqat cookie’dan olib ishlatamiz
+      return csrfManager.getToken()
+    } catch (error) {
+      console.warn("Failed to fetch CSRF token:", error)
+      return null
+    }
+  },
+}
 
 
 // Public API (auth oldidan ishlatiladigan)
@@ -14,16 +39,30 @@ const publicApi = axios.create({
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
+  withCredentials: true
 });
+
+// Helper function to get a cookie by name
+function getCookie(name: string): string | null {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()!.split(';').shift() || null;
+  return null;
+}
 
 // Authenticated API (token bilan ishlaydi)
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
-  },
+  }
 });
+
+// Har bir request oldidan CSRF tokenni qo'shib yuboradi
+
+
 
 // Token manager
 export const tokenManager = {
@@ -55,9 +94,12 @@ export const tokenManager = {
   }
 };
 
-// Request interceptor: tokenni headerga qo‘shish
 api.interceptors.request.use(
   (config) => {
+    const csrfToken = getCookie("csrftoken");
+    if (csrfToken) {
+      config.headers["X-CSRFToken"] = csrfToken;
+    }
     const token = tokenManager.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -249,8 +291,22 @@ export const leaderboardApi = {
      
 
 
+// Define UserData interface (customize fields as needed)
+export interface UserData {
+  id: number;
+  username: string;
+  email: string;
+  // Add other user fields as needed
+}
+
 // Auth API
 export const authAPI = {
+  async getCurrentUser(): Promise<UserData> {
+    const response = await api.get<UserData>("/accounts/me/");
+    return response.data;
+  },
+
+
   login: (username: string, password: string) =>
     api.post('/accounts/login/', { username, password }),
 
@@ -540,6 +596,92 @@ export const chatAPI = {
   deleteDraft: (id: number) => api.delete(`/chat/drafts/${id}/`),
 };
 
+// Live Quiz API
+export const liveQuizAPI = {
+  // Get user's live quizzes
+  fetchMyLiveQuizzes: () => api.get("/quiz/live-quiz/my/"),
+
+  createLiveQuiz: async (data: {
+    test: number // test_id -> test (ForeignKey field name)
+    mode: "timed" | "first_answer" | "admin_controlled" | "free" // matches VIKTORINA_MODE choices
+    start_time?: string // ISO datetime string
+    end_time?: string // ISO datetime string
+    description?: string
+    is_public?: boolean
+    is_active?: boolean // will be activated when quiz starts
+    time_per_question?: number // for timed mode
+  }) => {
+    // Ensure CSRF token is available
+    let csrfToken = csrfManager.getToken()
+    if (!csrfToken) {
+      csrfToken = await csrfManager.fetchToken()
+    }
+
+    // Determine is_active based on start_time
+    let isActive = false
+    if (data.start_time) {
+      const now = new Date()
+      const start = new Date(data.start_time)
+      // Agar start_time hozirga teng yoki o'tgan bo'lsa, is_active true
+      isActive = start <= now
+    }
+
+    // Transform data to match Django model expectations
+    const payload = {
+      test: data.test, // ForeignKey to Test model
+      mode: data.mode, // matches VIKTORINA_MODE choices
+      start_time: data.start_time || null,
+      end_time: data.end_time || null,
+      description: data.description || "",
+      is_public: data.is_public !== undefined ? data.is_public : true,
+      is_active: isActive,
+      // Add time_per_question for timed mode
+      ...(data.mode === "timed" &&
+        data.time_per_question && {
+          time_per_question: data.time_per_question,
+        }),
+    }
+
+    return api.post("/quiz/live-quiz/save/", payload, {
+      headers: {
+        ...(csrfToken && { "X-CSRFToken": csrfToken }),
+        "Content-Type": "application/json",
+      },
+      withCredentials: true,
+    })
+  },
+
+
+
+  // Get live quiz by ID
+  getLiveQuiz: (id: number) => api.get(`/quiz/live-quiz/${id}/`),
+
+  // Update live quiz
+  updateLiveQuiz: (id: number, data: any) => api.patch(`/quiz/live-quiz/${id}/`, data),
+
+  // Delete live quiz
+  deleteLiveQuiz: (id: number) => api.delete(`/quiz/live-quiz/${id}/`),
+
+  // Join live quiz
+  joinLiveQuiz: (quizId: number) => api.post(`/quiz/live-quiz/${quizId}/join/`),
+
+  // Get live quiz participants
+  getLiveQuizParticipants: (quizId: number) => api.get(`/quiz/live-quiz/${quizId}/participants/`),
+
+  // Submit answer in live quiz
+  submitLiveQuizAnswer: (
+    quizId: number,
+    data: {
+      question_id: number
+      selected_answer_ids: number[]
+      duration?: number
+    },
+  ) => api.post(`/quiz/live-quiz/${quizId}/submit-answer/`, data),
+
+  // Get live quiz results
+  getLiveQuizResults: (quizId: number) => api.get(`/quiz/live-quiz/${quizId}/results/`),
+}
+
 
 
 export class ChatWebSocket {
@@ -550,7 +692,7 @@ export class ChatWebSocket {
   private maxReconnectAttempts = 5;
   
   constructor() {
-    this.url = 'ws://127.0.0.1:5000/ws/chat/';
+    this.url = 'ws://127.0.0.1:8000/ws/chat/';
     this.token = localStorage.getItem('access_token');
   }
   
@@ -665,5 +807,60 @@ export class ChatWebSocket {
     });
   }
 }
+
+
+export const checkApiHealth = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/health/`, { timeout: 5000 })
+    return { healthy: true, data: response.data }
+  } catch (error) {
+    console.warn("API health check failed:", error)
+    return { healthy: false, error }
+  }
+}
+
+export const handleApiError = (error: any) => {
+  console.error("API Error:", error)
+
+  if (error.response?.status === 401) {
+    // Unauthorized - redirect to login
+    tokenManager.clearTokens()
+    if (typeof window !== "undefined") {
+      window.location.href = "/login"
+    }
+    return "Tizimga kirish talab qilinadi. Iltimos, qaytadan kiring."
+  } else if (error.response?.status === 403) {
+    return "Ushbu amalni bajarish uchun ruxsat yo'q. Tizimga kirganingizni tekshiring."
+  } else if (error.response?.status === 404) {
+    return "So'ralgan ma'lumot topilmadi. Backend endpoint mavjudligini tekshiring."
+  } else if (error.response?.status >= 500) {
+    return "Server xatosi yuz berdi. Iltimos, keyinroq qayta urinib ko'ring."
+  } else if (error.code === "NETWORK_ERROR" || !error.response) {
+    return "Tarmoq xatosi. Internet aloqasini va API URL ni tekshiring."
+  } else if (error.code === "ECONNREFUSED") {
+    return "Serverga ulanib bo'lmadi. Backend server ishlab turganini tekshiring."
+  }
+
+  const errorMessage =
+    error.response?.data?.detail ||
+    error.response?.data?.message ||
+    error.response?.data?.error ||
+    error.message ||
+    "Noma'lum xatolik yuz berdi"
+
+  return `Xatolik: ${errorMessage}`
+}
+
+export const initializeCSRF = async () => {
+  try {
+    await csrfManager.fetchToken()
+    return true
+  } catch (error) {
+    console.error("Failed to initialize CSRF token:", error)
+    return false
+  }
+}
+
+export { csrfManager }
 
 export default api;

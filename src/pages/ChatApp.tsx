@@ -19,8 +19,8 @@ function useWebSocket({ onMessage, autoConnect = true }) {
   const wsRef = useRef(null);
 
   const connect = () => {
-    const token = localStorage.getItem('access_token');
-    const wsUrl = `ws://127.0.0.1:8000/ws/chat/?token=${token}`;
+    // const token = localStorage.getItem('access_token');
+    const wsUrl = `ws://127.0.0.1:8000/ws/chat/`;
 
     wsRef.current = new WebSocket(wsUrl);
 
@@ -180,7 +180,7 @@ function ChatAppContent() {
   
   // WebSocket message handler
   function handleWebSocketMessage(data: any) {
-    switch (data.type) {
+    switch (data.action) {
       case 'chat_message':
         qc.invalidateQueries({ queryKey: ['/chat/messages', data.chatroom_id] });
         break;
