@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = 'http://backend.testabd.uz';
 
 // axios.defaults.withCredentials = true;
 
@@ -477,6 +477,8 @@ export const accountsAPI = {
     api.post('/accounts/subscriptions/', data),
 
   getNotifications: () => api.get('/accounts/notifications/'),
+
+  getRecomendedUsers: () => api.get('/accounts/recommended-users/'),
 };
 
 // System API (Admin only)
@@ -692,7 +694,7 @@ export class ChatWebSocket {
   private maxReconnectAttempts = 5;
   
   constructor() {
-    this.url = 'ws://127.0.0.1:8000/ws/chat/';
+    this.url = 'ws://backend.testabd.uz/ws/chat/';
     this.token = localStorage.getItem('access_token');
   }
   

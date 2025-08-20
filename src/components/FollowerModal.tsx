@@ -84,7 +84,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
                                 <div key={follower.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
                                     <div className="flex items-center space-x-3">
                                         <img
-                                            src={`${follower.profile_image || 'http://127.0.0.1:8000/media/defaultuseravatar.png'}`}
+                                            src={`${follower.profile_image || 'http://backend.testabd.uz/media/defaultuseravatar.png'}`}
                                             alt={`${follower.first_name} ${follower.last_name}`}
                                             className="w-12 h-12 rounded-full object-cover"
                                         />

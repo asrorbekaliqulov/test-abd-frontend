@@ -5,7 +5,7 @@
       "description": "User and Quiz APIs",
       "version": "v1"
     },
-    "host": "127.0.0.1:8000",
+    "host": "backend.testabd.uz",
     "schemes": [
       "http"
     ],

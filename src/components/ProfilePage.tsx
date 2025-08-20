@@ -101,6 +101,7 @@ interface UserData {
   settlement: number
   streak_day: number
   streak_days: number
+  referral_code: string
   coin_percentage: number
   coins: number
   weekly_test_count: {
@@ -685,7 +686,7 @@ const ReferralSection = () => {
   };
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(referralCode)
+    navigator.clipboard.writeText('@TestAbdUzBot')
     // You can add a toast notification here
   }
 
@@ -796,8 +797,8 @@ const ReferralSection = () => {
         <h4 className="text-lg font-semibold mb-4 dark:text-white">Sizning Referral Kodingiz</h4>
 
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4 font-mono text-lg text-center">
-            {referralCode}
+          <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-2 font-italic text-lg text-center">
+            <a href="https://t.me/TestAbdUzBot">@TestAbdUzBot</a> orqali olishingiz mumkin
           </div>
           <button
             onClick={handleCopyCode}
@@ -819,7 +820,7 @@ const ReferralSection = () => {
             <span className="font-medium text-yellow-800 dark:text-yellow-200">Coming Soon!</span>
           </div>
           <p className="text-sm text-yellow-700 dark:text-yellow-300">
-            Referral kod olish funksiyasi tez orada ishga tushiriladi. Hozircha bu demo versiyasi.
+            Referral kod funksiyasini bizning telegram botdan boshqarishingiz mumkin.
           </p>
         </div>
       </div>
@@ -875,7 +876,7 @@ const ReferralSection = () => {
           <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h5 className="font-medium text-gray-900 dark:text-white mb-2">Hozircha referrallar yo'q</h5>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Birinchi referralingiz ro'yxatdan o'tganidan keyin bu yerda ko'rinadi
+            Hozircha referrallar tarixi <a href="https://t.me/TestAbdUzBot">@TestAbdUzBot</a> botimizdan ko'rsangiz bo'ladi
           </p>
         </div>
       </div>
@@ -2714,7 +2715,7 @@ const ProfilePage = () => {
       >
         <div className="p-6">
           <div className="max-h-96 overflow-y-auto space-y-4">
-            {Array.isArray(follow?.following) && follow.following.length > 0 ? (
+            {Array.isArray(follow?.followers) && follow.followers.length > 0 ? (
               follow.followers.map((user) => (
                 <div
                   key={user.id}

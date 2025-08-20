@@ -23,7 +23,7 @@ import {
   Megaphone,
   Info,
 } from "lucide-react"
-import { quizAPI, authAPI } from "../utils/api"
+import { quizAPI, authAPI, accountsAPI } from "../utils/api"
 import AnimatedLiveProfile from './AnimatedLiveProfile';
 import { useNavigate } from 'react-router-dom';
 import { StoriesViewer } from "./stories/StoriesViewer"
@@ -107,14 +107,16 @@ interface Notification {
 
 interface User {
   id: number
+  first_name: string
+  last_name: string
   username: string
   profile_image: string | null
   followers_count: number
   following_count: number
   is_following: boolean
-  is_badged?: boolean
   bio?: string
 }
+
 
 const NotificationToast: React.FC<{
   notification: Notification
@@ -480,56 +482,9 @@ const UserProfilesSection: React.FC<{
     setLoading(true)
     try {
       await new Promise(resolve => setTimeout(resolve, 1000))
-      const mockUsers: User[] = [
-        {
-          id: 1,
-          username: 'john_doe',
-          profile_image: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150',
-          followers_count: 1250,
-          following_count: 890,
-          is_following: false,
-          is_badged: true,
-          bio: 'Test yaratuvchisi va dasturchi'
-        },
-        {
-          id: 2,
-          username: 'sarah_wilson',
-          profile_image: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=150',
-          followers_count: 2100,
-          following_count: 456,
-          is_following: false,
-          bio: 'Matematika o\'qituvchisi'
-        },
-        {
-          id: 3,
-          username: 'alex_tech',
-          profile_image: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=150',
-          followers_count: 890,
-          following_count: 1200,
-          is_following: false,
-          is_badged: true,
-          bio: 'Frontend Developer'
-        },
-        {
-          id: 4,
-          username: 'maria_garcia',
-          profile_image: 'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg?auto=compress&cs=tinysrgb&w=150',
-          followers_count: 3400,
-          following_count: 234,
-          is_following: false,
-          bio: 'Quiz master va ta\'lim mutaxassisi'
-        },
-        {
-          id: 5,
-          username: 'david_kim',
-          profile_image: 'https://images.pexels.com/photos/1040880/pexels-photo-1040880.jpeg?auto=compress&cs=tinysrgb&w=150',
-          followers_count: 567,
-          following_count: 789,
-          is_following: false,
-          bio: 'Ilm-fan sevuvchisi'
-        }
-      ]
-      setUsers(mockUsers)
+      const usersResponse = await accountsAPI.getRecomendedUsers()
+      console.log(usersResponse)
+      setUsers(usersResponse.data.results)
     } catch (error) {
       console.error('Error fetching suggested users:', error)
     } finally {
@@ -606,11 +561,6 @@ const UserProfilesSection: React.FC<{
                   alt={user.username}
                   className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500/20"
                 />
-                {user.is_badged && (
-                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center animate-bounce">
-                    <span className="text-white text-xs">✓</span>
-                  </div>
-                )}
               </div>
               <div className="flex-1">
                 <div className="flex items-center space-x-2">
@@ -752,7 +702,7 @@ const useNotifications = () => {
       return;
     }
     try {
-      const wsUrl = `ws://127.0.0.1:8000/ws/notifications/${userId}/`;
+      const wsUrl = `ws://backend.testabd.uz/ws/notifications/${userId}/`;
       console.log('WebSocket ulanish urinilmoqda:', wsUrl); // Debug uchun
       const newSocket = new WebSocket(wsUrl);
 
@@ -1627,7 +1577,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                 >
                   <div className="relative animate-slideInDown">
                     <AnimatedLiveProfile
-                      profileImage={`http://127.0.0.1:8000${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
+                      profileImage={`http://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
                       username={groupedStory.user.username}
                       size={64}
                     />
@@ -1656,7 +1606,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                         className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"}`}
                       >
                         <img
-                          src={`http://127.0.0.1:8000${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
+                          src={`http://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
                           alt={groupedStory.user.username}
                           className="w-full h-full object-cover"
                         />
