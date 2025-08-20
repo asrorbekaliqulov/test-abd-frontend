@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'http://backend.testabd.uz';
+const API_BASE_URL = 'https://backend.testabd.uz';
 
 // axios.defaults.withCredentials = true;
 

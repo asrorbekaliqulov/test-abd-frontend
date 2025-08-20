@@ -1577,7 +1577,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                 >
                   <div className="relative animate-slideInDown">
                     <AnimatedLiveProfile
-                      profileImage={`http://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
+                      profileImage={`https://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
                       username={groupedStory.user.username}
                       size={64}
                     />
@@ -1606,7 +1606,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
                         className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"}`}
                       >
                         <img
-                          src={`http://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
+                          src={`https://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
                           alt={groupedStory.user.username}
                           className="w-full h-full object-cover"
                         />
