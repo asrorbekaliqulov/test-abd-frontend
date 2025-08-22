@@ -821,7 +821,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 }}
               >
                 <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
-                <div className={`absolute top-5 left-4 sm:top-16 sm:left-6 flex items-center space-x-3 z-10 glass-morphism rounded-xl p-3 max-w-xs`}>
+                <div className={`absolute bottom-20 left-5sm:bottom-4 sm:left-3 column items-center space-x-3 z-10 glass-morphism rounded-xl p-3 max-w-xs`}>
                   <a href={`/profile/${quiz.user.username}`} className="flex items-center space-x-3">
                   <img
                     src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
