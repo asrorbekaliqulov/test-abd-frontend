@@ -57,6 +57,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    'X-CSRFToken': getCookie("csrftoken"),
   }
 });
 
@@ -696,7 +697,7 @@ export class ChatWebSocket {
   private maxReconnectAttempts = 5;
   
   constructor() {
-    this.url = 'ws://backend.testabd.uz/ws/chat/';
+    this.url = 'wss://backend.testabd.uz/ws/chat/';
     this.token = localStorage.getItem('access_token');
   }
   

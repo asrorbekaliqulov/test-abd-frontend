@@ -77,7 +77,7 @@ export const useNotifications = () => {
     const connectWebSocket = useCallback(() => {
         try {
             // Replace with your actual WebSocket URL
-            const wsUrl = `ws://backend.testabd.uz/ws/notifications/`;
+            const wsUrl = `wss://backend.testabd.uz/ws/notifications/`;
             const newSocket = new WebSocket(wsUrl);
 
             newSocket.onopen = () => {

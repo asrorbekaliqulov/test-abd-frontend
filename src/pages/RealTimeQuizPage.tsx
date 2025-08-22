@@ -177,7 +177,7 @@ const RealTimeQuizPage: React.FC = () => {
     totalWrong: 0,
   })
 
-  const WS_BASE_URL = "ws://backend.testabd.uz"
+  const WS_BASE_URL = "wss://backend.testabd.uz"
   const wsUrl = quiz_id ? `${WS_BASE_URL}/ws/quiz/${quiz_id}/` : null
 
   const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl)

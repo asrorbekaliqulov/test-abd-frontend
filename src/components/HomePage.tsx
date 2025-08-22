@@ -702,7 +702,7 @@ const useNotifications = () => {
       return;
     }
     try {
-      const wsUrl = `ws://backend.testabd.uz/ws/notifications/${userId}/`;
+      const wsUrl = `wss://backend.testabd.uz/ws/notifications/${userId}/`;
       console.log('WebSocket ulanish urinilmoqda:', wsUrl); // Debug uchun
       const newSocket = new WebSocket(wsUrl);
 

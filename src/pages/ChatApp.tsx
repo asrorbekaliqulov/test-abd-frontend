@@ -20,7 +20,7 @@ function useWebSocket({ onMessage, autoConnect = true }) {
 
   const connect = () => {
     // const token = localStorage.getItem('access_token');
-    const wsUrl = `ws://backend.testabd.uz/ws/chat/`;
+    const wsUrl = `wss://backend.testabd.uz/ws/chat/`;
 
     wsRef.current = new WebSocket(wsUrl);
 
