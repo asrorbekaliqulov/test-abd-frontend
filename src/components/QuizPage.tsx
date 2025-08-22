@@ -22,6 +22,8 @@ interface Quiz {
   }>
   correct_count: number
   wrong_count: number
+  test_title: string
+  test_description: string
   difficulty_percentage: number
   is_bookmarked?: boolean
   user: {
@@ -819,7 +821,22 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 }}
               >
                 <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
-
+                        <div className="absolute bottom-4 left-4 glass-morphism rounded-xl p-3 max-w-xs">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
+                    alt="Creator"
+                    className="w-6 h-6 rounded-full border border-white/30"
+                  />
+                  <div>
+                    <span className="text-white font-medium text-sm">@{quiz.user.username}</span>
+                    <div className="text-white/60 text-xs">{quiz.test_title}</div>
+                  </div>
+                </div>
+                {quiz && (
+                  <p className="text-white/70 text-xs mt-2 line-clamp-2">{quiz.test_description}</p>
+                )}
+              </div>
                 <div className={`absolute top-12 left-4 sm:top-16 sm:left-6 flex items-center space-x-3 z-10`}>
                   <a href={`/profile/${quiz.user.username}`} className="flex items-center space-x-3">
                     <img

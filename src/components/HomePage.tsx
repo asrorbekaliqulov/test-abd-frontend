@@ -868,7 +868,7 @@ const HomePage: React.FC<HomePageProps> = ({ theme, toggleTheme }) => {
   const fetchQuizzes = async (url?: string) => {
     setLoading(true)
     try {
-      const response = await quizAPI.fetchQuestions(url)
+      const response = await quizAPI.fetchQuestionsbyfollower(url)
       const data = response.data
       setQuizzes((prev) => [...prev, ...data.results])
       setNextPageUrl(data.next)

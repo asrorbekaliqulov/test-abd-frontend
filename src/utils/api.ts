@@ -380,6 +380,8 @@ export const quizAPI = {
   fetchMyBookmarks: () => api.get('/quiz/tests/my_bookmarks/'),
   fetchMyTest: () => api.get('/quiz/tests/my_tests/'),
   fetchTestByUser: (user_id: number) => api.get(`/quiz/tests/by_user/${user_id}/`),
+  fetchQuestionsbyfollower: (url?: string) =>
+    url ? api.get(url) : api.get('/quiz/recommended/followed-questions/'),
 
   fetchQuestionsByUser: (user_id: number) =>
     api.get(`/quiz/questions/user_questions/?user_id=${user_id}`),

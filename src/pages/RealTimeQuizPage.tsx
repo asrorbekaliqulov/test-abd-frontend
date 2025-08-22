@@ -820,7 +820,7 @@ const RealTimeQuizPage: React.FC = () => {
         <div className="absolute bottom-4 left-4 glass-morphism rounded-xl p-3 max-w-xs">
           <div className="flex items-center gap-3">
             <img
-              src={quizSession.creator_avatar || "/placeholder.svg?height=24&width=24&query=creator+avatar"}
+              src={quizSession.creator_avatar || "/media/defaultuseravater.png"}
               alt="Creator"
               className="w-6 h-6 rounded-full border border-white/30"
             />
