@@ -120,7 +120,7 @@ const RealTimeQuizPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false)
   const [quizTimeLeft, setQuizTimeLeft] = useState<number>(0)
 
-  const WS_BASE_URL = "ws://127.0.0.1:8000"
+  const WS_BASE_URL = "wss://backend.testabd.uz"
   const wsUrl = quiz_id ? `${WS_BASE_URL}/ws/quiz/${quiz_id}/` : null
 
   const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl)
