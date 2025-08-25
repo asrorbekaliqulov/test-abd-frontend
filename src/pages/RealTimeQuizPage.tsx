@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback } from "react"
-import { useParams } from "react-router-dom" // Import useParams from react-router-dom instead of Next.js
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useParams } from "react-router-dom"
 import { useWebSocket } from "../hooks/useWebSocket"
 import { authAPI } from "../utils/api"
-import { Users, Trophy, Clock, Check, X, Timer, Eye, LogOut, Square } from "lucide-react"
+import { Users, Check, X, LogOut, Square, Share, Play, ChevronUp, ChevronDown } from "lucide-react"
 
 interface QuizSession {
   id: string
@@ -30,6 +30,7 @@ interface Question {
   text: string
   image?: string
   options: Answer[]
+  correct_answer_id?: string // Added correct answer tracking
 }
 
 interface Answer {
@@ -58,93 +59,11 @@ interface UserData {
 }
 
 const backgroundImages = [
-  "/abstract-digital-gradient-purple-blue.png",
-  "/cosmic-purple-nebula.png",
-  "/liquid-glass-blue-gradient.png",
-  "/dark-geometric-patterns.png",
-  "/flowing-waves-purple-blue-gradient.png",
-]
-
-const mockUser: UserData = {
-  id: 1,
-  username: "demo_user",
-  email: "demo@example.com",
-  first_name: "Demo",
-  last_name: "User",
-}
-
-const mockQuizSession: QuizSession = {
-  id: "1",
-  title: "JavaScript Fundamentals Quiz",
-  description: "Test your knowledge of JavaScript basics",
-  mode: "timed",
-  current_question: {
-    id: "q1",
-    text: "What is the correct way to declare a variable in JavaScript?",
-    options: [
-      { id: "a1", text: "var myVariable = 'hello';" },
-      { id: "a2", text: "variable myVariable = 'hello';" },
-      { id: "a3", text: "v myVariable = 'hello';" },
-      { id: "a4", text: "declare myVariable = 'hello';" },
-    ],
-  },
-  is_active: true,
-  creator_id: 2,
-  creator_username: "quiz_master",
-  participants_count: 5,
-  time_per_question: 15,
-  current_question_index: 1,
-  total_questions: 10,
-  start_time: new Date().toISOString(),
-  end_time: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes from now
-}
-
-const mockParticipants: Participant[] = [
-  {
-    id: "1",
-    username: "demo_user",
-    answered: false,
-    correct_answers: 3,
-    wrong_answers: 1,
-    total_answered: 4,
-    is_online: true,
-  },
-  {
-    id: "2",
-    username: "alice_coder",
-    answered: true,
-    correct_answers: 4,
-    wrong_answers: 0,
-    total_answered: 4,
-    is_online: true,
-  },
-  {
-    id: "3",
-    username: "bob_dev",
-    answered: true,
-    correct_answers: 2,
-    wrong_answers: 2,
-    total_answered: 4,
-    is_online: true,
-  },
-  {
-    id: "4",
-    username: "charlie_js",
-    answered: false,
-    correct_answers: 3,
-    wrong_answers: 1,
-    total_answered: 4,
-    is_online: false,
-  },
-  {
-    id: "5",
-    username: "diana_react",
-    answered: true,
-    correct_answers: 4,
-    wrong_answers: 0,
-    total_answered: 4,
-    is_online: true,
-  },
+  "/abstract-gradient-blue-purple.png",
+  "/geometric-teal-orange.png",
+  "/modern-gradient-pink-blue.png",
+  "/abstract-waves-purple-green.png",
+  "/digital-pattern-blue-cyan.png",
 ]
 
 const RealTimeQuizPage: React.FC = () => {
@@ -166,9 +85,27 @@ const RealTimeQuizPage: React.FC = () => {
   const [quizStarted, setQuizStarted] = useState(false)
   const [backgroundImage] = useState(() => backgroundImages[Math.floor(Math.random() * backgroundImages.length)])
 
+  const [answerResult, setAnswerResult] = useState<{
+    isCorrect: boolean
+    correctAnswerId: string
+    explanation?: string
+    responseTime?: number
+  } | null>(null)
+  const [showingResults, setShowingResults] = useState(false)
+
   const [showParticipantsModal, setShowParticipantsModal] = useState(false)
   const [quizEndTime, setQuizEndTime] = useState<Date | null>(null)
   const [timeUntilEnd, setTimeUntilEnd] = useState<string>("")
+
+  const [isStartingQuiz, setIsStartingQuiz] = useState(false)
+  const [isEndingQuiz, setIsEndingQuiz] = useState(false)
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false)
+
+  const [canMoveToNext, setCanMoveToNext] = useState(false)
+
+  const questionContainerRef = useRef<HTMLDivElement>(null)
+  const startQuizTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const questionStartTimeRef = useRef<number>(0)
 
   const [totalStats, setTotalStats] = useState({
     totalUsers: 0,
@@ -177,10 +114,22 @@ const RealTimeQuizPage: React.FC = () => {
     totalWrong: 0,
   })
 
-  const WS_BASE_URL = "wss://backend.testabd.uz"
+  const [finalResults, setFinalResults] = useState<any[]>([])
+  const [userResults, setUserResults] = useState<any>(null)
+  const [showResultsModal, setShowResultsModal] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
+  const [quizTimeLeft, setQuizTimeLeft] = useState<number>(0)
+
+  const WS_BASE_URL = "ws://127.0.0.1:8000"
   const wsUrl = quiz_id ? `${WS_BASE_URL}/ws/quiz/${quiz_id}/` : null
 
   const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl)
+
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [isNavigating, setIsNavigating] = useState(false)
+
+  const isCreator = user && quizSession && user.id === quizSession.creator_id
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -219,6 +168,218 @@ const RealTimeQuizPage: React.FC = () => {
     }
   }, [isConnected, error, user, hasJoined, sendMessage])
 
+  const handleSubmitAnswer = useCallback(
+    (answerId: string) => {
+      if (hasAnswered || !quizSession?.current_question || !user || isSubmittingAnswer) return
+
+      console.log("[v0] Submitting answer:", answerId)
+      setSelectedAnswer(answerId)
+      setHasAnswered(true)
+      setIsSubmittingAnswer(true)
+
+      if (isConnected) {
+        sendMessage({
+          action: "submit_answer",
+          question_id: quizSession.current_question.id,
+          answer_id: answerId,
+          user_id: user.id,
+          response_time: quizSession?.mode === "timed" ? quizSession.time_per_question - timeLeft : 0,
+        })
+      } else {
+        console.error("[v0] Cannot submit answer - WebSocket not connected")
+        setHasAnswered(false)
+        setIsSubmittingAnswer(false)
+      }
+    },
+    [hasAnswered, quizSession, user, isConnected, sendMessage, isSubmittingAnswer, timeLeft],
+  )
+
+  const handleLeaveQuiz = useCallback(() => {
+    if (isConnected && user) {
+      sendMessage({
+        action: "leave_quiz",
+        user_id: user.id,
+      })
+    }
+    // Navigate back or to home page
+    window.history.back()
+  }, [isConnected, user, sendMessage])
+
+  const handleStartQuiz = useCallback(() => {
+    if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isStartingQuiz) {
+      return
+    }
+
+    if (startQuizTimeoutRef.current) {
+      clearTimeout(startQuizTimeoutRef.current)
+    }
+
+    setIsStartingQuiz(true)
+
+    startQuizTimeoutRef.current = setTimeout(() => {
+      if (isConnected && user && quizSession && user.id === quizSession.creator_id) {
+        sendMessage({
+          action: "start_quiz",
+          user_id: user.id,
+        })
+      }
+    }, 300)
+  }, [isConnected, user, quizSession, sendMessage, isStartingQuiz])
+
+  const handleEndQuiz = useCallback(() => {
+    if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isEndingQuiz) {
+      return
+    }
+
+    const confirmEnd = window.confirm("Are you sure you want to end this quiz for all participants?")
+    if (confirmEnd) {
+      setIsEndingQuiz(true)
+      sendMessage({
+        action: "end_quiz",
+        user_id: user.id,
+      })
+    }
+  }, [isConnected, user, quizSession, sendMessage, isEndingQuiz])
+
+  const handleNextQuestion = useCallback(() => {
+    if (!isConnected || !user || !canMoveToNext) return
+
+    console.log("[v0] Requesting next question")
+    setCanMoveToNext(false)
+    setShowingResults(false)
+
+    sendMessage({
+      action: "next_question",
+      user_id: user.id,
+    })
+  }, [isConnected, user, canMoveToNext, sendMessage])
+
+  useEffect(() => {
+    return () => {
+      if (startQuizTimeoutRef.current) {
+        clearTimeout(startQuizTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handlePreviousQuestion = useCallback(() => {
+    if (isNavigating || currentQuestionIndex <= 0) return
+
+    setIsNavigating(true)
+    setCurrentQuestionIndex((prev) => prev - 1)
+
+    setTimeout(() => {
+      setIsNavigating(false)
+    }, 300)
+  }, [currentQuestionIndex, isNavigating])
+
+  const handleNextQuestionManual = useCallback(() => {
+    if (isNavigating) return
+
+    setIsNavigating(true)
+
+    if (isConnected && user) {
+      sendMessage({
+        action: "next_question",
+        user_id: user.id,
+      })
+    }
+
+    setTimeout(() => {
+      setIsNavigating(false)
+    }, 300)
+  }, [isConnected, user, sendMessage, isNavigating])
+
+  const renderQuestionContent = (question: Question) => {
+    if (!question) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-white/60">No question available</div>
+        </div>
+      )
+    }
+
+    if (!question.options || question.options.length === 0) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-white/60">Loading question options...</div>
+        </div>
+      )
+    }
+
+    const isTimeExpired = quizSession?.mode === "timed" && timeLeft === 0
+    const isDisabled = hasAnswered || isTimeExpired || isQuizEnded || showingResults || isSubmittingAnswer
+
+    return (
+      <div className="grid gap-4">
+        {question.options.map((option, index) => {
+          const isSelected = selectedAnswer === option.id
+          const isCorrect = answerResult?.correctAnswerId === option.id
+          const isWrong = isSelected && answerResult && !answerResult.isCorrect
+
+          let buttonClass =
+            "p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20"
+
+          if (showingResults) {
+            if (isCorrect) {
+              buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
+            } else if (isWrong) {
+              buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
+            } else {
+              buttonClass += " bg-white/10 opacity-60"
+            }
+          } else if (isDisabled) {
+            buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
+          } else {
+            buttonClass += " bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer"
+          }
+
+          if (isSelected && !showingResults) {
+            buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
+          }
+
+          return (
+            <button
+              key={option.id}
+              onClick={() => !isDisabled && handleSubmitAnswer(option.id)}
+              disabled={isDisabled}
+              className={buttonClass}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                    showingResults
+                      ? isCorrect
+                        ? "bg-green-500"
+                        : isWrong
+                          ? "bg-red-500"
+                          : "bg-white/20"
+                      : isSelected
+                        ? "bg-blue-500"
+                        : "bg-white/20"
+                  }`}
+                >
+                  {showingResults ? (
+                    isCorrect ? (
+                      <Check className="w-4 h-4" />
+                    ) : isWrong ? (
+                      <X className="w-4 h-4" />
+                    ) : (
+                      String.fromCharCode(65 + index)
+                    )
+                  ) : (
+                    String.fromCharCode(65 + index)
+                  )}
+                </div>
+                <span className="text-white font-medium">{option.text}</span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   useEffect(() => {
     if (lastMessage) {
       try {
@@ -228,29 +389,25 @@ const RealTimeQuizPage: React.FC = () => {
         switch (data.type) {
           case "quiz_state":
             console.log("[v0] Setting quiz session:", data.quiz_session)
-            console.log("[v0] Current question in quiz_state:", data.quiz_session?.current_question)
             setQuizSession(data.quiz_session)
             if (data.quiz_session?.end_time) {
               setQuizEndTime(new Date(data.quiz_session.end_time))
             }
             if (data.quiz_session?.is_active) {
               setQuizStarted(true)
+              questionStartTimeRef.current = Date.now()
             }
             if (data.participants) {
               setParticipants(data.participants)
             }
-            break
-
-          case "user_joined":
-            console.log("[v0] User joined:", data.username)
-            if (data.participants) {
-              setParticipants(data.participants)
-            }
+            setIsStartingQuiz(false)
+            setIsEndingQuiz(false)
             break
 
           case "quiz_started":
             console.log("[v0] Quiz started:", data)
             setQuizStarted(true)
+            setIsStartingQuiz(false)
             if (data.quiz_session) {
               setQuizSession(data.quiz_session)
             }
@@ -267,8 +424,21 @@ const RealTimeQuizPage: React.FC = () => {
               )
               setHasAnswered(false)
               setSelectedAnswer(null)
+              setAnswerResult(null)
+              setShowingResults(false)
+              setIsSubmittingAnswer(false)
+              setCanMoveToNext(false)
+              questionStartTimeRef.current = Date.now()
+
+              setTimeout(() => {
+                questionContainerRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                })
+              }, 100)
+
               if (data.mode === "timed" || data.quiz_session?.mode === "timed") {
-                setTimeLeft(currentQuestion.time_per_question || 15)
+                setTimeLeft(data.quiz_session?.time_per_question || 15)
               }
             }
             break
@@ -280,15 +450,88 @@ const RealTimeQuizPage: React.FC = () => {
                 ? {
                     ...prev,
                     current_question: data.question,
-                    current_question_index: data.question_index || prev.current_question_index,
+                    current_question_index: data.question_index || prev.current_question_index + 1,
                   }
                 : null,
             )
             setHasAnswered(false)
             setSelectedAnswer(null)
+            setAnswerResult(null)
+            setShowingResults(false)
+            setIsSubmittingAnswer(false)
+            setCanMoveToNext(false)
+            questionStartTimeRef.current = Date.now()
+
+            setTimeout(() => {
+              questionContainerRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              })
+            }, 100)
+
             if (quizSession?.mode === "timed") {
               setTimeLeft(data.time_per_question || 15)
             }
+            break
+
+          case "answer_result":
+            console.log("[v0] Answer result:", data)
+            setAnswerResult({
+              isCorrect: data.is_correct,
+              correctAnswerId: data.correct_answer_id,
+              explanation: data.explanation,
+              responseTime: data.response_time,
+            })
+            setShowingResults(true)
+            setIsSubmittingAnswer(false)
+            setCanMoveToNext(data.has_next_question || false)
+
+            if (data.has_next_question && isCreator) {
+              setTimeout(() => {
+                handleNextQuestion()
+              }, 3000)
+            } else if (!data.has_next_question) {
+              setTimeout(() => {
+                setIsQuizEnded(true)
+                setQuizStarted(false)
+                sendMessage({ action: "get_final_results" })
+              }, 3000)
+            }
+            break
+
+          case "stats_update":
+            console.log("[v0] Stats update:", data.stats)
+            setTotalStats({
+              totalUsers: data.stats.total_participants || 0,
+              totalAnswered: data.stats.total_attempts || 0,
+              totalCorrect: data.stats.correct_attempts || 0,
+              totalWrong: data.stats.wrong_attempts || 0,
+            })
+            break
+
+          case "final_results":
+            console.log("[v0] Final results:", data.results)
+            setFinalResults(data.results)
+            setShowResultsModal(true)
+            break
+
+          case "user_results":
+            console.log("[v0] User results:", data.results)
+            setUserResults(data.results)
+            break
+
+          case "quiz_restarted":
+            console.log("[v0] Quiz restarted")
+            // Reset all states for new quiz
+            setIsQuizEnded(false)
+            setQuizStarted(false)
+            setHasAnswered(false)
+            setSelectedAnswer(null)
+            setAnswerResult(null)
+            setShowingResults(false)
+            setFinalResults([])
+            setUserResults(null)
+            setShowResultsModal(false)
             break
 
           case "participants_update":
@@ -296,26 +539,16 @@ const RealTimeQuizPage: React.FC = () => {
             setParticipants(data.participants || [])
             break
 
-          case "leaderboard":
-            console.log("[v0] Leaderboard received:", data.data)
-            // Handle leaderboard data if needed
-            break
-
-          case "participants_list":
-            console.log("[v0] Participants list received:", data.data)
-            if (data.data) {
-              setParticipants(data.data)
-            }
-            break
-
           case "quiz_ended":
             console.log("[v0] Quiz ended")
             setIsQuizEnded(true)
             setQuizStarted(false)
-            break
-
-          case "answer_result":
-            console.log("[v0] Answer result:", data)
+            setIsEndingQuiz(false)
+            setCanMoveToNext(false)
+            sendMessage({ action: "get_final_results" })
+            if (user) {
+              sendMessage({ action: "get_user_results", user_id: user.id })
+            }
             break
 
           case "time_update":
@@ -326,7 +559,9 @@ const RealTimeQuizPage: React.FC = () => {
 
           case "error":
             console.error("[v0] Backend error:", data.message)
-            // You can show error notifications here if needed
+            setIsStartingQuiz(false)
+            setIsEndingQuiz(false)
+            setIsSubmittingAnswer(false)
             break
 
           default:
@@ -336,7 +571,7 @@ const RealTimeQuizPage: React.FC = () => {
         console.error("[v0] Error parsing WebSocket message:", err)
       }
     }
-  }, [lastMessage, quizSession])
+  }, [lastMessage, quizSession, user, sendMessage])
 
   useEffect(() => {
     const stats = participants.reduce(
@@ -365,104 +600,6 @@ const RealTimeQuizPage: React.FC = () => {
       return () => clearTimeout(timer)
     }
   }, [timeLeft, hasAnswered, quizStarted, quizSession?.mode, isQuizEnded])
-
-  const handleSubmitAnswer = useCallback(
-    (answerId: string) => {
-      if (hasAnswered || !quizSession?.current_question || !user) return
-
-      console.log("[v0] Submitting answer:", answerId)
-      setSelectedAnswer(answerId)
-      setHasAnswered(true)
-
-      if (isConnected) {
-        sendMessage({
-          action: "submit_answer",
-          question_id: quizSession.current_question.id,
-          answer_id: answerId,
-          user_id: user.id,
-        })
-      } else {
-        console.error("[v0] Cannot submit answer - WebSocket not connected")
-      }
-    },
-    [hasAnswered, quizSession, user, isConnected, sendMessage],
-  )
-
-  const handleLeaveQuiz = useCallback(() => {
-    if (isConnected && user) {
-      sendMessage({
-        action: "leave_quiz",
-        user_id: user.id,
-      })
-    }
-    // Navigate back or to home page
-    window.history.back()
-  }, [isConnected, user, sendMessage])
-
-  const handleEndQuiz = useCallback(() => {
-    if (isConnected && user && quizSession && user.id === quizSession.creator_id) {
-      const confirmEnd = window.confirm("Are you sure you want to end this quiz for all participants?")
-      if (confirmEnd) {
-        sendMessage({
-          action: "end_quiz",
-          user_id: user.id,
-        })
-      }
-    }
-  }, [isConnected, user, quizSession, sendMessage])
-
-  const renderQuestionContent = (question: Question) => {
-    if (!question) {
-      return (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-white/60">No question available</div>
-        </div>
-      )
-    }
-
-    if (!question.options || question.options.length === 0) {
-      return (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-white/60">Loading question options...</div>
-        </div>
-      )
-    }
-
-    const isTimeExpired = quizSession?.mode === "timed" && timeLeft === 0
-    const isDisabled = hasAnswered || isTimeExpired || isQuizEnded
-
-    return (
-      <div className="grid gap-4">
-        {question.options.map((option, index) => {
-          const isSelected = selectedAnswer === option.id
-
-          return (
-            <button
-              key={option.id}
-              onClick={() => !isDisabled && handleSubmitAnswer(option.id)}
-              disabled={isDisabled}
-              className={`p-4 rounded-xl text-left transition-all duration-300 ${
-                isDisabled
-                  ? "bg-white/10 cursor-not-allowed opacity-60"
-                  : "bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer"
-              } ${isSelected ? "ring-2 ring-blue-400 bg-blue-500/20" : ""} backdrop-blur-sm border border-white/20`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                    isSelected ? "bg-blue-500" : "bg-white/20"
-                  }`}
-                >
-                  {String.fromCharCode(65 + index)}
-                </div>
-                <span className="text-white font-medium">{option.text}</span>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-    )
-  }
 
   useEffect(() => {
     if (!quizEndTime) return
@@ -495,80 +632,84 @@ const RealTimeQuizPage: React.FC = () => {
     return () => clearInterval(interval)
   }, [quizEndTime])
 
+  const handleAnswerSubmit = async (answerId: string) => {
+    if (hasAnswered || !currentQuestion || !user) return
+
+    setIsSubmittingAnswer(true)
+    setSelectedAnswer(answerId)
+    setHasAnswered(true)
+
+    const responseTime = (Date.now() - questionStartTimeRef.current) / 1000
+
+    sendMessage({
+      action: "submit_answer",
+      user_id: user.id,
+      question_id: currentQuestion.id,
+      answer_id: answerId,
+      response_time: responseTime,
+    })
+  }
+
+  const handleRestartQuiz = () => {
+    if (!user || !isCreator) return
+
+    sendMessage({
+      action: "restart_quiz",
+      user_id: user.id,
+    })
+  }
+
+  const getUserResults = () => {
+    if (!user) return
+
+    sendMessage({
+      action: "get_user_results",
+      user_id: user.id,
+    })
+  }
+
   if (userLoading) {
     return (
-      <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-xl">Loading...</p>
-        </div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading user data...</div>
+      </div>
+    )
+  }
+
+  if (userError) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-red-400">Error: {userError}</div>
       </div>
     )
   }
 
   if (!user) {
     return (
-      <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-xl">Setting up anonymous user...</p>
-        </div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Please log in to access this quiz</div>
       </div>
     )
   }
 
-  if (connectionStatus === "connecting") {
-    return (
-      <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-xl">Connecting to quiz...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (connectionStatus === "disconnected") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 via-purple-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <p className="text-xl mb-4">Connection failed</p>
-          <p className="text-sm mb-4 text-white/70">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!quiz_id) {
-    return (
-      <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <p className="text-xl mb-4">Invalid Quiz URL</p>
-          <p className="text-sm mb-4 text-white/70">Quiz ID not found in URL</p>
-          <button
-            onClick={() => window.history.back()}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const currentQuestion = quizSession?.current_question
 
   return (
-    <div className="fixed inset-0 bg-gray-900 overflow-hidden">
+    <div className="min-h-screen w-full bg-black relative overflow-x-hidden">
       <style>{`
         .glass-morphism {
-          background: rgba(0, 0, 0, 0.25);
+          background: rgba(0, 0, 0, 0.4);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .liquid-glass {
+          background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
         
         .scrollbar-hide {
@@ -579,259 +720,484 @@ const RealTimeQuizPage: React.FC = () => {
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
         }
+        
+        /* Enhanced responsive design */
+        @media (max-width: 768px) {
+          .mobile-layout {
+            padding: 1rem;
+          }
+          
+          .mobile-question-card {
+            margin-top: 6rem;
+            margin-bottom: 8rem;
+          }
+          
+          .mobile-controls {
+            position: fixed;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            z-index: 50;
+          }
+          
+          .mobile-stats {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 40;
+          }
+        }
+        
+        @media (max-width: 640px) {
+          .mobile-sidebar {
+            bottom: 22vh;
+          }
+          
+          .question-options {
+            gap: 0.75rem;
+          }
+          
+          .option-button {
+            padding: 0.75rem;
+            font-size: 0.875rem;
+          }
+        }
       `}</style>
 
+      {/* Background Image */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 w-full h-full"
         style={{
           backgroundImage: `url(${backgroundImage})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
         }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-blue-900/50 to-indigo-900/60"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30"></div>
+      />
+
+      {/* Dark Overlay */}
+      <div className="absolute inset-0 bg-black/60" />
+
+      <div className="fixed top-4 left-4 right-4 z-40 flex justify-between items-center">
+        <div className="liquid-glass rounded-xl px-4 py-2 text-white text-sm">
+          <div className="flex items-center gap-4">
+            <span>👥 {totalStats.totalUsers}</span>
+            <span className="text-green-400">✓ {totalStats.totalCorrect}</span>
+            <span className="text-red-400">✗ {totalStats.totalWrong}</span>
+          </div>
+        </div>
+
+        {quizEndTime && <div className="liquid-glass rounded-xl px-4 py-2 text-white text-sm">⏰ {timeUntilEnd}</div>}
       </div>
 
-      {quizEndTime && (
-        <div className="absolute top-4 right-4 z-50">
-          <div className="glass-morphism rounded-xl px-4 py-2">
-            <div className="flex items-center gap-2 text-white">
-              <Clock className="w-4 h-4" />
-              <span className="text-sm font-medium">
-                {timeUntilEnd === "Quiz Ended" ? (
-                  <span className="text-red-400">Quiz Ended</span>
-                ) : (
-                  <span>Ends in {timeUntilEnd}</span>
-                )}
-              </span>
+      <button
+        onClick={() => setShowSidebar(!showSidebar)}
+        className="fixed top-20 right-4 z-50 liquid-glass rounded-full p-3 text-white hover:bg-white/20 transition-colors"
+      >
+        📊
+      </button>
+
+      {showSidebar && (
+        <div className="fixed top-32 right-4 bottom-4 w-80 max-w-[90vw] liquid-glass rounded-xl p-4 z-40 overflow-y-auto scrollbar-hide">
+          <div className="text-white">
+            <h3 className="text-lg font-bold mb-4">Quiz Statistics</h3>
+
+            {/* User's own stats */}
+            {userResults && (
+              <div className="mb-6 p-3 bg-blue-500/20 rounded-lg">
+                <h4 className="font-semibold mb-2">Your Results</h4>
+                <div className="space-y-1 text-sm">
+                  <div>
+                    Rank: #{userResults.rank} of {userResults.total_participants}
+                  </div>
+                  <div>Score: {userResults.score} points</div>
+                  <div className="text-green-400">Correct: {userResults.correct}</div>
+                  <div className="text-red-400">Wrong: {userResults.wrong}</div>
+                  <div>Avg Time: {userResults.avg_time}s</div>
+                </div>
+              </div>
+            )}
+
+            {/* Participants list */}
+            <div className="space-y-2">
+              <h4 className="font-semibold">Participants ({participants.length})</h4>
+              {participants.map((participant, index) => (
+                <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded">
+                  <span className="text-sm">{participant.username}</span>
+                  <div className="text-xs text-gray-300">{participant.score || 0} pts</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex h-full">
-        <div className="flex-1 relative p-6">
-          <div className="glass-morphism rounded-xl p-4 mb-6">
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div className="flex flex-col items-center">
-                <Users className="w-5 h-5 text-blue-400 mb-1" />
-                <span className="text-white text-lg font-bold">{totalStats.totalUsers}</span>
-                <span className="text-white/60 text-xs">Users</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <Trophy className="w-5 h-5 text-purple-400 mb-1" />
-                <span className="text-white text-lg font-bold">{totalStats.totalAnswered}</span>
-                <span className="text-white/60 text-xs">Answered</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <Check className="w-5 h-5 text-green-400 mb-1" />
-                <span className="text-white text-lg font-bold">{totalStats.totalCorrect}</span>
-                <span className="text-white/60 text-xs">Correct</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <X className="w-5 h-5 text-red-400 mb-1" />
-                <span className="text-white text-lg font-bold">{totalStats.totalWrong}</span>
-                <span className="text-white/60 text-xs">Wrong</span>
-              </div>
-            </div>
-          </div>
+      {showResultsModal && finalResults.length > 0 && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="liquid-glass rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="text-white">
+              <h2 className="text-2xl font-bold mb-6 text-center">🏆 Quiz Results</h2>
 
-          <div className="glass-morphism rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {quizSession?.mode === "timed" ? (
-                  <Timer className="w-5 h-5 text-orange-400" />
-                ) : (
-                  <Clock className="w-5 h-5 text-blue-400" />
-                )}
-                <div>
-                  <h3 className="text-white font-medium">
-                    {quizSession?.mode === "timed" ? "Timed Mode" : "Free Mode"}
-                  </h3>
-                  <p className="text-white/60 text-sm">
-                    {quizSession?.mode === "timed" ? "15 seconds per question" : "Answer at your own pace"}
-                  </p>
-                </div>
-              </div>
-
-              {quizSession?.mode === "timed" && timeLeft > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="text-white font-bold text-lg">{timeLeft}</div>
-                  <div className="w-12 h-12 rounded-full border-4 border-white/20 relative">
-                    <div
-                      className="absolute inset-0 rounded-full border-4 border-orange-400 transition-all duration-1000"
-                      style={{
-                        clipPath: `polygon(50% 50%, 50% 0%, ${50 + 50 * Math.cos((2 * Math.PI * (15 - timeLeft)) / 15 - Math.PI / 2)}% ${50 + 50 * Math.sin((2 * Math.PI * (15 - timeLeft)) / 15 - Math.PI / 2)}%, 50% 50%)`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-1 flex items-center justify-center min-h-[400px]">
-            {quizSession?.current_question ? (
-              <div className="w-full max-w-3xl">
-                <div className="glass-morphism rounded-2xl p-8">
-                  <div className="text-center mb-8">
-                    <div className="text-white/60 text-sm mb-2">
-                      Question {quizSession.current_question_index} of {quizSession.total_questions}
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-4">{quizSession.current_question.text}</h2>
-
-                    {quizSession.current_question.image && (
-                      <img
-                        src={quizSession.current_question.image || "/placeholder.svg"}
-                        alt="Question"
-                        className="w-full max-w-md mx-auto rounded-xl mb-6"
-                      />
-                    )}
-                  </div>
-
-                  {renderQuestionContent(quizSession.current_question)}
-
-                  {hasAnswered && (
-                    <div className="mt-6 text-center">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 rounded-full">
-                        <Check className="w-4 h-4" />
-                        <span>
-                          {quizSession.mode === "timed" && timeLeft === 0 && !selectedAnswer
-                            ? "Time expired!"
-                            : "Answer submitted!"}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {quizSession.mode === "timed" && timeLeft === 0 && !hasAnswered && (
-                    <div className="mt-6 text-center">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-300 rounded-full">
-                        <Timer className="w-4 h-4" />
-                        <span>Time expired!</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : quizStarted ? (
-              <div className="glass-morphism rounded-2xl p-8 text-center">
-                <div className="w-16 h-16 bg-white/10 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <Clock className="w-8 h-8 text-white/60" />
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2">Waiting for Next Question</h2>
-                <p className="text-white/70">The quiz will continue shortly...</p>
-              </div>
-            ) : (
-              <div className="glass-morphism rounded-2xl p-8 text-center">
-                <div className="w-16 h-16 bg-white/10 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <Users className="w-8 h-8 text-white/60" />
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2">Waiting for Quiz to Start</h2>
-                <p className="text-white/70">Please wait while the quiz is being prepared...</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="w-16 p-4 flex flex-col items-center gap-4">
-          <button
-            onClick={() => setShowParticipantsModal(true)}
-            className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
-            title="View Participants"
-          >
-            <Eye className="w-5 h-5 text-white" />
-          </button>
-
-          {user && quizSession && user.id === quizSession.creator_id && (
-            <button
-              onClick={handleEndQuiz}
-              className="w-12 h-12 rounded-full bg-red-500/20 backdrop-blur-sm border border-red-400/20 flex items-center justify-center hover:bg-red-500/30 transition-all"
-              title="End Quiz"
-            >
-              <Square className="w-5 h-5 text-red-400" />
-            </button>
-          )}
-
-          <div className="flex-1"></div>
-
-          <button
-            onClick={handleLeaveQuiz}
-            className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/30 transition-all"
-            title="Leave Quiz"
-          >
-            <LogOut className="w-5 h-5 text-white" />
-          </button>
-        </div>
-      </div>
-
-      {showParticipantsModal && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-            onClick={() => setShowParticipantsModal(false)}
-          />
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-md mx-4 z-50">
-            <div className="glass-morphism rounded-2xl p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-white">Participants ({participants.length})</h3>
-                <button
-                  onClick={() => setShowParticipantsModal(false)}
-                  className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-hide">
-                {participants.map((participant) => (
-                  <div key={participant.id} className="flex items-center justify-between p-3 bg-white/10 rounded-xl">
+              <div className="space-y-3">
+                {finalResults.map((result, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-center justify-between p-4 rounded-lg ${
+                      index === 0
+                        ? "bg-yellow-500/20 border border-yellow-500/50"
+                        : index === 1
+                          ? "bg-gray-400/20 border border-gray-400/50"
+                          : index === 2
+                            ? "bg-orange-600/20 border border-orange-600/50"
+                            : "bg-white/10"
+                    }`}
+                  >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={participant.avatar || "/placeholder.svg?height=32&width=32&query=user+avatar"}
-                        alt={participant.username}
-                        className="w-8 h-8 rounded-full border border-white/30"
-                      />
+                      <span className="text-2xl">
+                        {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`}
+                      </span>
                       <div>
-                        <span className="text-white font-medium text-sm">{participant.username}</span>
-                        <div className="flex items-center gap-2 text-xs text-white/60">
-                          <span className="text-green-400">{participant.correct_answers}✓</span>
-                          <span className="text-red-400">{participant.wrong_answers}✗</span>
-                          <span>({participant.total_answered} total)</span>
-                          {participant.is_online && <div className="w-2 h-2 bg-green-400 rounded-full" />}
+                        <div className="font-semibold">{result.username}</div>
+                        <div className="text-sm text-gray-300">
+                          {result.correct} correct, {result.wrong} wrong
                         </div>
                       </div>
                     </div>
-
-                    {participant.answered && (
-                      <div className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">Answered</div>
-                    )}
+                    <div className="text-right">
+                      <div className="font-bold text-lg">{result.score} pts</div>
+                      <div className="text-sm text-gray-300">{result.avg_time}s avg</div>
+                    </div>
                   </div>
                 ))}
               </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowResultsModal(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+                {isCreator && (
+                  <button
+                    onClick={handleRestartQuiz}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg transition-colors"
+                  >
+                    🔄 Restart Quiz
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {quizSession && (
-        <div className="absolute bottom-4 left-4 glass-morphism rounded-xl p-3 max-w-xs">
-          <div className="flex items-center gap-3">
-            <img
-              src={quizSession.creator_avatar || "/media/defaultuseravater.png"}
-              alt="Creator"
-              className="w-6 h-6 rounded-full border border-white/30"
-            />
+      {isQuizEnded && !showResultsModal && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-40">
+          <button
+            onClick={() => {
+              setShowResultsModal(true)
+              if (user) getUserResults()
+            }}
+            className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-white/20 transition-colors"
+          >
+            📊 View Results
+          </button>
+        </div>
+      )}
+
+      {/* Rest of existing UI components... */}
+      <div className="px-4 md:px-6 pt-24 md:pt-32 pb-32 md:pb-20">
+        <div ref={questionContainerRef} className="glass-morphism rounded-xl p-4 md:p-6 shadow-lg max-w-4xl mx-auto">
+          {!quizStarted && !isQuizEnded ? (
+            <div className="text-center py-6 md:py-8">
+              <div className="text-white text-lg md:text-xl font-bold mb-4">
+                {connectionStatus === "connected" ? "Quiz Ready" : "Connecting..."}
+              </div>
+              <div className="text-white/70 mb-6">
+                {participants.length} participant{participants.length !== 1 ? "s" : ""} joined
+              </div>
+              {isCreator && (
+                <button
+                  onClick={handleStartQuiz}
+                  disabled={isStartingQuiz || connectionStatus !== "connected"}
+                  className="liquid-glass rounded-full px-6 md:px-8 py-3 text-white font-bold hover:bg-white/20 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto text-sm md:text-base"
+                >
+                  {isStartingQuiz ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Play size={16} />
+                      Start Quiz
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          ) : isQuizEnded ? (
+            <div className="text-center py-6 md:py-8">
+              <div className="text-white text-lg md:text-xl font-bold mb-4">Quiz Ended</div>
+              <div className="text-white/70">Thank you for participating!</div>
+            </div>
+          ) : currentQuestion ? (
             <div>
-              <span className="text-white font-medium text-sm">@{quizSession.creator_username}</span>
-              <div className="text-white/60 text-xs">Quiz Creator</div>
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-base md:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                  Question
+                </div>
+                {!hasAnswered && (
+                  <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/30 rounded-full border border-white/20">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span className="text-white/80 text-xs md:text-sm">Live</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-white text-base md:text-lg mb-6 leading-relaxed">{currentQuestion.text}</div>
+
+              {currentQuestion.image && (
+                <div className="mb-6">
+                  <img
+                    src={currentQuestion.image || "/placeholder.svg"}
+                    alt="Question"
+                    className="w-full max-h-48 md:max-h-64 object-cover rounded-lg"
+                  />
+                </div>
+              )}
+
+              <div className="question-options grid gap-3 md:gap-4">
+                {currentQuestion.options?.map((option, index) => {
+                  const isSelected = selectedAnswer === option.id
+                  const isCorrect = answerResult?.correctAnswerId === option.id
+                  const isWrong = isSelected && answerResult && !answerResult.isCorrect
+
+                  let buttonClass =
+                    "option-button p-3 md:p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20 w-full"
+
+                  if (showingResults) {
+                    if (isCorrect) {
+                      buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
+                    } else if (isWrong) {
+                      buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
+                    } else {
+                      buttonClass += " bg-white/10 opacity-60"
+                    }
+                  } else if (hasAnswered || isSubmittingAnswer) {
+                    buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
+                  } else {
+                    buttonClass +=
+                      " bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
+                  }
+
+                  if (isSelected && !showingResults) {
+                    buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
+                  }
+
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => !hasAnswered && !isSubmittingAnswer && handleAnswerSubmit(option.id)}
+                      disabled={hasAnswered || isSubmittingAnswer}
+                      className={buttonClass}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base ${
+                            showingResults
+                              ? isCorrect
+                                ? "bg-green-500"
+                                : isWrong
+                                  ? "bg-red-500"
+                                  : "bg-white/20"
+                              : isSelected
+                                ? "bg-blue-500"
+                                : "bg-white/20"
+                          }`}
+                        >
+                          {showingResults ? (
+                            isCorrect ? (
+                              <Check className="w-3 h-3 md:w-4 md:h-4" />
+                            ) : isWrong ? (
+                              <X className="w-3 h-3 md:w-4 md:h-4" />
+                            ) : (
+                              String.fromCharCode(65 + index)
+                            )
+                          ) : (
+                            String.fromCharCode(65 + index)
+                          )}
+                        </div>
+                        <span className="text-white font-medium text-sm md:text-base">{option.text}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {isCreator && (
+                <div className="flex justify-between items-center mt-6">
+                  <button
+                    onClick={handlePreviousQuestion}
+                    disabled={currentQuestionIndex <= 0 || isNavigating}
+                    className="liquid-glass rounded-full p-2 md:p-3 text-white hover:bg-white/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronUp size={16} className="md:w-5 md:h-5" />
+                  </button>
+
+                  <div className="text-white/60 text-xs md:text-sm text-center">
+                    {hasAnswered ? "Answered" : "Select an answer"}
+                  </div>
+
+                  <button
+                    onClick={handleNextQuestionManual}
+                    disabled={isNavigating || !canMoveToNext}
+                    className="liquid-glass rounded-full p-2 md:p-3 text-white hover:bg-white/20 transition-all disabled:opacity-50"
+                  >
+                    <ChevronDown size={16} className="md:w-5 md:h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6 md:py-8">
+              <div className="text-white/60">Loading question...</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {quizSession?.creator_username && (
+        <div className="absolute bottom-20 md:bottom-20 left-4 md:left-6 z-10 hidden md:block">
+          <div className="glass-morphism rounded-xl p-3 max-w-xs">
+            <div className="flex items-center space-x-3">
+              <img
+                src={quizSession.creator_avatar || "/placeholder.svg?height=40&width=40&query=user avatar"}
+                alt="Creator"
+                className="w-8 h-8 rounded-full border border-white/30"
+              />
+              <div>
+                <span className="text-white font-medium text-sm">@{quizSession.creator_username}</span>
+                <div className="text-white/60 text-xs">Quiz Creator</div>
+              </div>
             </div>
           </div>
-          {quizSession.description && (
-            <p className="text-white/70 text-xs mt-2 line-clamp-2">{quizSession.description}</p>
-          )}
+        </div>
+      )}
+
+      <div className="mobile-stats md:absolute md:right-6 md:bottom-32 flex md:flex-col items-center gap-3 md:gap-4 z-10">
+        <div className="flex md:flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <button className="w-12 h-12 md:w-14 md:h-14 rounded-full glass-morphism flex items-center justify-center">
+              <div className="w-6 h-6 md:w-7 md:h-7 bg-green-500 rounded-full flex items-center justify-center">
+                <Check size={12} className="text-white md:w-4 md:h-4" />
+              </div>
+            </button>
+            <span className="text-xs font-medium text-white text-center">{totalStats.totalCorrect}</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <button className="w-12 h-12 md:w-14 md:h-14 rounded-full glass-morphism flex items-center justify-center">
+              <div className="w-6 h-6 md:w-7 md:h-7 bg-red-500 rounded-full flex items-center justify-center">
+                <X size={12} className="text-white md:w-4 md:h-4" />
+              </div>
+            </button>
+            <span className="text-xs font-medium text-white text-center">{totalStats.totalWrong}</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={() => setShowParticipantsModal(true)}
+              className="w-12 h-12 md:w-14 md:h-14 rounded-full glass-morphism flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            >
+              <Users size={14} className="md:w-[18px] md:h-[18px]" />
+            </button>
+            <span className="text-xs font-medium text-white text-center">{participants.length}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mobile-controls md:absolute md:bottom-6 md:right-6 flex justify-center md:flex-col items-center gap-3 z-10">
+        <button
+          onClick={() => {
+            if (navigator.share) {
+              navigator.share({
+                title: quizSession?.title || "Live Quiz",
+                text: "Join this live quiz!",
+                url: window.location.href,
+              })
+            }
+          }}
+          className="liquid-glass rounded-full p-3 text-white hover:bg-white/20 transition-all"
+        >
+          <Share size={16} className="md:w-[18px] md:h-[18px]" />
+        </button>
+
+        <button
+          onClick={handleLeaveQuiz}
+          className="liquid-glass rounded-full p-3 text-white hover:bg-red-500/20 transition-all"
+        >
+          <LogOut size={16} className="md:w-[18px] md:h-[18px]" />
+        </button>
+      </div>
+
+      {isCreator && quizStarted && !isQuizEnded && (
+        <div className="absolute bottom-6 left-4 md:left-6 z-10">
+          <button
+            onClick={handleEndQuiz}
+            disabled={isEndingQuiz}
+            className="liquid-glass rounded-full px-4 md:px-6 py-2 md:py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2 text-sm md:text-base"
+          >
+            {isEndingQuiz ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Ending...
+              </>
+            ) : (
+              <>
+                <Square size={14} className="md:w-4 md:h-4" />
+                End Quiz
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {showParticipantsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-morphism rounded-xl p-4 md:p-6 max-w-md w-full max-h-96 overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-bold text-base md:text-lg">Participants ({participants.length})</h3>
+              <button
+                onClick={() => setShowParticipantsModal(false)}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <X size={18} className="md:w-5 md:h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {participants.map((participant) => (
+                <div key={participant.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={participant.avatar || "/placeholder.svg?height=32&width=32&query=user avatar"}
+                      alt={participant.username}
+                      className="w-8 h-8 rounded-full"
+                    />
+                    <div>
+                      <div className="text-white font-medium text-sm">{participant.username}</div>
+                      <div className="text-white/60 text-xs">
+                        {participant.correct_answers}✓ {participant.wrong_answers}✗
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`w-2 h-2 rounded-full ${participant.is_online ? "bg-green-500" : "bg-gray-500"}`} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
