@@ -19,7 +19,6 @@ const csrfManager = {
   fetchToken: async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/system/csrf/`, {
-        withCredentials: true,
       })
       // Backend @ensure_csrf_cookie bilan cookie yuboradi,
       // biz faqat cookie’dan olib ishlatamiz
@@ -649,7 +648,6 @@ export const liveQuizAPI = {
         ...(csrfToken && { "X-CSRFToken": csrfToken }),
         "Content-Type": "application/json",
       },
-      withCredentials: true,
     })
   },
 
