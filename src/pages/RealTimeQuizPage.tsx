@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { useWebSocket } from "../hooks/useWebSocket"
 import { authAPI } from "../utils/api"
-import { Users, Check, X, LogOut, Square, Share, Play, ChevronUp, ChevronDown } from "lucide-react"
+import { Users, Check, X, LogOut, Square, Share, Play, ChevronRight, Clock } from "lucide-react"
 
 interface QuizSession {
   id: string
@@ -72,7 +72,7 @@ const RealTimeQuizPage: React.FC = () => {
   const [userError, setUserError] = useState<string | null>(null)
 
   const params = useParams<{ quiz_id: string }>()
-  const quiz_id = params?.quiz_id
+  const quiz_id = params?.quiz_id || "demo-quiz" // Added fallback for demo purposes
 
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -130,6 +130,8 @@ const RealTimeQuizPage: React.FC = () => {
   const [isNavigating, setIsNavigating] = useState(false)
 
   const isCreator = user && quizSession && user.id === quizSession.creator_id
+
+  const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -242,7 +244,7 @@ const RealTimeQuizPage: React.FC = () => {
   }, [isConnected, user, quizSession, sendMessage, isEndingQuiz])
 
   const handleNextQuestion = useCallback(() => {
-    if (!isConnected || !user || !canMoveToNext) return
+    if (!isConnected || !user) return
 
     console.log("[v0] Requesting next question")
     setCanMoveToNext(false)
@@ -252,7 +254,7 @@ const RealTimeQuizPage: React.FC = () => {
       action: "next_question",
       user_id: user.id,
     })
-  }, [isConnected, user, canMoveToNext, sendMessage])
+  }, [isConnected, user, sendMessage])
 
   useEffect(() => {
     return () => {
@@ -381,6 +383,25 @@ const RealTimeQuizPage: React.FC = () => {
   }
 
   useEffect(() => {
+    if (quizSession?.mode === "timed" && showingResults && canMoveToNext) {
+      const timeToWait = quizSession.time_per_question * 1000 // Convert to milliseconds
+
+      const timer = setTimeout(
+        () => {
+          handleNextQuestion()
+        },
+        Math.min(timeToWait, 5000),
+      ) // Max 5 seconds wait
+
+      setAutoAdvanceTimer(timer)
+
+      return () => {
+        if (timer) clearTimeout(timer)
+      }
+    }
+  }, [showingResults, canMoveToNext, quizSession?.mode, quizSession?.time_per_question, handleNextQuestion])
+
+  useEffect(() => {
     if (lastMessage) {
       try {
         const data = JSON.parse(lastMessage)
@@ -486,10 +507,15 @@ const RealTimeQuizPage: React.FC = () => {
             setIsSubmittingAnswer(false)
             setCanMoveToNext(data.has_next_question || false)
 
-            if (data.has_next_question && isCreator) {
-              setTimeout(() => {
-                handleNextQuestion()
-              }, 3000)
+            if (data.has_next_question) {
+              // For timed mode, auto-advance will be handled by useEffect
+              // For free mode, user can manually proceed
+              if (quizSession?.mode === "free") {
+                // Show next button for 3 seconds, then allow manual advance
+                setTimeout(() => {
+                  setCanMoveToNext(true)
+                }, 1000)
+              }
             } else if (!data.has_next_question) {
               setTimeout(() => {
                 setIsQuizEnded(true)
@@ -721,45 +747,76 @@ const RealTimeQuizPage: React.FC = () => {
           display: none;
         }
         
-        /* Enhanced responsive design */
+        /* Enhanced mobile responsiveness */
+        @media (max-width: 1024px) {
+          .desktop-sidebar {
+            display: none;
+          }
+        }
+        
         @media (max-width: 768px) {
           .mobile-layout {
-            padding: 1rem;
+            padding: 0.75rem;
           }
           
           .mobile-question-card {
-            margin-top: 6rem;
-            margin-bottom: 8rem;
+            margin-top: 4rem;
+            margin-bottom: 6rem;
           }
           
           .mobile-controls {
             position: fixed;
-            bottom: 1rem;
-            left: 1rem;
-            right: 1rem;
+            bottom: 0;
+            left: 0;
+            right: 0;
             z-index: 50;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
           }
           
-          .mobile-stats {
+          .mobile-stats-header {
             position: fixed;
-            top: 1rem;
-            right: 1rem;
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 40;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          }
+          
+          .mobile-sidebar {
+            position: fixed;
+            top: 4rem;
+            right: 0;
+            bottom: 6rem;
+            width: 100%;
+            max-width: 320px;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 45;
+          }
+          
+          .mobile-sidebar.show {
+            transform: translateX(0);
           }
         }
         
         @media (max-width: 640px) {
-          .mobile-sidebar {
-            bottom: 22vh;
-          }
-          
           .question-options {
-            gap: 0.75rem;
+            gap: 0.5rem;
           }
           
           .option-button {
             padding: 0.75rem;
             font-size: 0.875rem;
+          }
+          
+          .mobile-controls {
+            padding: 0.75rem;
           }
         }
       `}</style>
@@ -778,59 +835,472 @@ const RealTimeQuizPage: React.FC = () => {
       {/* Dark Overlay */}
       <div className="absolute inset-0 bg-black/60" />
 
-      <div className="fixed top-4 left-4 right-4 z-40 flex justify-between items-center">
-        <div className="liquid-glass rounded-xl px-4 py-2 text-white text-sm">
-          <div className="flex items-center gap-4">
-            <span>👥 {totalStats.totalUsers}</span>
-            <span className="text-green-400">✓ {totalStats.totalCorrect}</span>
-            <span className="text-red-400">✗ {totalStats.totalWrong}</span>
+      <div className="mobile-stats-header md:fixed md:top-4 md:left-4 md:right-4 md:z-40 md:bg-transparent md:backdrop-filter-none md:border-none md:p-0">
+        <div className="flex justify-between items-center md:justify-start md:gap-4">
+          <div className="liquid-glass rounded-xl px-3 py-2 text-white text-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <Users size={14} />
+                {totalStats.totalUsers}
+              </span>
+              <span className="text-green-400 flex items-center gap-1">
+                <Check size={14} />
+                {totalStats.totalCorrect}
+              </span>
+              <span className="text-red-400 flex items-center gap-1">
+                <X size={14} />
+                {totalStats.totalWrong}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {quizEndTime && (
+              <div className="liquid-glass rounded-xl px-3 py-2 text-white text-sm flex items-center gap-1">
+                <Clock size={14} />
+                {timeUntilEnd}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="liquid-glass rounded-full p-2 text-white hover:bg-white/20 transition-colors md:hidden"
+            >
+              📊
+            </button>
           </div>
         </div>
-
-        {quizEndTime && <div className="liquid-glass rounded-xl px-4 py-2 text-white text-sm">⏰ {timeUntilEnd}</div>}
       </div>
 
-      <button
-        onClick={() => setShowSidebar(!showSidebar)}
-        className="fixed top-20 right-4 z-50 liquid-glass rounded-full p-3 text-white hover:bg-white/20 transition-colors"
-      >
-        📊
-      </button>
+      <div className="desktop-sidebar fixed top-20 right-4 bottom-4 w-80 liquid-glass rounded-xl p-4 z-40 overflow-y-auto scrollbar-hide hidden lg:block">
+        <div className="text-white">
+          <h3 className="text-lg font-bold mb-4">Quiz Statistics</h3>
 
-      {showSidebar && (
-        <div className="fixed top-32 right-4 bottom-4 w-80 max-w-[90vw] liquid-glass rounded-xl p-4 z-40 overflow-y-auto scrollbar-hide">
+          {/* User's own stats */}
+          {user && (
+            <div className="mb-6 p-3 bg-blue-500/20 rounded-lg">
+              <h4 className="font-semibold mb-2">Your Results</h4>
+              <div className="space-y-1 text-sm">
+                {userResults ? (
+                  <>
+                    <div>
+                      Rank: #{userResults.rank} of {userResults.total_participants}
+                    </div>
+                    <div>Score: {userResults.score} points</div>
+                    <div className="text-green-400">Correct: {userResults.correct}</div>
+                    <div className="text-red-400">Wrong: {userResults.wrong}</div>
+                    <div>Avg Time: {userResults.avg_time}s</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-green-400">
+                      Correct: {participants.find((p) => p.username === user.username)?.correct_answers || 0}
+                    </div>
+                    <div className="text-red-400">
+                      Wrong: {participants.find((p) => p.username === user.username)?.wrong_answers || 0}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* All participants stats */}
+          <div className="space-y-2">
+            <h4 className="font-semibold">All Participants ({participants.length})</h4>
+            {participants.map((participant, index) => (
+              <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{participant.username}</span>
+                  {participant.username === user?.username && (
+                    <span className="text-xs bg-blue-500/30 px-1 rounded">You</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-300 flex items-center gap-2">
+                  <span className="text-green-400">{participant.correct_answers}✓</span>
+                  <span className="text-red-400">{participant.wrong_answers}✗</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={`mobile-sidebar ${showSidebar ? "show" : ""} lg:hidden`}>
+        <div className="liquid-glass rounded-l-xl p-4 h-full overflow-y-auto scrollbar-hide">
           <div className="text-white">
-            <h3 className="text-lg font-bold mb-4">Quiz Statistics</h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Statistics</h3>
+              <button
+                onClick={() => setShowSidebar(false)}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
             {/* User's own stats */}
-            {userResults && (
-              <div className="mb-6 p-3 bg-blue-500/20 rounded-lg">
-                <h4 className="font-semibold mb-2">Your Results</h4>
-                <div className="space-y-1 text-sm">
-                  <div>
-                    Rank: #{userResults.rank} of {userResults.total_participants}
-                  </div>
-                  <div>Score: {userResults.score} points</div>
-                  <div className="text-green-400">Correct: {userResults.correct}</div>
-                  <div className="text-red-400">Wrong: {userResults.wrong}</div>
-                  <div>Avg Time: {userResults.avg_time}s</div>
+            {user && (
+              <div className="mb-4 p-3 bg-blue-500/20 rounded-lg">
+                <h4 className="font-semibold mb-2 text-sm">Your Results</h4>
+                <div className="space-y-1 text-xs">
+                  {userResults ? (
+                    <>
+                      <div>
+                        Rank: #{userResults.rank}/{userResults.total_participants}
+                      </div>
+                      <div>Score: {userResults.score} pts</div>
+                      <div className="text-green-400">Correct: {userResults.correct}</div>
+                      <div className="text-red-400">Wrong: {userResults.wrong}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-green-400">
+                        Correct: {participants.find((p) => p.username === user.username)?.correct_answers || 0}
+                      </div>
+                      <div className="text-red-400">
+                        Wrong: {participants.find((p) => p.username === user.username)?.wrong_answers || 0}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Participants list */}
+            {/* All participants */}
             <div className="space-y-2">
-              <h4 className="font-semibold">Participants ({participants.length})</h4>
-              {participants.map((participant, index) => (
-                <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded">
-                  <span className="text-sm">{participant.username}</span>
-                  <div className="text-xs text-gray-300">{participant.score || 0} pts</div>
+              <h4 className="font-semibold text-sm">Participants ({participants.length})</h4>
+              {participants.map((participant) => (
+                <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded text-xs">
+                  <div className="flex items-center gap-1">
+                    <span>{participant.username}</span>
+                    {participant.username === user?.username && (
+                      <span className="bg-blue-500/30 px-1 rounded text-[10px]">You</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-400">{participant.correct_answers}✓</span>
+                    <span className="text-red-400">{participant.wrong_answers}✗</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
+      </div>
+
+      {showSidebar && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setShowSidebar(false)} />
       )}
+
+      {/* Main content */}
+      <div className="mobile-layout px-4 md:px-6 pt-16 md:pt-24 pb-20 md:pb-20 lg:pr-96">
+        <div
+          ref={questionContainerRef}
+          className="mobile-question-card glass-morphism rounded-xl p-4 md:p-6 shadow-lg max-w-4xl mx-auto lg:max-w-none"
+        >
+          {!quizStarted && !isQuizEnded ? (
+            <div className="text-center py-6 md:py-8">
+              <div className="text-white text-lg md:text-xl font-bold mb-4">
+                {connectionStatus === "connected" ? "Quiz Ready" : "Connecting..."}
+              </div>
+              <div className="text-white/70 mb-6">
+                {participants.length} participant{participants.length !== 1 ? "s" : ""} joined
+              </div>
+              {isCreator && (
+                <button
+                  onClick={handleStartQuiz}
+                  disabled={isStartingQuiz || connectionStatus !== "connected"}
+                  className="liquid-glass rounded-full px-6 md:px-8 py-3 text-white font-bold hover:bg-white/20 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto text-sm md:text-base"
+                >
+                  {isStartingQuiz ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Play size={16} />
+                      Start Quiz
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          ) : isQuizEnded ? (
+            <div className="text-center py-6 md:py-8">
+              <div className="text-white text-lg md:text-xl font-bold mb-4">Quiz Ended</div>
+              <div className="text-white/70 mb-6">Thank you for participating!</div>
+
+              {isCreator && (
+                <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                  <button
+                    onClick={() => {
+                      setShowResultsModal(true)
+                      if (user) getUserResults()
+                    }}
+                    className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-white/20 transition-colors"
+                  >
+                    📊 View Results
+                  </button>
+                  <button
+                    onClick={handleRestartQuiz}
+                    className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-blue-500/20 transition-colors"
+                  >
+                    🔄 Restart Quiz
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : currentQuestion ? (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-base md:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                  Question {quizSession?.current_question_index + 1 || 1} of {quizSession?.total_questions || "?"}
+                </div>
+                {quizSession?.mode === "timed" && timeLeft > 0 && !hasAnswered && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full border border-red-500/30">
+                    <Clock size={14} />
+                    <span className="text-white font-mono text-sm">{timeLeft}s</span>
+                  </div>
+                )}
+                {!hasAnswered && quizSession?.mode === "free" && (
+                  <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/30 rounded-full border border-white/20">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-white/80 text-xs md:text-sm">Live</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-white text-base md:text-lg mb-6 leading-relaxed">{currentQuestion.text}</div>
+
+              {currentQuestion.image && (
+                <div className="mb-6">
+                  <img
+                    src={currentQuestion.image || "/placeholder.svg"}
+                    alt="Question"
+                    className="w-full max-h-48 md:max-h-64 object-cover rounded-lg"
+                  />
+                </div>
+              )}
+
+              <div className="question-options grid gap-3 md:gap-4">
+                {currentQuestion.options?.map((option, index) => {
+                  const isSelected = selectedAnswer === option.id
+                  const isCorrect = answerResult?.correctAnswerId === option.id
+                  const isWrong = isSelected && answerResult && !answerResult.isCorrect
+
+                  let buttonClass =
+                    "option-button p-3 md:p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20 w-full"
+
+                  if (showingResults) {
+                    if (isCorrect) {
+                      buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
+                    } else if (isWrong) {
+                      buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
+                    } else {
+                      buttonClass += " bg-white/10 opacity-60"
+                    }
+                  } else if (hasAnswered || isSubmittingAnswer || (quizSession?.mode === "timed" && timeLeft === 0)) {
+                    buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
+                  } else {
+                    buttonClass +=
+                      " bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
+                  }
+
+                  if (isSelected && !showingResults) {
+                    buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
+                  }
+
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() =>
+                        !hasAnswered &&
+                        !isSubmittingAnswer &&
+                        !(quizSession?.mode === "timed" && timeLeft === 0) &&
+                        handleSubmitAnswer(option.id)
+                      }
+                      disabled={hasAnswered || isSubmittingAnswer || (quizSession?.mode === "timed" && timeLeft === 0)}
+                      className={buttonClass}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base ${
+                            showingResults
+                              ? isCorrect
+                                ? "bg-green-500"
+                                : isWrong
+                                  ? "bg-red-500"
+                                  : "bg-white/20"
+                              : isSelected
+                                ? "bg-blue-500"
+                                : "bg-white/20"
+                          }`}
+                        >
+                          {showingResults ? (
+                            isCorrect ? (
+                              <Check className="w-3 h-3 md:w-4 md:h-4" />
+                            ) : isWrong ? (
+                              <X className="w-3 h-3 md:w-4 md:h-4" />
+                            ) : (
+                              String.fromCharCode(65 + index)
+                            )
+                          ) : (
+                            String.fromCharCode(65 + index)
+                          )}
+                        </div>
+                        <span className="text-white font-medium text-sm md:text-base">{option.text}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6 md:py-8">
+              <div className="text-white/60">Loading question...</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mobile-controls md:hidden">
+        <div className="flex justify-between items-center">
+          {/* Left side - Creator info */}
+          {quizSession?.creator_username && (
+            <div className="flex items-center space-x-2">
+              <img
+                src={quizSession.creator_avatar || "/placeholder.svg?height=32&width=32&query=user avatar"}
+                alt="Creator"
+                className="w-6 h-6 rounded-full border border-white/30"
+              />
+              <div>
+                <span className="text-white font-medium text-xs">@{quizSession.creator_username}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Center - Next question button for all users */}
+          {quizStarted && !isQuizEnded && canMoveToNext && (
+            <button
+              onClick={handleNextQuestion}
+              className="liquid-glass rounded-full px-4 py-2 text-white hover:bg-white/20 transition-all flex items-center gap-2"
+            >
+              <span className="text-sm">Next</span>
+              <ChevronRight size={16} />
+            </button>
+          )}
+
+          {/* Right side - Action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: quizSession?.title || "Live Quiz",
+                    text: "Join this live quiz!",
+                    url: window.location.href,
+                  })
+                }
+              }}
+              className="liquid-glass rounded-full p-2 text-white hover:bg-white/20 transition-all"
+            >
+              <Share size={16} />
+            </button>
+
+            <button
+              onClick={handleLeaveQuiz}
+              className="liquid-glass rounded-full p-2 text-white hover:bg-red-500/20 transition-all"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop controls */}
+      <div className="hidden md:block">
+        {/* Creator info */}
+        {quizSession?.creator_username && (
+          <div className="absolute bottom-20 left-6 z-10">
+            <div className="glass-morphism rounded-xl p-3 max-w-xs">
+              <div className="flex items-center space-x-3">
+                <img
+                  src={quizSession.creator_avatar || "/placeholder.svg?height=40&width=40&query=user avatar"}
+                  alt="Creator"
+                  className="w-8 h-8 rounded-full border border-white/30"
+                />
+                <div>
+                  <span className="text-white font-medium text-sm">@{quizSession.creator_username}</span>
+                  <div className="text-white/60 text-xs">Quiz Creator</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="absolute bottom-6 right-6 flex flex-col items-center gap-3 z-10">
+          {/* Next question button for all users */}
+          {quizStarted && !isQuizEnded && canMoveToNext && (
+            <button
+              onClick={handleNextQuestion}
+              className="liquid-glass rounded-full px-6 py-3 text-white hover:bg-white/20 transition-all flex items-center gap-2"
+            >
+              <span>Next Question</span>
+              <ChevronRight size={18} />
+            </button>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: quizSession?.title || "Live Quiz",
+                    text: "Join this live quiz!",
+                    url: window.location.href,
+                  })
+                }
+              }}
+              className="liquid-glass rounded-full p-3 text-white hover:bg-white/20 transition-all"
+            >
+              <Share size={18} />
+            </button>
+
+            <button
+              onClick={handleLeaveQuiz}
+              className="liquid-glass rounded-full p-3 text-white hover:bg-red-500/20 transition-all"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* End quiz button for creator */}
+        {isCreator && (quizStarted || isQuizEnded) && (
+          <div className="absolute bottom-6 left-6 z-10">
+            <button
+              onClick={handleEndQuiz}
+              disabled={isEndingQuiz}
+              className="liquid-glass rounded-full px-6 py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {isEndingQuiz ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Ending...
+                </>
+              ) : (
+                <>
+                  <Square size={16} />
+                  End Quiz
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
       {showResultsModal && finalResults.length > 0 && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -892,278 +1362,6 @@ const RealTimeQuizPage: React.FC = () => {
         </div>
       )}
 
-      {isQuizEnded && !showResultsModal && (
-        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-40">
-          <button
-            onClick={() => {
-              setShowResultsModal(true)
-              if (user) getUserResults()
-            }}
-            className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-white/20 transition-colors"
-          >
-            📊 View Results
-          </button>
-        </div>
-      )}
-
-      {/* Rest of existing UI components... */}
-      <div className="px-4 md:px-6 pt-24 md:pt-32 pb-32 md:pb-20">
-        <div ref={questionContainerRef} className="glass-morphism rounded-xl p-4 md:p-6 shadow-lg max-w-4xl mx-auto">
-          {!quizStarted && !isQuizEnded ? (
-            <div className="text-center py-6 md:py-8">
-              <div className="text-white text-lg md:text-xl font-bold mb-4">
-                {connectionStatus === "connected" ? "Quiz Ready" : "Connecting..."}
-              </div>
-              <div className="text-white/70 mb-6">
-                {participants.length} participant{participants.length !== 1 ? "s" : ""} joined
-              </div>
-              {isCreator && (
-                <button
-                  onClick={handleStartQuiz}
-                  disabled={isStartingQuiz || connectionStatus !== "connected"}
-                  className="liquid-glass rounded-full px-6 md:px-8 py-3 text-white font-bold hover:bg-white/20 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto text-sm md:text-base"
-                >
-                  {isStartingQuiz ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <Play size={16} />
-                      Start Quiz
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          ) : isQuizEnded ? (
-            <div className="text-center py-6 md:py-8">
-              <div className="text-white text-lg md:text-xl font-bold mb-4">Quiz Ended</div>
-              <div className="text-white/70">Thank you for participating!</div>
-            </div>
-          ) : currentQuestion ? (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <div className="text-base md:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                  Question
-                </div>
-                {!hasAnswered && (
-                  <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/30 rounded-full border border-white/20">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-white/80 text-xs md:text-sm">Live</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-white text-base md:text-lg mb-6 leading-relaxed">{currentQuestion.text}</div>
-
-              {currentQuestion.image && (
-                <div className="mb-6">
-                  <img
-                    src={currentQuestion.image || "/placeholder.svg"}
-                    alt="Question"
-                    className="w-full max-h-48 md:max-h-64 object-cover rounded-lg"
-                  />
-                </div>
-              )}
-
-              <div className="question-options grid gap-3 md:gap-4">
-                {currentQuestion.options?.map((option, index) => {
-                  const isSelected = selectedAnswer === option.id
-                  const isCorrect = answerResult?.correctAnswerId === option.id
-                  const isWrong = isSelected && answerResult && !answerResult.isCorrect
-
-                  let buttonClass =
-                    "option-button p-3 md:p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20 w-full"
-
-                  if (showingResults) {
-                    if (isCorrect) {
-                      buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
-                    } else if (isWrong) {
-                      buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
-                    } else {
-                      buttonClass += " bg-white/10 opacity-60"
-                    }
-                  } else if (hasAnswered || isSubmittingAnswer) {
-                    buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
-                  } else {
-                    buttonClass +=
-                      " bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
-                  }
-
-                  if (isSelected && !showingResults) {
-                    buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
-                  }
-
-                  return (
-                    <button
-                      key={option.id}
-                      onClick={() => !hasAnswered && !isSubmittingAnswer && handleAnswerSubmit(option.id)}
-                      disabled={hasAnswered || isSubmittingAnswer}
-                      className={buttonClass}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base ${
-                            showingResults
-                              ? isCorrect
-                                ? "bg-green-500"
-                                : isWrong
-                                  ? "bg-red-500"
-                                  : "bg-white/20"
-                              : isSelected
-                                ? "bg-blue-500"
-                                : "bg-white/20"
-                          }`}
-                        >
-                          {showingResults ? (
-                            isCorrect ? (
-                              <Check className="w-3 h-3 md:w-4 md:h-4" />
-                            ) : isWrong ? (
-                              <X className="w-3 h-3 md:w-4 md:h-4" />
-                            ) : (
-                              String.fromCharCode(65 + index)
-                            )
-                          ) : (
-                            String.fromCharCode(65 + index)
-                          )}
-                        </div>
-                        <span className="text-white font-medium text-sm md:text-base">{option.text}</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {isCreator && (
-                <div className="flex justify-between items-center mt-6">
-                  <button
-                    onClick={handlePreviousQuestion}
-                    disabled={currentQuestionIndex <= 0 || isNavigating}
-                    className="liquid-glass rounded-full p-2 md:p-3 text-white hover:bg-white/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronUp size={16} className="md:w-5 md:h-5" />
-                  </button>
-
-                  <div className="text-white/60 text-xs md:text-sm text-center">
-                    {hasAnswered ? "Answered" : "Select an answer"}
-                  </div>
-
-                  <button
-                    onClick={handleNextQuestionManual}
-                    disabled={isNavigating || !canMoveToNext}
-                    className="liquid-glass rounded-full p-2 md:p-3 text-white hover:bg-white/20 transition-all disabled:opacity-50"
-                  >
-                    <ChevronDown size={16} className="md:w-5 md:h-5" />
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-6 md:py-8">
-              <div className="text-white/60">Loading question...</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {quizSession?.creator_username && (
-        <div className="absolute bottom-20 md:bottom-20 left-4 md:left-6 z-10 hidden md:block">
-          <div className="glass-morphism rounded-xl p-3 max-w-xs">
-            <div className="flex items-center space-x-3">
-              <img
-                src={quizSession.creator_avatar || "/placeholder.svg?height=40&width=40&query=user avatar"}
-                alt="Creator"
-                className="w-8 h-8 rounded-full border border-white/30"
-              />
-              <div>
-                <span className="text-white font-medium text-sm">@{quizSession.creator_username}</span>
-                <div className="text-white/60 text-xs">Quiz Creator</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mobile-stats md:absolute md:right-6 md:bottom-32 flex md:flex-col items-center gap-3 md:gap-4 z-10">
-        <div className="flex md:flex-col items-center gap-3">
-          <div className="flex flex-col items-center gap-1">
-            <button className="w-12 h-12 md:w-14 md:h-14 rounded-full glass-morphism flex items-center justify-center">
-              <div className="w-6 h-6 md:w-7 md:h-7 bg-green-500 rounded-full flex items-center justify-center">
-                <Check size={12} className="text-white md:w-4 md:h-4" />
-              </div>
-            </button>
-            <span className="text-xs font-medium text-white text-center">{totalStats.totalCorrect}</span>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <button className="w-12 h-12 md:w-14 md:h-14 rounded-full glass-morphism flex items-center justify-center">
-              <div className="w-6 h-6 md:w-7 md:h-7 bg-red-500 rounded-full flex items-center justify-center">
-                <X size={12} className="text-white md:w-4 md:h-4" />
-              </div>
-            </button>
-            <span className="text-xs font-medium text-white text-center">{totalStats.totalWrong}</span>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <button
-              onClick={() => setShowParticipantsModal(true)}
-              className="w-12 h-12 md:w-14 md:h-14 rounded-full glass-morphism flex items-center justify-center text-white hover:bg-white/20 transition-all"
-            >
-              <Users size={14} className="md:w-[18px] md:h-[18px]" />
-            </button>
-            <span className="text-xs font-medium text-white text-center">{participants.length}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mobile-controls md:absolute md:bottom-6 md:right-6 flex justify-center md:flex-col items-center gap-3 z-10">
-        <button
-          onClick={() => {
-            if (navigator.share) {
-              navigator.share({
-                title: quizSession?.title || "Live Quiz",
-                text: "Join this live quiz!",
-                url: window.location.href,
-              })
-            }
-          }}
-          className="liquid-glass rounded-full p-3 text-white hover:bg-white/20 transition-all"
-        >
-          <Share size={16} className="md:w-[18px] md:h-[18px]" />
-        </button>
-
-        <button
-          onClick={handleLeaveQuiz}
-          className="liquid-glass rounded-full p-3 text-white hover:bg-red-500/20 transition-all"
-        >
-          <LogOut size={16} className="md:w-[18px] md:h-[18px]" />
-        </button>
-      </div>
-
-      {isCreator && quizStarted && !isQuizEnded && (
-        <div className="absolute bottom-6 left-4 md:left-6 z-10">
-          <button
-            onClick={handleEndQuiz}
-            disabled={isEndingQuiz}
-            className="liquid-glass rounded-full px-4 md:px-6 py-2 md:py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2 text-sm md:text-base"
-          >
-            {isEndingQuiz ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Ending...
-              </>
-            ) : (
-              <>
-                <Square size={14} className="md:w-4 md:h-4" />
-                End Quiz
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
       {showParticipantsModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="glass-morphism rounded-xl p-4 md:p-6 max-w-md w-full max-h-96 overflow-y-auto">
@@ -1173,7 +1371,7 @@ const RealTimeQuizPage: React.FC = () => {
                 onClick={() => setShowParticipantsModal(false)}
                 className="text-white/60 hover:text-white transition-colors"
               >
-                <X size={18} className="md:w-5 md:h-5" />
+                <X size={18} />
               </button>
             </div>
 
