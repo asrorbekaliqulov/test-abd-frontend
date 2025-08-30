@@ -1,11 +1,9 @@
 "use client"
-
-import type React from "react"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { useWebSocket } from "../hooks/useWebSocket"
 import { authAPI } from "../utils/api"
-import { Users, Check, X, LogOut, Square, Share, Play, ChevronRight, Clock } from "lucide-react"
+import { Users, Check, X, Square, Play, ChevronRight, Clock, ChevronLeft, AlertCircle } from "lucide-react"
 
 interface QuizSession {
   id: string
@@ -66,7 +64,7 @@ const backgroundImages = [
   "/digital-pattern-blue-cyan.png",
 ]
 
-const RealTimeQuizPage: React.FC = () => {
+export default function RealTimeQuizPage() {
   const [user, setUser] = useState<UserData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [userError, setUserError] = useState<string | null>(null)
@@ -119,6 +117,13 @@ const RealTimeQuizPage: React.FC = () => {
   const [showResultsModal, setShowResultsModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [quizTimeLeft, setQuizTimeLeft] = useState<number>(0)
+
+  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
+  const [showAnsweredWarning, setShowAnsweredWarning] = useState(false)
+  const [canGoBack, setCanGoBack] = useState(false)
+  const [canGoNext, setCanGoNext] = useState(false)
+  const [isResultsPanelCollapsed, setIsResultsPanelCollapsed] = useState(false)
+  const [autoNextTimer, setAutoNextTimer] = useState<NodeJS.Timeout | null>(null)
 
   const WS_BASE_URL = "wss://backend.testabd.uz"
   const wsUrl = quiz_id ? `${WS_BASE_URL}/ws/quiz/${quiz_id}/` : null
@@ -178,6 +183,8 @@ const RealTimeQuizPage: React.FC = () => {
       setSelectedAnswer(answerId)
       setHasAnswered(true)
       setIsSubmittingAnswer(true)
+
+      setAnsweredQuestions((prev) => new Set([...prev, quizSession.current_question!.id]))
 
       if (isConnected) {
         sendMessage({
@@ -249,12 +256,32 @@ const RealTimeQuizPage: React.FC = () => {
     console.log("[v0] Requesting next question")
     setCanMoveToNext(false)
     setShowingResults(false)
+    setCanGoNext(false)
 
     sendMessage({
       action: "next_question",
       user_id: user.id,
     })
   }, [isConnected, user, sendMessage])
+
+  const handlePreviousQuestion = useCallback(() => {
+    if (isNavigating || currentQuestionIndex <= 0) return
+
+    const currentQuestionId = quizSession?.current_question?.id
+
+    if (currentQuestionId && answeredQuestions.has(currentQuestionId)) {
+      setShowAnsweredWarning(true)
+      setTimeout(() => setShowAnsweredWarning(false), 3000)
+      return
+    }
+
+    setIsNavigating(true)
+    setCurrentQuestionIndex((prev) => prev - 1)
+
+    setTimeout(() => {
+      setIsNavigating(false)
+    }, 300)
+  }, [currentQuestionIndex, isNavigating, quizSession?.current_question?.id, answeredQuestions])
 
   useEffect(() => {
     return () => {
@@ -263,17 +290,6 @@ const RealTimeQuizPage: React.FC = () => {
       }
     }
   }, [])
-
-  const handlePreviousQuestion = useCallback(() => {
-    if (isNavigating || currentQuestionIndex <= 0) return
-
-    setIsNavigating(true)
-    setCurrentQuestionIndex((prev) => prev - 1)
-
-    setTimeout(() => {
-      setIsNavigating(false)
-    }, 300)
-  }, [currentQuestionIndex, isNavigating])
 
   const handleNextQuestionManual = useCallback(() => {
     if (isNavigating) return
@@ -400,6 +416,36 @@ const RealTimeQuizPage: React.FC = () => {
       }
     }
   }, [showingResults, canMoveToNext, quizSession?.mode, quizSession?.time_per_question, handleNextQuestion])
+
+  useEffect(() => {
+    if (quizSession?.mode === "timed" && timeLeft === 0 && !hasAnswered && quizStarted && !isQuizEnded) {
+      console.log("[v0] Time expired, auto-advancing to next question")
+      setHasAnswered(true)
+
+      // Auto advance after 2 seconds
+      const timer = setTimeout(() => {
+        if (isConnected && user) {
+          sendMessage({
+            action: "next_question",
+            user_id: user.id,
+          })
+        }
+      }, 2000)
+
+      setAutoNextTimer(timer)
+    }
+
+    return () => {
+      if (autoNextTimer) {
+        clearTimeout(autoNextTimer)
+      }
+    }
+  }, [timeLeft, hasAnswered, quizStarted, quizSession?.mode, isQuizEnded, isConnected, user, sendMessage])
+
+  useEffect(() => {
+    setCanGoBack(currentQuestionIndex > 0)
+    setCanGoNext(hasAnswered || (quizSession?.mode === "timed" && timeLeft === 0))
+  }, [currentQuestionIndex, hasAnswered, quizSession?.mode, timeLeft])
 
   useEffect(() => {
     if (lastMessage) {
@@ -720,6 +766,82 @@ const RealTimeQuizPage: React.FC = () => {
 
   const currentQuestion = quizSession?.current_question
 
+  const renderQuestionOptions = (question: any) => {
+    if (!question) return null
+
+    const isTimeExpired = quizSession?.mode === "timed" && timeLeft === 0
+    const isDisabled = hasAnswered || isTimeExpired || isQuizEnded || showingResults || isSubmittingAnswer
+
+    return (
+      <div className="grid gap-3 md:gap-4">
+        {question.options.map((option: any, index: number) => {
+          const isSelected = selectedAnswer === option.id
+          const isCorrect = answerResult?.correctAnswerId === option.id
+          const isWrong = isSelected && answerResult && !answerResult.isCorrect
+
+          let buttonClass =
+            "p-3 md:p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20 relative overflow-hidden"
+
+          if (showingResults) {
+            if (isCorrect) {
+              buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
+            } else if (isWrong) {
+              buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
+            } else {
+              buttonClass += " bg-white/10 opacity-60"
+            }
+          } else if (isDisabled) {
+            buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
+          } else {
+            buttonClass += " bg-white/20 cursor-pointer active:scale-[0.98]"
+          }
+
+          if (isSelected && !showingResults) {
+            buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
+          }
+
+          return (
+            <button
+              key={option.id}
+              onClick={() => !isDisabled && handleSubmitAnswer(option.id)}
+              disabled={isDisabled}
+              className={buttonClass}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base ${
+                    showingResults
+                      ? isCorrect
+                        ? "bg-green-500"
+                        : isWrong
+                          ? "bg-red-500"
+                          : "bg-white/20"
+                      : isSelected
+                        ? "bg-blue-500"
+                        : "bg-white/20"
+                  }`}
+                >
+                  {showingResults ? (
+                    isCorrect ? (
+                      <Check className="w-3 h-3 md:w-4 md:h-4" />
+                    ) : isWrong ? (
+                      <X className="w-3 h-3 md:w-4 md:h-4" />
+                    ) : (
+                      String.fromCharCode(65 + index)
+                    )
+                  ) : (
+                    String.fromCharCode(65 + index)
+                  )}
+                </div>
+                <span className="text-white font-medium text-sm md:text-base">{option.text}</span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen w-full bg-black relative overflow-x-hidden">
       <style>{`
@@ -736,6 +858,22 @@ const RealTimeQuizPage: React.FC = () => {
           -webkit-backdrop-filter: blur(20px);
           border: 1px solid rgba(255, 255, 255, 0.2);
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+          border-radius: 16px;
+        }
+        
+        .liquid-glass-button {
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+          transition: all 0.3s ease;
+        }
+        
+        .liquid-glass-button:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
         
         .scrollbar-hide {
@@ -747,7 +885,7 @@ const RealTimeQuizPage: React.FC = () => {
           display: none;
         }
         
-        /* Enhanced mobile responsiveness */
+        /* Enhanced responsive design */
         @media (max-width: 1024px) {
           .desktop-sidebar {
             display: none;
@@ -760,8 +898,8 @@ const RealTimeQuizPage: React.FC = () => {
           }
           
           .mobile-question-card {
-            margin-top: 4rem;
-            margin-bottom: 6rem;
+            margin-top: 5rem;
+            margin-bottom: 8rem;
           }
           
           .mobile-controls {
@@ -770,7 +908,7 @@ const RealTimeQuizPage: React.FC = () => {
             left: 0;
             right: 0;
             z-index: 50;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             backdrop-filter: blur(20px);
             padding: 1rem;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -782,26 +920,10 @@ const RealTimeQuizPage: React.FC = () => {
             left: 0;
             right: 0;
             z-index: 40;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             backdrop-filter: blur(20px);
             padding: 0.75rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          }
-          
-          .mobile-sidebar {
-            position: fixed;
-            top: 4rem;
-            right: 0;
-            bottom: 6rem;
-            width: 100%;
-            max-width: 320px;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-            z-index: 45;
-          }
-          
-          .mobile-sidebar.show {
-            transform: translateX(0);
           }
         }
         
@@ -814,12 +936,45 @@ const RealTimeQuizPage: React.FC = () => {
             padding: 0.75rem;
             font-size: 0.875rem;
           }
-          
-          .mobile-controls {
-            padding: 0.75rem;
+        }
+        
+        /* Warning notification styles */
+        .warning-notification {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 100;
+          background: rgba(239, 68, 68, 0.95);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(239, 68, 68, 0.5);
+          border-radius: 12px;
+          padding: 1rem 1.5rem;
+          color: white;
+          font-weight: 600;
+          animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -60%);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, -50%);
           }
         }
       `}</style>
+
+      {showAnsweredWarning && (
+        <div className="warning-notification">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={20} />
+            <span>Siz allaqachon javob bergansiz! Faqat bir marta javob bera olasiz.</span>
+          </div>
+        </div>
+      )}
 
       {/* Background Image */}
       <div
@@ -1165,143 +1320,210 @@ const RealTimeQuizPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="mobile-controls md:hidden">
-        <div className="flex justify-between items-center">
-          {/* Left side - Creator info */}
-          {quizSession?.creator_username && (
-            <div className="flex items-center space-x-2">
-              <img
-                src={quizSession.creator_avatar || "/placeholder.svg?height=32&width=32&query=user avatar"}
-                alt="Creator"
-                className="w-6 h-6 rounded-full border border-white/30"
-              />
-              <div>
-                <span className="text-white font-medium text-xs">@{quizSession.creator_username}</span>
+      {/* Mobile layout */}
+      <div className="md:hidden mobile-layout">
+        {/* Mobile header with stats */}
+        <div className="mobile-stats-header">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-white font-bold text-lg">
+                {currentQuestionIndex + 1}/{quizSession?.total_questions || 0}
               </div>
+              {quizSession?.mode === "timed" && (
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-white" />
+                  <span className="text-white font-mono">
+                    {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Center - Next question button for all users */}
-          {quizStarted && !isQuizEnded && canMoveToNext && (
             <button
-              onClick={handleNextQuestion}
-              className="liquid-glass rounded-full px-4 py-2 text-white hover:bg-white/20 transition-all flex items-center gap-2"
+              onClick={() => setIsResultsPanelCollapsed(!isResultsPanelCollapsed)}
+              className="liquid-glass-button rounded-full p-2 text-white"
             >
-              <span className="text-sm">Next</span>
-              <ChevronRight size={16} />
-            </button>
-          )}
-
-          {/* Right side - Action buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: quizSession?.title || "Live Quiz",
-                    text: "Join this live quiz!",
-                    url: window.location.href,
-                  })
-                }
-              }}
-              className="liquid-glass rounded-full p-2 text-white hover:bg-white/20 transition-all"
-            >
-              <Share size={16} />
-            </button>
-
-            <button
-              onClick={handleLeaveQuiz}
-              className="liquid-glass rounded-full p-2 text-white hover:bg-red-500/20 transition-all"
-            >
-              <LogOut size={16} />
+              <Users size={16} />
             </button>
           </div>
+        </div>
+
+        {/* Mobile question content */}
+        <div className="mobile-question-card">
+          {currentQuestion && (
+            <div className="liquid-glass rounded-2xl p-4 md:p-6 mb-6">
+              <h2 className="text-white text-lg md:text-xl font-bold mb-4 text-balance">{currentQuestion.text}</h2>
+              {renderQuestionOptions(currentQuestion)}
+            </div>
+          )}
+        </div>
+
+        <div className="mobile-controls">
+          <div className="flex items-center justify-between gap-4">
+            {/* Back button */}
+            <button
+              onClick={handlePreviousQuestion}
+              disabled={!canGoBack}
+              className={`liquid-glass-button rounded-full px-4 py-2 text-white flex items-center gap-2 ${
+                !canGoBack ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              <ChevronLeft size={16} />
+              <span className="text-sm">Orqaga</span>
+            </button>
+
+            {/* Center info */}
+            <div className="flex items-center gap-2 text-white text-sm">
+              <span>
+                {currentQuestionIndex + 1} / {quizSession?.total_questions || 0}
+              </span>
+            </div>
+
+            {/* Next button */}
+            <button
+              onClick={handleNextQuestion}
+              disabled={!canGoNext}
+              className={`liquid-glass-button rounded-full px-4 py-2 text-white flex items-center gap-2 ${
+                !canGoNext ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              <span className="text-sm">Keyingi</span>
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {isCreator && (quizStarted || isQuizEnded) && (
+            <div className="mt-3 flex justify-center">
+              <button
+                onClick={handleEndQuiz}
+                disabled={isEndingQuiz}
+                className="liquid-glass-button rounded-full px-6 py-2 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isEndingQuiz ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Tugatilmoqda...
+                  </>
+                ) : (
+                  <>
+                    <Square size={16} />
+                    Testni Tugatish
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Desktop controls */}
+      {/* Desktop layout */}
       <div className="hidden md:block">
-        {/* Creator info */}
-        {quizSession?.creator_username && (
-          <div className="absolute bottom-20 left-6 z-10">
-            <div className="glass-morphism rounded-xl p-3 max-w-xs">
-              <div className="flex items-center space-x-3">
-                <img
-                  src={quizSession.creator_avatar || "/placeholder.svg?height=40&width=40&query=user avatar"}
-                  alt="Creator"
-                  className="w-8 h-8 rounded-full border border-white/30"
-                />
-                <div>
-                  <span className="text-white font-medium text-sm">@{quizSession.creator_username}</span>
-                  <div className="text-white/60 text-xs">Quiz Creator</div>
+        {/* Main content area */}
+        <div className={`transition-all duration-300 ${isResultsPanelCollapsed ? "mr-0" : "mr-80"}`}>
+          <div className="flex items-center justify-center min-h-screen p-6">
+            {currentQuestion && (
+              <div className="liquid-glass rounded-3xl p-8 max-w-4xl w-full">
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-white/60 text-sm">
+                      Savol {currentQuestionIndex + 1} / {quizSession?.total_questions || 0}
+                    </div>
+                    {quizSession?.mode === "timed" && (
+                      <div className="flex items-center gap-2 liquid-glass rounded-full px-4 py-2">
+                        <Clock size={16} className="text-white" />
+                        <span className="text-white font-mono text-lg">
+                          {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <h2 className="text-white text-2xl md:text-3xl font-bold mb-8 text-balance">
+                    {currentQuestion.text}
+                  </h2>
                 </div>
+                {renderQuestionOptions(currentQuestion)}
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Action buttons */}
-        <div className="absolute bottom-6 right-6 flex flex-col items-center gap-3 z-10">
-          {/* Next question button for all users */}
-          {quizStarted && !isQuizEnded && canMoveToNext && (
-            <button
-              onClick={handleNextQuestion}
-              className="liquid-glass rounded-full px-6 py-3 text-white hover:bg-white/20 transition-all flex items-center gap-2"
-            >
-              <span>Next Question</span>
-              <ChevronRight size={18} />
-            </button>
-          )}
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: quizSession?.title || "Live Quiz",
-                    text: "Join this live quiz!",
-                    url: window.location.href,
-                  })
-                }
-              }}
-              className="liquid-glass rounded-full p-3 text-white hover:bg-white/20 transition-all"
-            >
-              <Share size={18} />
-            </button>
-
-            <button
-              onClick={handleLeaveQuiz}
-              className="liquid-glass rounded-full p-3 text-white hover:bg-red-500/20 transition-all"
-            >
-              <LogOut size={18} />
-            </button>
+            )}
           </div>
         </div>
 
-        {/* End quiz button for creator */}
-        {isCreator && (quizStarted || isQuizEnded) && (
-          <div className="absolute bottom-6 left-6 z-10">
+        <div className="fixed bottom-6 left-6 flex items-center gap-4 z-10">
+          {/* Back button */}
+          <button
+            onClick={handlePreviousQuestion}
+            disabled={!canGoBack}
+            className={`liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 ${
+              !canGoBack ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            <ChevronLeft size={18} />
+            <span>Orqaga</span>
+          </button>
+
+          {/* Next button */}
+          <button
+            onClick={handleNextQuestion}
+            disabled={!canGoNext}
+            className={`liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 ${
+              !canGoNext ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            <span>Keyingi Savol</span>
+            <ChevronRight size={18} />
+          </button>
+
+          {isCreator && (quizStarted || isQuizEnded) && (
             <button
               onClick={handleEndQuiz}
               disabled={isEndingQuiz}
-              className="liquid-glass rounded-full px-6 py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
+              className="liquid-glass-button rounded-full px-6 py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {isEndingQuiz ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Ending...
+                  Tugatilmoqda...
                 </>
               ) : (
                 <>
                   <Square size={16} />
-                  End Quiz
+                  Testni Tugatish
                 </>
               )}
             </button>
+          )}
+        </div>
+
+        <div
+          className={`fixed top-0 right-0 h-full w-80 bg-black/50 backdrop-blur-xl border-l border-white/10 transition-transform duration-300 z-30 ${
+            isResultsPanelCollapsed ? "translate-x-full" : "translate-x-0"
+          }`}
+        >
+          {/* Panel header */}
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <h3 className="text-white font-bold">Natijalar</h3>
+            <button
+              onClick={() => setIsResultsPanelCollapsed(true)}
+              className="liquid-glass-button rounded-full p-2 text-white"
+            >
+              <X size={16} />
+            </button>
           </div>
+
+          {/* Results content */}
+          <div className="p-4 overflow-y-auto h-full scrollbar-hide">{/* Existing results content */}</div>
+        </div>
+
+        {/* Toggle button for collapsed panel */}
+        {isResultsPanelCollapsed && (
+          <button
+            onClick={() => setIsResultsPanelCollapsed(false)}
+            className="fixed top-4 right-4 liquid-glass-button rounded-full p-3 text-white z-40"
+          >
+            <Users size={18} />
+          </button>
         )}
       </div>
 
+      {/* Results Modal */}
       {showResultsModal && finalResults.length > 0 && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="liquid-glass rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -1362,6 +1584,7 @@ const RealTimeQuizPage: React.FC = () => {
         </div>
       )}
 
+      {/* Participants Modal */}
       {showParticipantsModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="glass-morphism rounded-xl p-4 md:p-6 max-w-md w-full max-h-96 overflow-y-auto">
@@ -1401,5 +1624,3 @@ const RealTimeQuizPage: React.FC = () => {
     </div>
   )
 }
-
-export default RealTimeQuizPage
