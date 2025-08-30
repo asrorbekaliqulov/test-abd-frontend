@@ -3,7 +3,21 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { useWebSocket } from "../hooks/useWebSocket"
 import { authAPI } from "../utils/api"
-import { Users, Check, X, Square, Play, ChevronRight, Clock, ChevronLeft, AlertCircle } from "lucide-react"
+import {
+  Users,
+  Check,
+  X,
+  Square,
+  Play,
+  ChevronRight,
+  Clock,
+  ChevronLeft,
+  AlertCircle,
+  RefreshCw,
+  Share2,
+  Trophy,
+  BarChart3,
+} from "lucide-react"
 
 interface QuizSession {
   id: string
@@ -139,6 +153,22 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   const isCreator = user && quizSession && user.id === quizSession.creator_id
 
   const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null)
+
+  const [showRefreshButton, setShowRefreshButton] = useState(false)
+  const [userAnswerHistory, setUserAnswerHistory] = useState<{
+    [questionId: string]: { answerId: string; isCorrect: boolean }
+  }>({})
+  const [showStatsModal, setShowStatsModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [questionLoadError, setQuestionLoadError] = useState(false)
+
+  useEffect(() => {
+    if (quizSession?.current_question) {
+      const savedQuestions = JSON.parse(localStorage.getItem(`quiz_${quizId}_questions`) || "{}")
+      savedQuestions[quizSession.current_question_index || 0] = quizSession.current_question
+      localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(savedQuestions))
+    }
+  }, [quizSession?.current_question, quizId])
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -482,12 +512,13 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
           case "quiz_state":
             console.log("[v0] Setting quiz session:", data.quiz_session)
             setQuizSession(data.quiz_session)
+            if (data.quiz_session?.current_question && data.quiz_session.is_active) {
+              setQuizStarted(true)
+              setQuestionLoadError(false)
+              questionStartTimeRef.current = Date.now()
+            }
             if (data.quiz_session?.end_time) {
               setQuizEndTime(new Date(data.quiz_session.end_time))
-            }
-            if (data.quiz_session?.is_active) {
-              setQuizStarted(true)
-              questionStartTimeRef.current = Date.now()
             }
             if (data.participants) {
               setParticipants(data.participants)
@@ -500,6 +531,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             console.log("[v0] Quiz started:", data)
             setQuizStarted(true)
             setIsStartingQuiz(false)
+            setQuestionLoadError(false)
             if (data.quiz_session) {
               setQuizSession(data.quiz_session)
             }
@@ -537,37 +569,50 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
 
           case "new_question":
             console.log("[v0] New question received:", data.question)
-            setQuizSession((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    current_question: data.question,
-                    current_question_index: data.question_index || prev.current_question_index + 1,
-                  }
-                : null,
-            )
-            setHasAnswered(false)
-            setSelectedAnswer(null)
-            setAnswerResult(null)
-            setShowingResults(false)
-            setIsSubmittingAnswer(false)
-            setCanMoveToNext(false)
-            questionStartTimeRef.current = Date.now()
+            if (data.question && data.question.id !== quizSession?.current_question?.id) {
+              setQuizSession((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      current_question: data.question,
+                      current_question_index: data.question_index || prev.current_question_index + 1,
+                    }
+                  : null,
+              )
+              setHasAnswered(false)
+              setSelectedAnswer(null)
+              setAnswerResult(null)
+              setShowingResults(false)
+              setIsSubmittingAnswer(false)
+              setCanMoveToNext(false)
+              setQuestionLoadError(false)
+              questionStartTimeRef.current = Date.now()
 
-            setTimeout(() => {
-              questionContainerRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-              })
-            }, 100)
+              setTimeout(() => {
+                questionContainerRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                })
+              }, 100)
 
-            if (quizSession?.mode === "timed") {
-              setTimeLeft(data.time_per_question || 15)
+              if (quizSession?.mode === "timed") {
+                setTimeLeft(data.time_per_question || 15)
+              }
             }
             break
 
           case "answer_result":
             console.log("[v0] Answer result:", data)
+            if (quizSession?.current_question) {
+              setUserAnswerHistory((prev) => ({
+                ...prev,
+                [quizSession.current_question.id]: {
+                  answerId: selectedAnswer || "",
+                  isCorrect: data.is_correct,
+                },
+              }))
+            }
+
             setAnswerResult({
               isCorrect: data.is_correct,
               correctAnswerId: data.correct_answer_id,
@@ -579,10 +624,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             setCanMoveToNext(data.has_next_question || false)
 
             if (data.has_next_question) {
-              // For timed mode, auto-advance will be handled by useEffect
-              // For free mode, user can manually proceed
               if (quizSession?.mode === "free") {
-                // Show next button for 3 seconds, then allow manual advance
                 setTimeout(() => {
                   setCanMoveToNext(true)
                 }, 1000)
@@ -655,20 +697,63 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             break
 
           case "error":
-            console.error("[v0] Backend error:", data.message)
-            setIsStartingQuiz(false)
-            setIsEndingQuiz(false)
-            setIsSubmittingAnswer(false)
+            console.log("[v0] Backend error:", data.message)
+            setShowRefreshButton(true)
+            setQuestionLoadError(true)
             break
 
           default:
             console.log("[v0] Unknown message type:", data.type)
+            break
         }
-      } catch (err) {
-        console.error("[v0] Error parsing WebSocket message:", err)
+      } catch (error) {
+        console.error("[v0] Error parsing WebSocket message:", error)
+        setShowRefreshButton(true)
+        setQuestionLoadError(true)
       }
     }
-  }, [lastMessage, quizSession, user, sendMessage])
+  }, [lastMessage, quizSession, selectedAnswer])
+
+  const handleRefresh = useCallback(() => {
+    setShowRefreshButton(false)
+    setQuestionLoadError(false)
+    if (user && hasJoined) {
+      sendMessage({
+        action: "join_quiz",
+        user_id: user.id,
+        username: user.username,
+      })
+    }
+  }, [user, hasJoined, sendMessage])
+
+  const userStats = {
+    totalAnswered: Object.keys(userAnswerHistory).length,
+    correctAnswers: Object.values(userAnswerHistory).filter((answer) => answer.isCorrect).length,
+    wrongAnswers: Object.values(userAnswerHistory).filter((answer) => !answer.isCorrect).length,
+    accuracy:
+      Object.keys(userAnswerHistory).length > 0
+        ? Math.round(
+            (Object.values(userAnswerHistory).filter((answer) => answer.isCorrect).length /
+              Object.keys(userAnswerHistory).length) *
+              100,
+          )
+        : 0,
+  }
+
+  const handleShare = useCallback(() => {
+    const shareData = {
+      title: `${quizSession?.title} - Live Quiz`,
+      text: `Join me in this live quiz: ${quizSession?.title}`,
+      url: window.location.href,
+    }
+
+    if (navigator.share) {
+      navigator.share(shareData)
+    } else {
+      navigator.clipboard.writeText(window.location.href)
+      alert("Quiz link copied to clipboard!")
+    }
+  }, [quizSession?.title])
 
   useEffect(() => {
     const stats = participants.reduce(
@@ -1081,115 +1166,53 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
         </div>
       </div>
 
-      <div className="desktop-sidebar fixed top-20 right-4 bottom-4 w-80 liquid-glass rounded-xl p-4 z-40 overflow-y-auto scrollbar-hide hidden lg:block">
-        <div className="text-white">
-          <h3 className="text-lg font-bold mb-4">Quiz Statistics</h3>
-
-          {/* User's own stats */}
-          {user && (
-            <div className="mb-6 p-3 bg-blue-500/20 rounded-lg">
-              <h4 className="font-semibold mb-2">Your Results</h4>
-              <div className="space-y-1 text-sm">
-                {userResults ? (
-                  <>
-                    <div>
-                      Rank: #{userResults.rank} of {userResults.total_participants}
-                    </div>
-                    <div>Score: {userResults.score} points</div>
-                    <div className="text-green-400">Correct: {userResults.correct}</div>
-                    <div className="text-red-400">Wrong: {userResults.wrong}</div>
-                    <div>Avg Time: {userResults.avg_time}s</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-green-400">
-                      Correct: {participants.find((p) => p.username === user.username)?.correct_answers || 0}
-                    </div>
-                    <div className="text-red-400">
-                      Wrong: {participants.find((p) => p.username === user.username)?.wrong_answers || 0}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* All participants stats */}
-          <div className="space-y-2">
-            <h4 className="font-semibold">All Participants ({participants.length})</h4>
-            {participants.map((participant, index) => (
-              <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{participant.username}</span>
-                  {participant.username === user?.username && (
-                    <span className="text-xs bg-blue-500/30 px-1 rounded">You</span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-300 flex items-center gap-2">
-                  <span className="text-green-400">{participant.correct_answers}✓</span>
-                  <span className="text-red-400">{participant.wrong_answers}✗</span>
-                </div>
-              </div>
-            ))}
+      {/* Mobile sidebar */}
+      <div
+        className={`fixed top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 lg:hidden ${
+          showSidebar ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-bold text-lg">Quiz Stats</h3>
+            <button onClick={() => setShowSidebar(false)} className="text-white/60 hover:text-white">
+              <X size={20} />
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className={`mobile-sidebar ${showSidebar ? "show" : ""} lg:hidden`}>
-        <div className="liquid-glass rounded-l-xl p-4 h-full overflow-y-auto scrollbar-hide">
-          <div className="text-white">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Statistics</h3>
-              <button
-                onClick={() => setShowSidebar(false)}
-                className="text-white/60 hover:text-white transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* User's own stats */}
-            {user && (
-              <div className="mb-4 p-3 bg-blue-500/20 rounded-lg">
-                <h4 className="font-semibold mb-2 text-sm">Your Results</h4>
-                <div className="space-y-1 text-xs">
-                  {userResults ? (
-                    <>
-                      <div>
-                        Rank: #{userResults.rank}/{userResults.total_participants}
-                      </div>
-                      <div>Score: {userResults.score} pts</div>
-                      <div className="text-green-400">Correct: {userResults.correct}</div>
-                      <div className="text-red-400">Wrong: {userResults.wrong}</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-green-400">
-                        Correct: {participants.find((p) => p.username === user.username)?.correct_answers || 0}
-                      </div>
-                      <div className="text-red-400">
-                        Wrong: {participants.find((p) => p.username === user.username)?.wrong_answers || 0}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* All participants */}
+        <div className="p-4 space-y-4">
+          <div className="glass-morphism rounded-lg p-4">
+            <h4 className="text-white font-semibold mb-3">Your Performance</h4>
             <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Participants ({participants.length})</h4>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/70">Answered:</span>
+                <span className="text-white">{userStats.totalAnswered}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-green-400">Correct:</span>
+                <span className="text-green-400">{userStats.correctAnswers}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-red-400">Wrong:</span>
+                <span className="text-red-400">{userStats.wrongAnswers}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-blue-400">Accuracy:</span>
+                <span className="text-blue-400">{userStats.accuracy}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-morphism rounded-lg p-4">
+            <h4 className="text-white font-semibold mb-3">Participants ({participants.length})</h4>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
               {participants.map((participant) => (
-                <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded text-xs">
-                  <div className="flex items-center gap-1">
-                    <span>{participant.username}</span>
-                    {participant.username === user?.username && (
-                      <span className="bg-blue-500/30 px-1 rounded text-[10px]">You</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-green-400">{participant.correct_answers}✓</span>
-                    <span className="text-red-400">{participant.wrong_answers}✗</span>
+                <div key={participant.id} className="flex items-center justify-between text-sm">
+                  <span className="text-white/80">{participant.username}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400">{participant.correct_answers}</span>
+                    <span className="text-red-400">{participant.wrong_answers}</span>
                   </div>
                 </div>
               ))}
@@ -1203,10 +1226,10 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
       )}
 
       {/* Main content */}
-      <div className="mobile-layout px-4 md:px-6 pt-16 md:pt-24 pb-20 md:pb-20 lg:pr-96">
+      <div className="mobile-layout px-4 md:px-6 pt-16 md:pt-24 pb-20 md:pb-20">
         <div
           ref={questionContainerRef}
-          className="mobile-question-card glass-morphism rounded-xl p-4 md:p-6 shadow-lg max-w-4xl mx-auto lg:max-w-none"
+          className="mobile-question-card glass-morphism rounded-xl p-4 md:p-6 shadow-lg max-w-4xl mx-auto"
         >
           {!quizStarted && !isQuizEnded ? (
             <div className="text-center py-6 md:py-8">
@@ -1241,25 +1264,31 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
               <div className="text-white text-lg md:text-xl font-bold mb-4">Quiz Ended</div>
               <div className="text-white/70 mb-6">Thank you for participating!</div>
 
-              {isCreator && (
-                <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-                  <button
-                    onClick={() => {
-                      setShowResultsModal(true)
-                      if (user) getUserResults()
-                    }}
-                    className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-white/20 transition-colors"
-                  >
-                    📊 View Results
-                  </button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                <button
+                  onClick={() => setShowStatsModal(true)}
+                  className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-white/20 transition-colors flex items-center gap-2"
+                >
+                  <Trophy size={16} />
+                  View Results
+                </button>
+                <button
+                  onClick={() => setShowShareModal(true)}
+                  className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-blue-500/20 transition-colors flex items-center gap-2"
+                >
+                  <Share2 size={16} />
+                  Share Quiz
+                </button>
+                {isCreator && (
                   <button
                     onClick={handleRestartQuiz}
-                    className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-blue-500/20 transition-colors"
+                    className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-green-500/20 transition-colors flex items-center gap-2"
                   >
-                    🔄 Restart Quiz
+                    <RefreshCw size={16} />
+                    Restart Quiz
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ) : currentQuestion ? (
             <div>
@@ -1267,18 +1296,29 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
                 <div className="text-base md:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                   Question {quizSession?.current_question_index + 1 || 1} of {quizSession?.total_questions || "?"}
                 </div>
-                {quizSession?.mode === "timed" && timeLeft > 0 && !hasAnswered && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full border border-red-500/30">
-                    <Clock size={14} />
-                    <span className="text-white font-mono text-sm">{timeLeft}s</span>
-                  </div>
-                )}
-                {!hasAnswered && quizSession?.mode === "free" && (
-                  <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/30 rounded-full border border-white/20">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-white/80 text-xs md:text-sm">Live</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  {quizSession?.mode === "timed" && timeLeft > 0 && !hasAnswered && (
+                    <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full border border-red-500/30">
+                      <Clock size={14} />
+                      <span className="text-white font-mono text-sm">{timeLeft}s</span>
+                    </div>
+                  )}
+                  {!hasAnswered && quizSession?.mode === "free" && (
+                    <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/30 rounded-full border border-white/20">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-white/80 text-xs md:text-sm">Live</span>
+                    </div>
+                  )}
+                  {(showRefreshButton || questionLoadError) && (
+                    <button
+                      onClick={handleRefresh}
+                      className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 rounded-full border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 transition-colors"
+                    >
+                      <RefreshCw size={12} />
+                      <span className="text-xs">Refresh</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="text-white text-base md:text-lg mb-6 leading-relaxed">{currentQuestion.text}</div>
@@ -1368,7 +1408,18 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             </div>
           ) : (
             <div className="text-center py-6 md:py-8">
-              <div className="text-white/60">Loading question...</div>
+              <div className="text-white/60 mb-4">
+                {questionLoadError ? "Failed to load question" : "Loading question..."}
+              </div>
+              {questionLoadError && (
+                <button
+                  onClick={handleRefresh}
+                  className="liquid-glass text-white px-4 py-2 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2 mx-auto"
+                >
+                  <RefreshCw size={16} />
+                  Try Again
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1381,7 +1432,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="text-white font-bold text-lg">
-                {currentQuestionIndex + 1}/{quizSession?.total_questions || 0}
+                {(quizSession?.current_question_index || 0) + 1}/{quizSession?.total_questions || 0}
               </div>
               {quizSession?.mode === "timed" && (
                 <div className="flex items-center gap-2">
@@ -1392,12 +1443,23 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => setShowParticipantsModal(true)}
-              className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors"
-            >
-              <Users size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSidebar(true)}
+                className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors flex items-center gap-1"
+              >
+                <BarChart3 size={16} />
+                <span className="text-xs">
+                  {userStats.correctAnswers}/{userStats.totalAnswered}
+                </span>
+              </button>
+              <button
+                onClick={() => setShowParticipantsModal(true)}
+                className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors"
+              >
+                <Users size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1471,179 +1533,112 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
         )}
       </div>
 
-      {/* Desktop layout */}
-      <div className="hidden md:block">
-        {/* Main content area */}
-        <div className={`transition-all duration-300 ${isResultsPanelCollapsed ? "mr-0" : "mr-80"}`}>
-          <div className="flex items-center justify-center min-h-screen p-6">
-            {currentQuestion && (
-              <div className="liquid-glass rounded-3xl p-8 max-w-4xl w-full">
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-white/60 text-sm">
-                      Savol {currentQuestionIndex + 1} / {quizSession?.total_questions || 0}
-                    </div>
-                    {quizSession?.mode === "timed" && (
-                      <div className="flex items-center gap-2 liquid-glass rounded-full px-4 py-2">
-                        <Clock size={16} className="text-white" />
-                        <span className="text-white font-mono text-lg">
-                          {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
-                        </span>
-                      </div>
-                    )}
+      {showStatsModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass-morphism rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                <Trophy className="text-yellow-400" size={24} />
+                Quiz Results
+              </h3>
+              <button onClick={() => setShowStatsModal(false)} className="text-white/60 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="glass-morphism rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-3">Your Performance</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-400">{userStats.correctAnswers}</div>
+                    <div className="text-sm text-white/70">Correct</div>
                   </div>
-                  <h2 className="text-white text-2xl md:text-3xl font-bold mb-8 text-balance">
-                    {currentQuestion.text}
-                  </h2>
-                </div>
-                {renderQuestionOptions(currentQuestion)}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {quizSession?.mode === "free" && (
-          <div className="fixed bottom-6 left-6 flex items-center gap-4 z-10">
-            {/* Back button */}
-            <button
-              onClick={handlePreviousQuestion}
-              disabled={!canGoBack}
-              className={`liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 ${
-                !canGoBack ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              <ChevronLeft size={18} />
-              <span>Orqaga</span>
-            </button>
-
-            {/* Next button */}
-            <button
-              onClick={handleNextQuestion}
-              disabled={!canGoNext}
-              className={`liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 ${
-                !canGoNext ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              <span>Keyingi Savol</span>
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
-
-        {isCreator && (quizStarted || isQuizEnded) && (
-          <div className="fixed bottom-6 right-6 z-10">
-            <button
-              onClick={handleEndQuiz}
-              disabled={isEndingQuiz}
-              className="liquid-glass-button rounded-full px-6 py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
-            >
-              {isEndingQuiz ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Tugatilmoqda...
-                </>
-              ) : (
-                <>
-                  <Square size={16} />
-                  Testni Tugatish
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        <div
-          className={`fixed top-0 right-0 h-full w-80 bg-black/50 backdrop-blur-xl border-l border-white/10 transition-transform duration-300 z-30 ${
-            isResultsPanelCollapsed ? "translate-x-full" : "translate-x-0"
-          }`}
-        >
-          {/* Panel header */}
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
-            <h3 className="text-white font-bold">Natijalar</h3>
-            <button
-              onClick={handleCloseResultsPanel}
-              className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="p-4 overflow-y-auto h-full scrollbar-hide">
-            {/* User's own stats with controls */}
-            {user && (
-              <div className="mb-6 p-3 bg-blue-500/20 rounded-lg">
-                <h4 className="font-semibold mb-2 text-white">Your Results</h4>
-                <div className="space-y-1 text-sm text-white/80">
-                  {userResults ? (
-                    <>
-                      <div>
-                        Rank: #{userResults.rank} of {userResults.total_participants}
-                      </div>
-                      <div>Score: {userResults.score} points</div>
-                      <div className="text-green-400">Correct: {userResults.correct}</div>
-                      <div className="text-red-400">Wrong: {userResults.wrong}</div>
-                      <div>Avg Time: {userResults.avg_time}s</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-green-400">
-                        Correct: {participants.find((p) => p.username === user.username)?.correct_answers || 0}
-                      </div>
-                      <div className="text-red-400">
-                        Wrong: {participants.find((p) => p.username === user.username)?.wrong_answers || 0}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={handleExitQuiz}
-                    className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-white py-2 px-3 rounded text-xs transition-colors"
-                  >
-                    Exit Quiz
-                  </button>
-                  <button
-                    onClick={handleShareQuiz}
-                    className="flex-1 bg-blue-500/20 hover:bg-blue-500/30 text-white py-2 px-3 rounded text-xs transition-colors"
-                  >
-                    Share
-                  </button>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-400">{userStats.wrongAnswers}</div>
+                    <div className="text-sm text-white/70">Wrong</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-400">{userStats.accuracy}%</div>
+                    <div className="text-sm text-white/70">Accuracy</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{userStats.totalAnswered}</div>
+                    <div className="text-sm text-white/70">Total</div>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* All participants stats */}
-            <div className="space-y-2">
-              <h4 className="font-semibold text-white">All Participants ({participants.length})</h4>
-              {participants.map((participant, index) => (
-                <div key={participant.id} className="flex justify-between items-center p-2 bg-white/10 rounded">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-white">{participant.username}</span>
-                    {participant.username === user?.username && (
-                      <span className="text-xs bg-blue-500/30 px-1 rounded text-white">You</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-300 flex items-center gap-2">
-                    <span className="text-green-400">{participant.correct_answers}✓</span>
-                    <span className="text-red-400">{participant.wrong_answers}✗</span>
-                  </div>
+              <div className="glass-morphism rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-3">Leaderboard</h4>
+                <div className="space-y-2">
+                  {participants
+                    .sort((a, b) => b.correct_answers - a.correct_answers)
+                    .slice(0, 5)
+                    .map((participant, index) => (
+                      <div key={participant.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white/60 text-sm">#{index + 1}</span>
+                          <span className="text-white">{participant.username}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-400">{participant.correct_answers}</span>
+                          <span className="text-white/40">/</span>
+                          <span className="text-white/60">{participant.total_answered}</span>
+                        </div>
+                      </div>
+                    ))}
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Toggle button for collapsed panel */}
-        {isResultsPanelCollapsed && (
-          <button
-            onClick={() => setIsResultsPanelCollapsed(false)}
-            className="fixed top-4 right-4 liquid-glass-button rounded-full p-3 text-white z-40 hover:bg-white/20 transition-colors"
-          >
-            <Users size={18} />
-          </button>
-        )}
-      </div>
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass-morphism rounded-xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                <Share2 className="text-blue-400" size={24} />
+                Share Quiz
+              </h3>
+              <button onClick={() => setShowShareModal(false)} className="text-white/60 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-white/70 text-center">Share this quiz with your friends!</div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={window.location.href}
+                  readOnly
+                  className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href)
+                    alert("Link copied!")
+                  }}
+                  className="liquid-glass px-4 py-2 rounded-lg text-white hover:bg-white/20 transition-colors"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <button
+                onClick={handleShare}
+                className="w-full liquid-glass py-3 rounded-lg text-white hover:bg-blue-500/20 transition-colors"
+              >
+                Share via System
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Results Modal */}
       {showResultsModal && finalResults.length > 0 && (
