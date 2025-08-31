@@ -83,8 +83,8 @@ const backgroundImages = [
 ]
 
 export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
-  const params = useParams<{ quiz_id: string }>()
-  const quizId = params?.quiz_id || quiz_id || "demo-quiz"
+  const params = useParams<{ quiz_id: number }>()
+  const quizId = params?.quiz_id || quiz_id
 
   const [user, setUser] = useState<UserData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
