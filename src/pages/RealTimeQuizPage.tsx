@@ -17,6 +17,10 @@ import {
   Crown,
   UserX,
   RotateCcw,
+  Share2,
+  Timer,
+  Target,
+  Zap,
 } from "lucide-react"
 
 interface QuizSession {
@@ -42,7 +46,7 @@ interface Question {
   text: string
   image?: string
   options: Answer[]
-  correct_answer_id?: string // Added correct answer tracking
+  correct_answer_id?: string
 }
 
 interface Answer {
@@ -70,8 +74,6 @@ interface UserData {
   last_name?: string
 }
 
-
-
 const backgroundImages = [
   "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1920&h=1080&fit=crop&crop=center",
   "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=1920&h=1080&fit=crop&crop=center",
@@ -81,13 +83,12 @@ const backgroundImages = [
 ]
 
 export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
+  const params = useParams<{ quiz_id: string }>()
+  const quizId = params?.quiz_id || quiz_id || "demo-quiz"
+
   const [user, setUser] = useState<UserData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [userError, setUserError] = useState<string | null>(null)
-
-  const params = useParams<{ quiz_id: string }>()
-  const quizId = params?.quiz_id || "demo-quiz" // Added fallback for demo purposes
-
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
@@ -168,8 +169,15 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
     accuracy: 0,
   })
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [questionAnswerStatus, setQuestionAnswerStatus] = useState<{
+    [key: number]: "correct" | "incorrect" | "timeout" | "unanswered"
+  }>({})
+
+  const currentQuestion = allQuestions[currentQuestionIndex] || null
+
   useEffect(() => {
-    if (quizSession?.current_question) {
+    if (typeof window !== "undefined" && quizSession?.current_question) {
       const savedQuestions = JSON.parse(localStorage.getItem(`quiz_${quizId}_questions`) || "{}")
       savedQuestions[quizSession.current_question_index || 0] = quizSession.current_question
       localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(savedQuestions))
@@ -177,24 +185,26 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   }, [quizSession?.current_question, quizId])
 
   useEffect(() => {
-    const savedQuestions = localStorage.getItem(`quiz_${quizId}_questions`)
-    const savedIndex = localStorage.getItem(`quiz_${quizId}_current_index`)
+    if (typeof window !== "undefined") {
+      const savedQuestions = localStorage.getItem(`quiz_${quizId}_questions`)
+      const savedIndex = localStorage.getItem(`quiz_${quizId}_current_index`)
 
-    if (savedQuestions) {
-      try {
-        const questions = JSON.parse(savedQuestions)
-        setAllQuestions(questions)
-        if (savedIndex) {
-          setCurrentQuestionIndex(Number.parseInt(savedIndex))
+      if (savedQuestions) {
+        try {
+          const questions = JSON.parse(savedQuestions)
+          setAllQuestions(questions)
+          if (savedIndex) {
+            setCurrentQuestionIndex(Number.parseInt(savedIndex))
+          }
+        } catch (error) {
+          console.error("Error loading saved questions:", error)
         }
-      } catch (error) {
-        console.error("Error loading saved questions:", error)
       }
     }
   }, [quizId])
 
   useEffect(() => {
-    if (allQuestions.length > 0) {
+    if (typeof window !== "undefined" && allQuestions.length > 0) {
       localStorage.setItem(`quiz_${quizId}_current_index`, currentQuestionIndex.toString())
     }
   }, [currentQuestionIndex, quizId, allQuestions.length])
@@ -224,12 +234,20 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
     } else if (isConnected) {
       setConnectionStatus("connected")
       if (!hasJoined && user) {
+        console.log("[v0] Auto-joining quiz for user:", user.username)
         sendMessage({
           action: "join_quiz",
           user_id: user.id,
           username: user.username,
         })
         setHasJoined(true)
+
+        setTimeout(() => {
+          sendMessage({
+            action: "load_all_questions",
+            user_id: user.id,
+          })
+        }, 500)
       }
     } else {
       setConnectionStatus("connecting")
@@ -237,285 +255,21 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   }, [isConnected, error, user, hasJoined, sendMessage])
 
   useEffect(() => {
-    if (quizSession?.mode === "free" && quizSession?.current_question) {
-      const newHistory = { ...questionHistory }
-      newHistory[currentQuestionIndex] = quizSession.current_question
-      setQuestionHistory(newHistory)
-      localStorage.setItem(`quiz_${quizId}_history`, JSON.stringify(newHistory))
-    }
-  }, [quizSession?.current_question, currentQuestionIndex, quizSession?.mode, quizId, questionHistory])
-
-  const handleAnswerSubmit = async (answerId: number) => {
-    if (hasAnswered || !quizSession?.current_question || !user) return
-
-    setIsSubmittingAnswer(true)
-    setSelectedAnswer(answerId)
-    setHasAnswered(true)
-
-    const responseTime = (Date.now() - questionStartTimeRef.current) / 1000
-
-    sendMessage({
-      action: "submit_answer",
-      user_id: user.id,
-      question_id: quizSession.current_question.id,
-      answer_id: answerId,
-      response_time: responseTime,
-    })
-  }
-
-  const handleNextQuestion = useCallback(() => {
-    if (quizSession?.mode === "timed") return // No manual navigation in timed mode
-
-    if (currentQuestionIndex < allQuestions.length - 1) {
-      const newIndex = currentQuestionIndex + 1
-      setCurrentQuestionIndex(newIndex)
-      setHasAnswered(false)
-      setSelectedAnswer(null)
-      setAnswerResult(null)
-      setShowingResults(false)
-
-      // Notify server about navigation
-      if (isConnected && user) {
-        sendMessage({
-          action: "user_navigate",
-          user_id: user.id,
-          question_index: newIndex,
+    if (user && participants.length > 0) {
+      const currentUser = participants.find((p) => p.id === user.id)
+      if (currentUser) {
+        setUserStatsFromParticipants({
+          correctAnswers: currentUser.correct_answers || 0,
+          wrongAnswers: currentUser.wrong_answers || 0,
+          totalAnswered: currentUser.total_answered || 0,
+          accuracy:
+            currentUser.total_answered > 0
+              ? Math.round((currentUser.correct_answers / currentUser.total_answered) * 100)
+              : 0,
         })
       }
     }
-  }, [currentQuestionIndex, allQuestions.length, quizSession?.mode, isConnected, user, sendMessage])
-
-  const handlePreviousQuestion = useCallback(() => {
-    if (quizSession?.mode === "timed") return // No manual navigation in timed mode
-
-    if (currentQuestionIndex > 0) {
-      const newIndex = currentQuestionIndex - 1
-      setCurrentQuestionIndex(newIndex)
-      setHasAnswered(false)
-      setSelectedAnswer(null)
-      setAnswerResult(null)
-      setShowingResults(false)
-
-      // Notify server about navigation
-      if (isConnected && user) {
-        sendMessage({
-          action: "user_navigate",
-          user_id: user.id,
-          question_index: newIndex,
-        })
-      }
-    }
-  }, [currentQuestionIndex, quizSession?.mode, isConnected, user, sendMessage])
-
-  const handleLeaveQuiz = useCallback(() => {
-    if (isConnected && user) {
-      sendMessage({
-        action: "leave_quiz",
-        user_id: user.id,
-      })
-    }
-    // Navigate back or to home page
-    window.history.back()
-  }, [isConnected, user, sendMessage])
-
-  const handleStartQuiz = useCallback(() => {
-    if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isStartingQuiz) {
-      return
-    }
-
-    if (startQuizTimeoutRef.current) {
-      clearTimeout(startQuizTimeoutRef.current)
-    }
-
-    setIsStartingQuiz(true)
-
-    startQuizTimeoutRef.current = setTimeout(() => {
-      if (isConnected && user && quizSession && user.id === quizSession.creator_id) {
-        sendMessage({
-          action: "start_quiz",
-          user_id: user.id,
-        })
-      }
-    }, 300)
-  }, [isConnected, user, quizSession, sendMessage, isStartingQuiz])
-
-  const handleEndQuiz = useCallback(() => {
-    if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isEndingQuiz) {
-      return
-    }
-
-    const confirmEnd = window.confirm("Are you sure you want to end this quiz for all participants?")
-    if (confirmEnd) {
-      setIsEndingQuiz(true)
-      sendMessage({
-        action: "end_quiz",
-        user_id: user.id,
-      })
-    }
-  }, [isConnected, user, quizSession, sendMessage, isEndingQuiz])
-
-  const handleNextQuestionManual = useCallback(() => {
-    if (isNavigating) return
-
-    setIsNavigating(true)
-
-    if (isConnected && user) {
-      sendMessage({
-        action: "next_question",
-        user_id: user.id,
-      })
-    }
-
-    setTimeout(() => {
-      setIsNavigating(false)
-    }, 300)
-  }, [isConnected, user, sendMessage, isNavigating])
-
-  const renderQuestionContent = (question: Question) => {
-    if (!question) {
-      return (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-white/60">No question available</div>
-        </div>
-      )
-    }
-
-    if (!question.options || question.options.length === 0) {
-      return (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-white/60">Loading question options...</div>
-        </div>
-      )
-    }
-
-    const isTimeExpired = quizSession?.mode === "timed" && timeLeft === 0
-    const isDisabled = hasAnswered || isTimeExpired || isQuizEnded || showingResults || isSubmittingAnswer
-
-    return (
-      <div className="grid gap-4">
-        {question.options.map((option, index) => {
-          const isSelected = selectedAnswer === option.id
-          const isCorrect = answerResult?.correctAnswerId === option.id
-          const isWrong = isSelected && answerResult && !answerResult.isCorrect
-
-          let buttonClass =
-            "p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20"
-
-          if (showingResults) {
-            if (isCorrect) {
-              buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
-            } else if (isWrong) {
-              buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
-            } else {
-              buttonClass += " bg-white/10 opacity-60"
-            }
-          } else if (isDisabled) {
-            buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
-          } else {
-            buttonClass += " bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer"
-          }
-
-          if (isSelected && !showingResults) {
-            buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
-          }
-
-          return (
-            <button
-              key={option.id}
-              onClick={() => !isDisabled && handleAnswerSubmit(option.id)}
-              disabled={isDisabled}
-              className={buttonClass}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                    showingResults
-                      ? isCorrect
-                        ? "bg-green-500"
-                        : isWrong
-                          ? "bg-red-500"
-                          : "bg-white/20"
-                      : isSelected
-                        ? "bg-blue-500"
-                        : "bg-white/20"
-                  }`}
-                >
-                  {showingResults ? (
-                    isCorrect ? (
-                      <Check className="w-4 h-4" />
-                    ) : isWrong ? (
-                      <X className="w-4 h-4" />
-                    ) : (
-                      String.fromCharCode(65 + index)
-                    )
-                  ) : (
-                    String.fromCharCode(65 + index)
-                  )}
-                </div>
-                <span className="text-white font-medium">{option.text}</span>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-    )
-  }
-
-  useEffect(() => {
-    if (quizSession?.mode === "timed" && showingResults && canMoveToNext) {
-      const timeToWait = quizSession.time_per_question * 1000 // Convert to milliseconds
-
-      const timer = setTimeout(
-        () => {
-          handleNextQuestion()
-        },
-        Math.min(timeToWait, 5000),
-      ) // Max 5 seconds wait
-
-      setAutoAdvanceTimer(timer)
-
-      return () => {
-        if (timer) clearTimeout(timer)
-      }
-    }
-  }, [showingResults, canMoveToNext, quizSession?.mode, quizSession?.time_per_question, handleNextQuestion])
-
-  useEffect(() => {
-    if (quizSession?.mode === "timed" && timeLeft === 0 && !hasAnswered && quizStarted && !isQuizEnded) {
-      console.log("[v0] Time expired, auto-advancing to next question")
-      setHasAnswered(true)
-
-      // Auto advance after 2 seconds
-      const timer = setTimeout(() => {
-        if (isConnected && user) {
-          sendMessage({
-            action: "next_question",
-            user_id: user.id,
-          })
-        }
-      }, 2000)
-
-      setAutoNextTimer(timer)
-    }
-
-    return () => {
-      if (autoNextTimer) {
-        clearTimeout(autoNextTimer)
-      }
-    }
-  }, [timeLeft, hasAnswered, quizStarted, quizSession?.mode, isQuizEnded, isConnected, user, sendMessage])
-
-  useEffect(() => {
-    if (quizSession?.mode === "free") {
-      // In free mode, users can always navigate
-      setCanGoBack(currentQuestionIndex > 0)
-      setCanGoNext(true) // Always allow next in free mode
-    } else if (quizSession?.mode === "timed") {
-      // In timed mode, no manual navigation
-      setCanGoBack(false)
-      setCanGoNext(false)
-    }
-  }, [currentQuestionIndex, quizSession?.mode])
+  }, [participants, user])
 
   useEffect(() => {
     if (lastMessage) {
@@ -525,8 +279,11 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
 
         switch (data.type) {
           case "all_questions_loaded":
+            console.log("[v0] All questions loaded:", data.questions.length)
             setAllQuestions(data.questions)
-            localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions))
+            if (typeof window !== "undefined") {
+              localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions))
+            }
             break
 
           case "quiz_started":
@@ -534,7 +291,9 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             setQuizSession(data.quiz_session)
             if (data.all_questions) {
               setAllQuestions(data.all_questions)
-              localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions))
+              if (typeof window !== "undefined") {
+                localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions))
+              }
             }
             break
 
@@ -567,49 +326,20 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             setIsEndingQuiz(false)
             break
 
-          case "new_question":
-            console.log("[v0] New question received:", data.question)
-            if (data.question && data.question.id !== quizSession?.current_question?.id) {
-              setQuizSession((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      current_question: data.question,
-                      current_question_index: data.question_index || prev.current_question_index + 1,
-                    }
-                  : null,
-              )
-              setHasAnswered(false)
-              setSelectedAnswer(null)
-              setAnswerResult(null)
-              setShowingResults(false)
-              setIsSubmittingAnswer(false)
-              setCanMoveToNext(false)
-              setQuestionLoadError(false)
-              questionStartTimeRef.current = Date.now()
-
-              setTimeout(() => {
-                questionContainerRef.current?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                })
-              }, 100)
-
-              if (quizSession?.mode === "timed") {
-                setTimeLeft(data.time_per_question || 15)
-              }
-            }
-            break
-
           case "answer_result":
             console.log("[v0] Answer result:", data)
-            if (quizSession?.current_question) {
+            if (currentQuestion) {
               setUserAnswerHistory((prev) => ({
                 ...prev,
-                [quizSession.current_question.id]: {
-                  answerId: selectedAnswer || "",
+                [currentQuestion.id]: {
+                  answerId: selectedAnswer?.toString() || "",
                   isCorrect: data.is_correct,
                 },
+              }))
+
+              setQuestionAnswerStatus((prev) => ({
+                ...prev,
+                [currentQuestionIndex]: data.is_correct ? "correct" : "incorrect",
               }))
             }
 
@@ -622,55 +352,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             setShowingResults(true)
             setIsSubmittingAnswer(false)
             setCanMoveToNext(data.has_next_question || false)
-
-            if (data.has_next_question) {
-              if (quizSession?.mode === "free") {
-                setTimeout(() => {
-                  setCanMoveToNext(true)
-                }, 1000)
-              }
-            } else if (!data.has_next_question) {
-              setTimeout(() => {
-                setIsQuizEnded(true)
-                setQuizStarted(false)
-                sendMessage({ action: "get_final_results" })
-              }, 3000)
-            }
-            break
-
-          case "stats_update":
-            console.log("[v0] Stats update:", data.stats)
-            setTotalStats({
-              totalUsers: data.stats.total_participants || 0,
-              totalAnswered: data.stats.total_attempts || 0,
-              totalCorrect: data.stats.correct_attempts || 0,
-              totalWrong: data.stats.wrong_attempts || 0,
-            })
-            break
-
-          case "final_results":
-            console.log("[v0] Final results:", data.results)
-            setFinalResults(data.results)
-            setShowResultsModal(true)
-            break
-
-          case "user_results":
-            console.log("[v0] User results:", data.results)
-            setUserResults(data.results)
-            break
-
-          case "quiz_restarted":
-            console.log("[v0] Quiz restarted")
-            // Reset all states for new quiz
-            setIsQuizEnded(false)
-            setQuizStarted(false)
-            setHasAnswered(false)
-            setSelectedAnswer(null)
-            setAnswerResult(null)
-            setShowingResults(false)
-            setFinalResults([])
-            setUserResults(null)
-            setShowResultsModal(false)
             break
 
           case "participants_update":
@@ -690,16 +371,16 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             }
             break
 
+          case "final_results":
+            console.log("[v0] Final results:", data.results)
+            setFinalResults(data.results)
+            setShowResultsModal(true)
+            break
+
           case "time_update":
             if (data.time_left !== undefined && quizSession?.mode === "timed") {
               setTimeLeft(data.time_left)
             }
-            break
-
-          case "error":
-            console.log("[v0] Backend error:", data.message)
-            setShowRefreshButton(true)
-            setQuestionLoadError(true)
             break
 
           default:
@@ -712,191 +393,49 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
         setQuestionLoadError(true)
       }
     }
-  }, [lastMessage, quizId, quizSession?.mode, quizSession, selectedAnswer])
+  }, [
+    lastMessage,
+    quizId,
+    quizSession?.mode,
+    quizSession,
+    selectedAnswer,
+    currentQuestion,
+    currentQuestionIndex,
+    user,
+    sendMessage,
+  ])
 
-  const handleRefresh = useCallback(() => {
-    setShowRefreshButton(false)
-    setQuestionLoadError(false)
-    if (user && hasJoined) {
-      sendMessage({
-        action: "join_quiz",
-        user_id: user.id,
-        username: user.username,
-      })
-    }
-  }, [user, hasJoined, sendMessage])
+  const handleKickParticipant = useCallback((participantId: string) => {
+    // Placeholder for kicking participant logic
+    console.log(`Kicking participant with ID: ${participantId}`)
+  }, [])
 
-  useEffect(() => {
-    if (user && participants.length > 0) {
-      const userParticipant = participants.find((p) => p.id === user.id)
-      if (userParticipant) {
-        const total = userParticipant.correct_answers + userParticipant.wrong_answers
-        const accuracy = total > 0 ? Math.round((userParticipant.correct_answers / total) * 100) : 0
-
-        setUserStatsFromParticipants({
-          correctAnswers: userParticipant.correct_answers,
-          wrongAnswers: userParticipant.wrong_answers,
-          totalAnswered: total,
-          accuracy,
-        })
-      }
-    }
-  }, [user, participants])
-
-  const userStats = {
-    totalAnswered: Object.keys(userAnswerHistory).length,
-    correctAnswers: Object.values(userAnswerHistory).filter((answer) => answer.isCorrect).length,
-    wrongAnswers: Object.values(userAnswerHistory).filter((answer) => !answer.isCorrect).length,
-    accuracy:
-      Object.keys(userAnswerHistory).length > 0
-        ? Math.round(
-            (Object.values(userAnswerHistory).filter((answer) => answer.isCorrect).length /
-              Object.keys(userAnswerHistory).length) *
-              100,
-          )
-        : 0,
-  }
-
-  const handleShare = useCallback(() => {
-    const shareData = {
-      title: `${quizSession?.title} - Live Quiz`,
-      text: `Join me in this live quiz: ${quizSession?.title}`,
-      url: window.location.href,
-    }
-
-    if (navigator.share) {
-      navigator.share(shareData)
-    } else {
-      navigator.clipboard.writeText(window.location.href)
-      alert("Quiz link copied to clipboard!")
-    }
-  }, [quizSession?.title])
-
-  useEffect(() => {
-    const stats = participants.reduce(
-      (acc, participant) => ({
-        totalUsers: acc.totalUsers + 1,
-        totalAnswered: acc.totalAnswered + participant.total_answered,
-        totalCorrect: acc.totalCorrect + participant.correct_answers,
-        totalWrong: acc.totalWrong + participant.wrong_answers,
-      }),
-      { totalUsers: 0, totalAnswered: 0, totalCorrect: 0, totalWrong: 0 },
-    )
-    setTotalStats(stats)
-  }, [participants])
-
-  useEffect(() => {
-    if (quizSession?.mode === "timed" && timeLeft > 0 && !hasAnswered && quizStarted && !isQuizEnded) {
-      const timer = setTimeout(() => {
-        const newTimeLeft = timeLeft - 1
-        setTimeLeft(newTimeLeft)
-
-        if (newTimeLeft === 0 && !hasAnswered) {
-          console.log("[v0] Time expired, auto-submitting")
-          setHasAnswered(true)
-        }
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [timeLeft, hasAnswered, quizStarted, quizSession?.mode, isQuizEnded])
-
-  useEffect(() => {
-    if (!quizEndTime) return
-
-    const updateTimeUntilEnd = () => {
-      const now = new Date()
-      const timeDiff = quizEndTime.getTime() - now.getTime()
-
-      if (timeDiff <= 0) {
-        setTimeUntilEnd("Quiz Ended")
-        setIsQuizEnded(true)
-        return
-      }
-
-      const hours = Math.floor(timeDiff / (1000 * 60 * 60))
-      const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
-      const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000)
-
-      if (hours > 0) {
-        setTimeUntilEnd(`${hours}h ${minutes}m ${seconds}s`)
-      } else if (minutes > 0) {
-        setTimeUntilEnd(`${minutes}m ${seconds}s`)
-      } else {
-        setTimeUntilEnd(`${seconds}s`)
-      }
-    }
-
-    updateTimeUntilEnd()
-    const interval = setInterval(updateTimeUntilEnd, 1000)
-    return () => clearInterval(interval)
-  }, [quizEndTime])
-
-  const getUserResults = () => {
-    if (!user) return
-
+  const handleStartQuiz = useCallback(() => {
+    setIsStartingQuiz(true)
     sendMessage({
-      action: "get_user_results",
-      user_id: user.id,
+      action: "start_quiz",
+      quiz_id: quizId,
     })
-  }
+    setTimeout(() => {
+      setIsStartingQuiz(false)
+      setQuizStarted(true)
+    }, 2000) // Simulate quiz start delay
+  }, [quizId, sendMessage])
 
-  useEffect(() => {
-    if (quizSession?.mode === "free") {
-      const savedHistory = localStorage.getItem(`quiz_${quizId}_history`)
-      if (savedHistory) {
-        try {
-          const parsed = JSON.parse(savedHistory)
-          setQuestionHistory(parsed)
-        } catch (error) {
-          console.error("Failed to parse question history:", error)
-        }
-      }
+  const handleEndQuiz = useCallback(() => {
+    if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isEndingQuiz) {
+      return
     }
-  }, [quizId, quizSession?.mode])
 
-  const handleCloseParticipantsModal = useCallback(() => {
-    setShowParticipantsModal(false)
-  }, [])
-
-  const handleCloseResultsPanel = useCallback(() => {
-    setIsResultsPanelCollapsed(true)
-  }, [])
-
-  const handleExitQuiz = useCallback(() => {
-    if (confirm("Are you sure you want to exit the quiz?")) {
-      window.location.href = "/dashboard" // or wherever users should go
-    }
-  }, [])
-
-  const handleShareQuiz = useCallback(() => {
-    const shareUrl = `${window.location.origin}/quiz/${quizId}`
-    if (navigator.share) {
-      navigator.share({
-        title: "Join this quiz!",
-        url: shareUrl,
-      })
-    } else {
-      navigator.clipboard.writeText(shareUrl)
-      alert("Quiz link copied to clipboard!")
-    }
-  }, [quizId])
-
-  const handleSubmitAnswer = (answerId: number) => {
-    handleAnswerSubmit(answerId)
-  }
-
-  const handleKickParticipant = useCallback(
-    (participantId: number) => {
-      if (!isCreator || !isConnected) return
-
+    const confirmEnd = window.confirm("Are you sure you want to end this quiz for all participants?")
+    if (confirmEnd) {
+      setIsEndingQuiz(true)
       sendMessage({
-        action: "kick_participant",
-        user_id: user?.id,
-        participant_id: participantId,
+        action: "end_quiz",
+        user_id: user.id,
       })
-    },
-    [isCreator, isConnected, user?.id, sendMessage],
-  )
+    }
+  }, [isConnected, user, quizSession, sendMessage, isEndingQuiz])
 
   const handleRestartQuiz = useCallback(() => {
     if (!isCreator || !isConnected) return
@@ -906,14 +445,103 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
       user_id: user?.id,
     })
 
-    // Clear localStorage
-    localStorage.removeItem(`quiz_${quizId}_questions`)
-    localStorage.removeItem(`quiz_${quizId}_current_index`)
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(`quiz_${quizId}_questions`)
+      localStorage.removeItem(`quiz_${quizId}_current_index`)
+    }
     setCurrentQuestionIndex(0)
     setAllQuestions([])
+    setIsQuizEnded(false)
+    setQuizStarted(false)
   }, [isCreator, isConnected, user?.id, sendMessage, quizId])
 
-  const currentQuestion = allQuestions[currentQuestionIndex] || null
+  const handleAnswerSubmit = async (answerId: number) => {
+    if (hasAnswered || !currentQuestion || !user) return
+
+    setIsSubmittingAnswer(true)
+    setSelectedAnswer(answerId)
+    setHasAnswered(true)
+
+    const responseTime = (Date.now() - questionStartTimeRef.current) / 1000
+
+    sendMessage({
+      action: "submit_answer",
+      user_id: user.id,
+      question_id: currentQuestion.id,
+      answer_id: answerId,
+      response_time: responseTime,
+    })
+  }
+
+  const handleNavigateQuestion = useCallback(
+    (direction: "next" | "prev") => {
+      if (quizSession?.mode !== "free") return
+
+      const newIndex =
+        direction === "next"
+          ? Math.min(currentQuestionIndex + 1, allQuestions.length - 1)
+          : Math.max(currentQuestionIndex - 1, 0)
+
+      if (newIndex !== currentQuestionIndex) {
+        setCurrentQuestionIndex(newIndex)
+        setSelectedAnswer(null)
+        setHasAnswered(false)
+        setShowingResults(false)
+        setAnswerResult(null)
+        questionStartTimeRef.current = Date.now()
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`quiz_${quizId}_current_index`, newIndex.toString())
+        }
+
+        if (user) {
+          sendMessage({
+            action: "user_navigate",
+            user_id: user.id,
+            question_index: newIndex,
+          })
+        }
+      }
+    },
+    [currentQuestionIndex, allQuestions.length, quizSession?.mode, quizId, user, sendMessage],
+  )
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `Quiz Results - ${quizSession?.title || "Live Quiz"}`,
+      text: `I scored ${userStatsFromParticipants.correctAnswers} correct answers out of ${userStatsFromParticipants.totalAnswered} questions! (${userStatsFromParticipants.accuracy}% accuracy)`,
+      url: window.location.href,
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch (error) {
+        console.log("[v0] Share cancelled or failed:", error)
+      }
+    } else {
+      // Fallback: copy to clipboard
+      const text = `${shareData.text}\n${shareData.url}`
+      await navigator.clipboard.writeText(text)
+      alert("Results copied to clipboard!")
+    }
+  }
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
+  if (userError || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+        <div className="text-white text-xl">Please log in to join the quiz</div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden">
@@ -950,16 +578,44 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
         }
         
         .liquid-glass-sidebar {
-          background: rgba(0, 0, 0, 0.8);
+          background: rgba(0, 0, 0, 0.85);
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
           border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
+
+        .question-indicator {
+          width: 4px;
+          height: 24px;
+          border-radius: 2px;
+          transition: all 0.3s ease;
+        }
+        
+        .question-indicator.correct {
+          background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .question-indicator.incorrect {
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        .question-indicator.timeout {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .question-indicator.unanswered {
+          background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .question-indicator.current {
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+        }
       `}</style>
 
+      {/* Header */}
       <div className="fixed top-0 left-0 right-0 z-40 liquid-glass border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
-          {/* Left: Participants and stats */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowSidebar(true)}
@@ -988,10 +644,9 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             </div>
           </div>
 
-          {/* Center: Question progress */}
           <div className="flex items-center gap-2 text-white">
             <span className="text-sm font-medium">
-              {currentQuestionIndex + 1} / {allQuestions.length}
+              {currentQuestionIndex + 1} / {allQuestions.length || 1}
             </span>
             {quizSession?.mode === "timed" && (
               <div className="flex items-center gap-1 px-2 py-1 bg-red-500/20 rounded-full">
@@ -1001,7 +656,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             )}
           </div>
 
-          {/* Right: Admin controls and exit */}
           <div className="flex items-center gap-2">
             {isCreator && (
               <button
@@ -1025,104 +679,269 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
       </div>
 
       <div
-        className={`fixed top-0 left-0 h-full w-80 z-50 liquid-glass-sidebar transform transition-transform duration-300 ${
-          showSidebar ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 lg:w-64`}
+        className={`fixed top-0 left-0 h-full z-50 liquid-glass-sidebar transform transition-all duration-300 ${
+          showSidebar ? (sidebarCollapsed ? "translate-x-0 w-20" : "translate-x-0 w-80") : "-translate-x-full w-80"
+        } lg:translate-x-0 ${sidebarCollapsed ? "lg:w-20" : "lg:w-80"}`}
       >
-        <div className="p-4 border-b border-white/10">
-          <div className="flex items-center justify-between">
-            <h3 className="text-white font-bold text-lg">Quiz Stats</h3>
-            <button onClick={() => setShowSidebar(false)} className="text-white/60 hover:text-white lg:hidden">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          {!sidebarCollapsed && <h3 className="text-white font-bold text-lg">Live Quiz</h3>}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            </button>
+            <button
+              onClick={() => setShowSidebar(false)}
+              className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors lg:hidden"
+            >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* User Stats */}
-          <div className="liquid-glass rounded-lg p-4">
-            <h4 className="text-white font-semibold mb-3">Your Performance</h4>
-            <div className="grid grid-cols-2 gap-3">
+        <div className={`${sidebarCollapsed ? "p-2" : "p-4"} space-y-4 overflow-y-auto h-full pb-20`}>
+          <div className="liquid-glass rounded-xl p-4">
+            {!sidebarCollapsed && (
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-white font-semibold">Your Stats</h4>
+                <button
+                  onClick={async () => {
+                    const shareData = {
+                      title: `Quiz Results - ${quizSession?.title || "Live Quiz"}`,
+                      text: `I scored ${userStatsFromParticipants.correctAnswers} correct answers out of ${userStatsFromParticipants.totalAnswered} questions! (${userStatsFromParticipants.accuracy}% accuracy)`,
+                      url: window.location.href,
+                    }
+
+                    if (navigator.share) {
+                      try {
+                        await navigator.share(shareData)
+                      } catch (error) {
+                        console.log("[v0] Share cancelled or failed:", error)
+                      }
+                    } else {
+                      const text = `${shareData.text}\n${shareData.url}`
+                      await navigator.clipboard.writeText(text)
+                      alert("Results copied to clipboard!")
+                    }
+                  }}
+                  className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                  title="Share Results"
+                >
+                  <Share2 size={16} />
+                </button>
+              </div>
+            )}
+
+            <div className={`grid ${sidebarCollapsed ? "grid-cols-1 gap-2" : "grid-cols-2 gap-3"}`}>
               <div className="text-center">
-                <div className="text-xl font-bold text-green-400">{userStats.correctAnswers}</div>
-                <div className="text-xs text-white/70">Correct</div>
+                <div className="text-2xl font-bold text-green-400">{userStatsFromParticipants.correctAnswers}</div>
+                {!sidebarCollapsed && <div className="text-xs text-white/70">Correct</div>}
               </div>
               <div className="text-center">
-                <div className="text-xl font-bold text-red-400">{userStats.wrongAnswers}</div>
-                <div className="text-xs text-white/70">Wrong</div>
+                <div className="text-2xl font-bold text-red-400">{userStatsFromParticipants.wrongAnswers}</div>
+                {!sidebarCollapsed && <div className="text-xs text-white/70">Wrong</div>}
               </div>
-              <div className="text-center col-span-2">
-                <div className="text-xl font-bold text-blue-400">{userStats.accuracy}%</div>
-                <div className="text-xs text-white/70">Accuracy</div>
-              </div>
+              {!sidebarCollapsed && (
+                <>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-blue-400">{userStatsFromParticipants.accuracy}%</div>
+                    <div className="text-xs text-white/70">Accuracy</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-purple-400">{userStatsFromParticipants.totalAnswered}</div>
+                    <div className="text-xs text-white/70">Answered</div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Participants List */}
-          <div className="liquid-glass rounded-lg p-4">
-            <h4 className="text-white font-semibold mb-3">Participants ({participants.length})</h4>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+          {!sidebarCollapsed && allQuestions.length > 0 && (
+            <div className="liquid-glass rounded-xl p-4">
+              <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <Target size={16} />
+                Progress ({currentQuestionIndex + 1}/{allQuestions.length})
+              </h4>
+
+              <div className="flex flex-wrap gap-1 mb-3">
+                {allQuestions.map((_, index) => {
+                  const status = questionAnswerStatus[index] || "unanswered"
+                  const isCurrent = index === currentQuestionIndex
+
+                  return (
+                    <div
+                      key={index}
+                      className={`question-indicator ${isCurrent ? "current" : status}`}
+                      title={`Question ${index + 1}: ${status}`}
+                    />
+                  )
+                })}
+              </div>
+
+              <div className="text-xs text-white/60 space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span>Correct ({Object.values(questionAnswerStatus).filter((s) => s === "correct").length})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span>Incorrect ({Object.values(questionAnswerStatus).filter((s) => s === "incorrect").length})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span>Timeout ({Object.values(questionAnswerStatus).filter((s) => s === "timeout").length})</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="liquid-glass rounded-xl p-4">
+            {!sidebarCollapsed && (
+              <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <Users size={16} />
+                Live ({participants.length})
+              </h4>
+            )}
+
+            <div className={`space-y-2 ${sidebarCollapsed ? "max-h-40" : "max-h-60"} overflow-y-auto`}>
               {participants
                 .sort((a, b) => b.correct_answers - a.correct_answers)
                 .map((participant, index) => (
-                  <div key={participant.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white/60 text-xs">#{index + 1}</span>
-                      <span className="text-white text-sm font-medium">{participant.username}</span>
-                      {participant.id === quizSession?.creator_id && <Crown size={12} className="text-yellow-400" />}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-green-400">{participant.correct_answers}</span>
-                      <span className="text-red-400">{participant.wrong_answers}</span>
-                      {isCreator && participant.id !== user?.id && (
-                        <button
-                          onClick={() => handleKickParticipant(participant.id)}
-                          className="text-red-400 hover:text-red-300 ml-2"
-                          title="Kick participant"
-                        >
-                          <UserX size={12} />
-                        </button>
-                      )}
-                    </div>
+                  <div
+                    key={participant.id}
+                    className={`flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between"} p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors ${
+                      participant.id === user?.id ? "ring-1 ring-blue-400/50" : ""
+                    }`}
+                  >
+                    {sidebarCollapsed ? (
+                      <div className="flex flex-col items-center">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold relative">
+                          {participant.username.charAt(0).toUpperCase()}
+                          {index < 3 && (
+                            <div className="absolute -top-1 -right-1 text-xs">
+                              {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-green-400 mt-1 font-bold">{participant.correct_answers}</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                              {participant.username.charAt(0).toUpperCase()}
+                            </div>
+                            {index < 3 && (
+                              <div className="absolute -top-1 -right-1 text-sm">
+                                {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white text-sm font-medium">{participant.username}</span>
+                              {participant.id === quizSession?.creator_id && (
+                                <Crown size={12} className="text-yellow-400" />
+                              )}
+                              {participant.id === user?.id && (
+                                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                                  You
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-white/60">
+                              #{index + 1} • {participant.total_answered || 0} answered
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-green-400 font-bold">{participant.correct_answers}</span>
+                              <span className="text-red-400">{participant.wrong_answers}</span>
+                            </div>
+                            <div className="text-xs text-white/60">
+                              {participant.total_answered > 0
+                                ? Math.round((participant.correct_answers / participant.total_answered) * 100)
+                                : 0}
+                              % acc
+                            </div>
+                          </div>
+                          {isCreator && participant.id !== user?.id && (
+                            <button
+                              onClick={() => {
+                                if (isConnected) {
+                                  sendMessage({
+                                    action: "kick_participant",
+                                    user_id: user?.id,
+                                    participant_id: participant.id,
+                                  })
+                                }
+                              }}
+                              className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20 transition-colors"
+                              title="Remove participant"
+                            >
+                              <UserX size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
             </div>
           </div>
 
-          {/* Share Section */}
-          <div className="liquid-glass rounded-lg p-4">
-            <h4 className="text-white font-semibold mb-3">Share Quiz</h4>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={window.location.href}
-                readOnly
-                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-xs"
-              />
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href)
-                  // Show toast notification
-                }}
-                className="liquid-glass-button px-3 py-2 rounded-lg text-white text-xs"
-              >
-                Copy
-              </button>
+          {quizSession?.mode === "free" && allQuestions.length > 0 && !sidebarCollapsed && (
+            <div className="liquid-glass rounded-xl p-4">
+              <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <Zap size={16} />
+                Navigation
+              </h4>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleNavigateQuestion("prev")}
+                  disabled={currentQuestionIndex === 0}
+                  className="flex-1 liquid-glass-button rounded-lg p-2 text-white hover:bg-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                >
+                  <ChevronLeft size={16} />
+                  Prev
+                </button>
+                <button
+                  onClick={() => handleNavigateQuestion("next")}
+                  disabled={currentQuestionIndex >= allQuestions.length - 1}
+                  className="flex-1 liquid-glass-button rounded-lg p-2 text-white hover:bg-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Exit Button */}
           <button
             onClick={() => window.history.back()}
-            className="w-full liquid-glass-button rounded-lg p-3 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+            className={`w-full liquid-glass-button rounded-xl p-3 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 ${
+              sidebarCollapsed ? "px-2" : ""
+            }`}
+            title="Exit Quiz"
           >
             <LogOut size={16} />
-            Exit Quiz
+            {!sidebarCollapsed && "Exit Quiz"}
           </button>
         </div>
       </div>
 
-      <div className={`transition-all duration-300 ${showSidebar ? "lg:ml-64" : "lg:ml-64"}`}>
+      {/* Main Content */}
+      <div
+        className={`transition-all duration-300 ${showSidebar ? (sidebarCollapsed ? "lg:ml-20" : "lg:ml-80") : sidebarCollapsed ? "lg:ml-20" : "lg:ml-80"}`}
+      >
         <div className="px-4 pt-20 pb-8 min-h-screen">
           <div className="max-w-4xl mx-auto">
             {!quizStarted && !isQuizEnded ? (
@@ -1131,12 +950,21 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
                 <div className="text-white text-2xl font-bold mb-4">
                   {connectionStatus === "connected" ? "Quiz Ready" : "Connecting..."}
                 </div>
-                <div className="text-white/70 mb-8">
+                <div className="text-white/70 mb-4">
                   {participants.length} participant{participants.length !== 1 ? "s" : ""} joined
                 </div>
+                {allQuestions.length > 0 && (
+                  <div className="text-white/60 mb-8">{allQuestions.length} questions loaded</div>
+                )}
                 {isCreator && (
                   <button
-                    onClick={handleStartQuiz}
+                    onClick={() => {
+                      setIsStartingQuiz(true)
+                      sendMessage({
+                        action: "start_quiz",
+                        user_id: user?.id,
+                      })
+                    }}
                     disabled={isStartingQuiz || connectionStatus !== "connected"}
                     className="liquid-glass-button rounded-full px-8 py-4 text-white font-bold hover:bg-green-500/20 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto"
                   >
@@ -1157,8 +985,34 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             ) : isQuizEnded ? (
               // Quiz ended
               <div className="liquid-glass rounded-2xl p-8 text-center">
-                <div className="text-white text-2xl font-bold mb-4">Quiz Completed!</div>
-                <div className="text-white/70 mb-8">Thank you for participating!</div>
+                <div className="text-white text-3xl font-bold mb-4">🏆 Quiz Completed!</div>
+                <div className="text-white/70 mb-6">Thank you for participating!</div>
+
+                <div className="liquid-glass rounded-xl p-6 mb-6">
+                  <h3 className="text-white font-bold text-xl mb-4">Your Final Score</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-400">
+                        {userStatsFromParticipants.correctAnswers}
+                      </div>
+                      <div className="text-sm text-white/70">Correct</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-400">{userStatsFromParticipants.wrongAnswers}</div>
+                      <div className="text-sm text-white/70">Wrong</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-400">{userStatsFromParticipants.accuracy}%</div>
+                      <div className="text-sm text-white/70">Accuracy</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-400">
+                        {userStatsFromParticipants.totalAnswered}
+                      </div>
+                      <div className="text-sm text-white/70">Total</div>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="flex flex-wrap gap-4 justify-center">
                   <button
@@ -1166,25 +1020,59 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
                     className="liquid-glass-button px-6 py-3 rounded-xl text-white hover:bg-blue-500/20 transition-colors flex items-center gap-2"
                   >
                     <Trophy size={16} />
-                    View Results
+                    View Leaderboard
                   </button>
 
                   {isCreator && (
                     <button
-                      onClick={handleRestartQuiz}
+                      onClick={() => {
+                        if (isConnected) {
+                          sendMessage({
+                            action: "restart_quiz",
+                            user_id: user?.id,
+                          })
+
+                          if (typeof window !== "undefined") {
+                            localStorage.removeItem(`quiz_${quizId}_questions`)
+                            localStorage.removeItem(`quiz_${quizId}_current_index`)
+                          }
+                          setCurrentQuestionIndex(0)
+                          setAllQuestions([])
+                          setIsQuizEnded(false)
+                          setQuizStarted(false)
+                        }
+                      }}
                       className="liquid-glass-button px-6 py-3 rounded-xl text-white hover:bg-green-500/20 transition-colors flex items-center gap-2"
                     >
                       <RotateCcw size={16} />
                       Restart Quiz
                     </button>
                   )}
+
+                  <button
+                    onClick={() => window.history.back()}
+                    className="liquid-glass-button px-6 py-3 rounded-xl text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <LogOut size={16} />
+                    Exit
+                  </button>
                 </div>
               </div>
             ) : currentQuestion ? (
               // Active quiz
               <div className="liquid-glass rounded-2xl p-6 md:p-8">
                 <div className="mb-6">
-                  <h2 className="text-white text-xl md:text-2xl font-bold mb-4 text-balance">{currentQuestion.text}</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-white text-xl md:text-2xl font-bold text-balance flex-1">
+                      {currentQuestion.text}
+                    </h2>
+                    {quizSession?.mode === "timed" && (
+                      <div className="flex items-center gap-2 ml-4">
+                        <Timer size={16} className="text-orange-400" />
+                        <span className="text-orange-400 font-mono text-sm">{timeLeft}s</span>
+                      </div>
+                    )}
+                  </div>
 
                   {currentQuestion.image && (
                     <div className="mb-6">
@@ -1265,24 +1153,23 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
                   })}
                 </div>
 
-                {/* Navigation for free mode */}
                 {quizSession?.mode === "free" && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex justify-between items-center mt-6">
                     <button
-                      onClick={handlePreviousQuestion}
+                      onClick={() => handleNavigateQuestion("prev")}
                       disabled={currentQuestionIndex === 0}
-                      className="liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="liquid-glass-button rounded-lg px-4 py-2 text-white hover:bg-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       <ChevronLeft size={16} />
                       Previous
                     </button>
 
-                    <div className="text-white/60 text-sm">Free Mode - Navigate at your own pace</div>
+                    <span className="text-white/60 text-sm">Free Mode - Navigate at your own pace</span>
 
                     <button
-                      onClick={handleNextQuestion}
+                      onClick={() => handleNavigateQuestion("next")}
                       disabled={currentQuestionIndex >= allQuestions.length - 1}
-                      className="liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="liquid-glass-button rounded-lg px-4 py-2 text-white hover:bg-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       Next
                       <ChevronRight size={16} />
@@ -1293,14 +1180,22 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             ) : (
               // Loading question
               <div className="liquid-glass rounded-2xl p-8 text-center">
-                <div className="text-white/60 mb-4">Loading question...</div>
+                <div className="text-white/60 mb-4">
+                  {allQuestions.length === 0 ? "Loading questions..." : "Preparing quiz..."}
+                </div>
                 <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+                {connectionStatus !== "connected" && (
+                  <div className="text-red-400 text-sm mt-4">
+                    Connection issue. Please check your internet connection.
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* Admin Panel Modal */}
       {showAdminPanel && isCreator && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="liquid-glass rounded-2xl p-6 max-w-md w-full">
@@ -1316,7 +1211,20 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
 
             <div className="space-y-4">
               <button
-                onClick={handleEndQuiz}
+                onClick={() => {
+                  if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isEndingQuiz) {
+                    return
+                  }
+
+                  const confirmEnd = window.confirm("Are you sure you want to end this quiz for all participants?")
+                  if (confirmEnd) {
+                    setIsEndingQuiz(true)
+                    sendMessage({
+                      action: "end_quiz",
+                      user_id: user.id,
+                    })
+                  }
+                }}
                 className="w-full liquid-glass-button rounded-lg p-3 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
               >
                 <Square size={16} />
@@ -1324,7 +1232,23 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
               </button>
 
               <button
-                onClick={handleRestartQuiz}
+                onClick={() => {
+                  if (isConnected) {
+                    sendMessage({
+                      action: "restart_quiz",
+                      user_id: user?.id,
+                    })
+
+                    if (typeof window !== "undefined") {
+                      localStorage.removeItem(`quiz_${quizId}_questions`)
+                      localStorage.removeItem(`quiz_${quizId}_current_index`)
+                    }
+                    setCurrentQuestionIndex(0)
+                    setAllQuestions([])
+                    setIsQuizEnded(false)
+                    setQuizStarted(false)
+                  }
+                }}
                 className="w-full liquid-glass-button rounded-lg p-3 text-green-400 hover:bg-green-500/20 transition-colors flex items-center justify-center gap-2"
               >
                 <RotateCcw size={16} />
@@ -1341,11 +1265,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Overlay for mobile sidebar */}
-      {showSidebar && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setShowSidebar(false)} />
       )}
 
       {/* Results Modal */}
@@ -1397,7 +1316,24 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
                 </button>
                 {isCreator && (
                   <button
-                    onClick={handleRestartQuiz}
+                    onClick={() => {
+                      if (isConnected) {
+                        sendMessage({
+                          action: "restart_quiz",
+                          user_id: user?.id,
+                        })
+
+                        if (typeof window !== "undefined") {
+                          localStorage.removeItem(`quiz_${quizId}_questions`)
+                          localStorage.removeItem(`quiz_${quizId}_current_index`)
+                        }
+                        setCurrentQuestionIndex(0)
+                        setAllQuestions([])
+                        setIsQuizEnded(false)
+                        setQuizStarted(false)
+                        setShowResultsModal(false)
+                      }
+                    }}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg transition-colors"
                   >
                     🔄 Restart Quiz
@@ -1409,41 +1345,9 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
         </div>
       )}
 
-      {showParticipantsModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="liquid-glass rounded-xl p-4 md:p-6 max-w-md w-full max-h-96 overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-white font-bold text-base md:text-lg">Participants ({participants.length})</h3>
-              <button
-                onClick={handleCloseParticipantsModal}
-                className="text-white/60 hover:text-white transition-colors p-1 hover:bg-white/10 rounded"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {participants.map((participant) => (
-                <div key={participant.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={participant.avatar || "/placeholder.svg?height=32&width=32&query=user avatar"}
-                      alt={participant.username}
-                      className="w-8 h-8 rounded-full"
-                    />
-                    <div>
-                      <div className="text-white font-medium text-sm">{participant.username}</div>
-                      <div className="text-white/60 text-xs">
-                        {participant.correct_answers}✓ {participant.wrong_answers}✗
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`w-2 h-2 rounded-full ${participant.is_online ? "bg-green-500" : "bg-gray-500"}`} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* Overlay for mobile sidebar */}
+      {showSidebar && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setShowSidebar(false)} />
       )}
     </div>
   )
