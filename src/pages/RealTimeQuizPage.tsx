@@ -82,7 +82,7 @@ const backgroundImages = [
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1920&h=1080&fit=crop&crop=center",
 ]
 
-export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
+export default function RealTimeQuizPage({ quiz_id }: { quiz_id: number }) {
   const params = useParams<{ quiz_id: number }>()
   const quizId = params?.quiz_id || quiz_id
 
