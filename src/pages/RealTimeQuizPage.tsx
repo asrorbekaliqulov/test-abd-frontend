@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useParams } from "react-router-dom"
+import { useParams } from "next/navigation"
 import { useWebSocket } from "../hooks/useWebSocket"
 import { authAPI } from "../utils/api"
 import {
@@ -12,15 +12,15 @@ import {
   ChevronRight,
   Clock,
   ChevronLeft,
-  AlertCircle,
-  RefreshCw,
-  Share2,
   Trophy,
-  BarChart3,
+  LogOut,
+  Crown,
+  UserX,
+  RotateCcw,
 } from "lucide-react"
 
 interface QuizSession {
-  id: string
+  id: number
   title: string
   description: string
   mode: "timed" | "free"
@@ -38,7 +38,7 @@ interface QuizSession {
 }
 
 interface Question {
-  id: string
+  id: number
   text: string
   image?: string
   options: Answer[]
@@ -46,12 +46,12 @@ interface Question {
 }
 
 interface Answer {
-  id: string
+  id: number
   text: string
 }
 
 interface Participant {
-  id: string
+  id: number
   username: string
   answered: boolean
   correct_answers: number
@@ -70,12 +70,14 @@ interface UserData {
   last_name?: string
 }
 
+
+
 const backgroundImages = [
-  "/abstract-gradient-blue-purple.png",
-  "/geometric-teal-orange.png",
-  "/modern-gradient-pink-blue.png",
-  "/abstract-waves-purple-green.png",
-  "/digital-pattern-blue-cyan.png",
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1920&h=1080&fit=crop&crop=center",
+  "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=1920&h=1080&fit=crop&crop=center",
+  "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1920&h=1080&fit=crop&crop=center",
+  "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1920&h=1080&fit=crop&crop=center",
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1920&h=1080&fit=crop&crop=center",
 ]
 
 export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
@@ -88,7 +90,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
 
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(15)
   const [hasAnswered, setHasAnswered] = useState(false)
   const [isQuizEnded, setIsQuizEnded] = useState(false)
@@ -99,7 +101,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
 
   const [answerResult, setAnswerResult] = useState<{
     isCorrect: boolean
-    correctAnswerId: string
+    correctAnswerId: number
     explanation?: string
     responseTime?: number
   } | null>(null)
@@ -130,10 +132,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   const [userResults, setUserResults] = useState<any>(null)
   const [showResultsModal, setShowResultsModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
-  const [quizTimeLeft, setQuizTimeLeft] = useState<number>(0)
 
-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
-  const [showAnsweredWarning, setShowAnsweredWarning] = useState(false)
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoNext, setCanGoNext] = useState(false)
   const [isResultsPanelCollapsed, setIsResultsPanelCollapsed] = useState(false)
@@ -158,9 +157,16 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   const [userAnswerHistory, setUserAnswerHistory] = useState<{
     [questionId: string]: { answerId: string; isCorrect: boolean }
   }>({})
-  const [showStatsModal, setShowStatsModal] = useState(false)
-  const [showShareModal, setShowShareModal] = useState(false)
   const [questionLoadError, setQuestionLoadError] = useState(false)
+
+  const [allQuestions, setAllQuestions] = useState<Question[]>([])
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [userStatsFromParticipants, setUserStatsFromParticipants] = useState({
+    correctAnswers: 0,
+    wrongAnswers: 0,
+    totalAnswered: 0,
+    accuracy: 0,
+  })
 
   useEffect(() => {
     if (quizSession?.current_question) {
@@ -169,6 +175,29 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
       localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(savedQuestions))
     }
   }, [quizSession?.current_question, quizId])
+
+  useEffect(() => {
+    const savedQuestions = localStorage.getItem(`quiz_${quizId}_questions`)
+    const savedIndex = localStorage.getItem(`quiz_${quizId}_current_index`)
+
+    if (savedQuestions) {
+      try {
+        const questions = JSON.parse(savedQuestions)
+        setAllQuestions(questions)
+        if (savedIndex) {
+          setCurrentQuestionIndex(Number.parseInt(savedIndex))
+        }
+      } catch (error) {
+        console.error("Error loading saved questions:", error)
+      }
+    }
+  }, [quizId])
+
+  useEffect(() => {
+    if (allQuestions.length > 0) {
+      localStorage.setItem(`quiz_${quizId}_current_index`, currentQuestionIndex.toString())
+    }
+  }, [currentQuestionIndex, quizId, allQuestions.length])
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -216,7 +245,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
     }
   }, [quizSession?.current_question, currentQuestionIndex, quizSession?.mode, quizId, questionHistory])
 
-  const handleAnswerSubmit = async (answerId: string) => {
+  const handleAnswerSubmit = async (answerId: number) => {
     if (hasAnswered || !quizSession?.current_question || !user) return
 
     setIsSubmittingAnswer(true)
@@ -235,62 +264,48 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   }
 
   const handleNextQuestion = useCallback(() => {
-    if (quizSession?.mode === "timed") return // No next button in timed mode
+    if (quizSession?.mode === "timed") return // No manual navigation in timed mode
 
-    if (isNavigating) return
+    if (currentQuestionIndex < allQuestions.length - 1) {
+      const newIndex = currentQuestionIndex + 1
+      setCurrentQuestionIndex(newIndex)
+      setHasAnswered(false)
+      setSelectedAnswer(null)
+      setAnswerResult(null)
+      setShowingResults(false)
 
-    setIsNavigating(true)
-    const newIndex = currentQuestionIndex + 1
-    setCurrentQuestionIndex(newIndex)
-
-    // In free mode, each user controls their own navigation
-    if (quizSession?.mode === "free" && isConnected && user) {
-      sendMessage({
-        action: "user_navigate",
-        user_id: user.id,
-        question_index: newIndex,
-      })
+      // Notify server about navigation
+      if (isConnected && user) {
+        sendMessage({
+          action: "user_navigate",
+          user_id: user.id,
+          question_index: newIndex,
+        })
+      }
     }
-
-    setTimeout(() => {
-      setIsNavigating(false)
-    }, 300)
-  }, [currentQuestionIndex, isNavigating, quizSession?.mode, isConnected, user, sendMessage])
+  }, [currentQuestionIndex, allQuestions.length, quizSession?.mode, isConnected, user, sendMessage])
 
   const handlePreviousQuestion = useCallback(() => {
-    if (quizSession?.mode === "timed") return // No back button in timed mode
+    if (quizSession?.mode === "timed") return // No manual navigation in timed mode
 
-    if (isNavigating || currentQuestionIndex <= 0) return
+    if (currentQuestionIndex > 0) {
+      const newIndex = currentQuestionIndex - 1
+      setCurrentQuestionIndex(newIndex)
+      setHasAnswered(false)
+      setSelectedAnswer(null)
+      setAnswerResult(null)
+      setShowingResults(false)
 
-    const currentQuestionId = quizSession?.current_question?.id
-
-    if (currentQuestionId && answeredQuestions.has(currentQuestionId)) {
-      setShowAnsweredWarning(true)
-      setTimeout(() => setShowAnsweredWarning(false), 3000)
-      return
+      // Notify server about navigation
+      if (isConnected && user) {
+        sendMessage({
+          action: "user_navigate",
+          user_id: user.id,
+          question_index: newIndex,
+        })
+      }
     }
-
-    setIsNavigating(true)
-    const newIndex = currentQuestionIndex - 1
-    setCurrentQuestionIndex(newIndex)
-
-    // Load question from history if available
-    if (questionHistory[newIndex]) {
-      // Use cached question from localStorage
-      // setCurrentQuestion(questionHistory[newIndex])
-    }
-
-    setTimeout(() => {
-      setIsNavigating(false)
-    }, 300)
-  }, [
-    currentQuestionIndex,
-    isNavigating,
-    quizSession?.current_question?.id,
-    answeredQuestions,
-    quizSession?.mode,
-    questionHistory,
-  ])
+  }, [currentQuestionIndex, quizSession?.mode, isConnected, user, sendMessage])
 
   const handleLeaveQuiz = useCallback(() => {
     if (isConnected && user) {
@@ -505,10 +520,35 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
   useEffect(() => {
     if (lastMessage) {
       try {
-        const data = JSON.parse(lastMessage)
-        console.log("[v0] Received WebSocket message:", data)
+        const data = JSON.parse(lastMessage.data)
+        console.log("Received WebSocket message:", data)
 
         switch (data.type) {
+          case "all_questions_loaded":
+            setAllQuestions(data.questions)
+            localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions))
+            break
+
+          case "quiz_started":
+            setQuizStarted(true)
+            setQuizSession(data.quiz_session)
+            if (data.all_questions) {
+              setAllQuestions(data.all_questions)
+              localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions))
+            }
+            break
+
+          case "timed_question_change":
+            if (quizSession?.mode === "timed") {
+              setCurrentQuestionIndex(data.question_index)
+              setHasAnswered(false)
+              setSelectedAnswer(null)
+              setAnswerResult(null)
+              setShowingResults(false)
+              questionStartTimeRef.current = Date.now()
+            }
+            break
+
           case "quiz_state":
             console.log("[v0] Setting quiz session:", data.quiz_session)
             setQuizSession(data.quiz_session)
@@ -525,46 +565,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
             }
             setIsStartingQuiz(false)
             setIsEndingQuiz(false)
-            break
-
-          case "quiz_started":
-            console.log("[v0] Quiz started:", data)
-            setQuizStarted(true)
-            setIsStartingQuiz(false)
-            setQuestionLoadError(false)
-            if (data.quiz_session) {
-              setQuizSession(data.quiz_session)
-            }
-            if (data.current_question || data.quiz_session?.current_question) {
-              const currentQuestion = data.current_question || data.quiz_session.current_question
-              console.log("[v0] Setting current question from quiz_started:", currentQuestion)
-              setQuizSession((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      current_question: currentQuestion,
-                    }
-                  : null,
-              )
-              setHasAnswered(false)
-              setSelectedAnswer(null)
-              setAnswerResult(null)
-              setShowingResults(false)
-              setIsSubmittingAnswer(false)
-              setCanMoveToNext(false)
-              questionStartTimeRef.current = Date.now()
-
-              setTimeout(() => {
-                questionContainerRef.current?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                })
-              }, 100)
-
-              if (data.mode === "timed" || data.quiz_session?.mode === "timed") {
-                setTimeLeft(data.quiz_session?.time_per_question || 15)
-              }
-            }
             break
 
           case "new_question":
@@ -712,7 +712,7 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
         setQuestionLoadError(true)
       }
     }
-  }, [lastMessage, quizSession, selectedAnswer])
+  }, [lastMessage, quizId, quizSession?.mode, quizSession, selectedAnswer])
 
   const handleRefresh = useCallback(() => {
     setShowRefreshButton(false)
@@ -725,6 +725,23 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
       })
     }
   }, [user, hasJoined, sendMessage])
+
+  useEffect(() => {
+    if (user && participants.length > 0) {
+      const userParticipant = participants.find((p) => p.id === user.id)
+      if (userParticipant) {
+        const total = userParticipant.correct_answers + userParticipant.wrong_answers
+        const accuracy = total > 0 ? Math.round((userParticipant.correct_answers / total) * 100) : 0
+
+        setUserStatsFromParticipants({
+          correctAnswers: userParticipant.correct_answers,
+          wrongAnswers: userParticipant.wrong_answers,
+          totalAnswered: total,
+          accuracy,
+        })
+      }
+    }
+  }, [user, participants])
 
   const userStats = {
     totalAnswered: Object.keys(userAnswerHistory).length,
@@ -864,780 +881,471 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id: string }) {
     }
   }, [quizId])
 
-  const handleSubmitAnswer = (answerId: string) => {
+  const handleSubmitAnswer = (answerId: number) => {
     handleAnswerSubmit(answerId)
   }
 
+  const handleKickParticipant = useCallback(
+    (participantId: number) => {
+      if (!isCreator || !isConnected) return
+
+      sendMessage({
+        action: "kick_participant",
+        user_id: user?.id,
+        participant_id: participantId,
+      })
+    },
+    [isCreator, isConnected, user?.id, sendMessage],
+  )
+
   const handleRestartQuiz = useCallback(() => {
-    if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id) {
-      return
-    }
+    if (!isCreator || !isConnected) return
 
     sendMessage({
       action: "restart_quiz",
-      user_id: user.id,
+      user_id: user?.id,
     })
-  }, [isConnected, user, quizSession, sendMessage])
 
-  if (userLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading user data...</div>
-      </div>
-    )
-  }
+    // Clear localStorage
+    localStorage.removeItem(`quiz_${quizId}_questions`)
+    localStorage.removeItem(`quiz_${quizId}_current_index`)
+    setCurrentQuestionIndex(0)
+    setAllQuestions([])
+  }, [isCreator, isConnected, user?.id, sendMessage, quizId])
 
-  if (userError) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-red-400">Error: {userError}</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Please log in to access this quiz</div>
-      </div>
-    )
-  }
-
-  const currentQuestion = quizSession?.current_question
-
-  const renderQuestionOptions = (question: any) => {
-    if (!question) return null
-
-    const isTimeExpired = quizSession?.mode === "timed" && timeLeft === 0
-    const isDisabled = hasAnswered || isTimeExpired || isQuizEnded || showingResults || isSubmittingAnswer
-
-    return (
-      <div className="grid gap-3 md:gap-4">
-        {question.options.map((option: any, index: number) => {
-          const isSelected = selectedAnswer === option.id
-          const isCorrect = answerResult?.correctAnswerId === option.id
-          const isWrong = isSelected && answerResult && !answerResult.isCorrect
-
-          let buttonClass =
-            "p-3 md:p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20 relative overflow-hidden"
-
-          if (showingResults) {
-            if (isCorrect) {
-              buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
-            } else if (isWrong) {
-              buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
-            } else {
-              buttonClass += " bg-white/10 opacity-60"
-            }
-          } else if (isDisabled) {
-            buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
-          } else {
-            buttonClass += " bg-white/20 cursor-pointer active:scale-[0.98]"
-          }
-
-          if (isSelected && !showingResults) {
-            buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
-          }
-
-          return (
-            <button
-              key={option.id}
-              onClick={() => !isDisabled && handleAnswerSubmit(option.id)}
-              disabled={isDisabled}
-              className={buttonClass}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base ${
-                    showingResults
-                      ? isCorrect
-                        ? "bg-green-500"
-                        : isWrong
-                          ? "bg-red-500"
-                          : "bg-white/20"
-                      : isSelected
-                        ? "bg-blue-500"
-                        : "bg-white/20"
-                  }`}
-                >
-                  {showingResults ? (
-                    isCorrect ? (
-                      <Check className="w-3 h-3 md:w-4 md:h-4" />
-                    ) : isWrong ? (
-                      <X className="w-3 h-3 md:w-4 md:h-4" />
-                    ) : (
-                      String.fromCharCode(65 + index)
-                    )
-                  ) : (
-                    String.fromCharCode(65 + index)
-                  )}
-                </div>
-                <span className="text-white font-medium text-sm md:text-base">{option.text}</span>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-    )
-  }
+  const currentQuestion = allQuestions[currentQuestionIndex] || null
 
   return (
-    <div className="min-h-screen w-full bg-black relative overflow-x-hidden">
+    <div className="min-h-screen w-full relative overflow-hidden">
+      <div
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${backgroundImage})` }}
+      />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+
       <style>{`
-        .glass-morphism {
-          background: rgba(0, 0, 0, 0.4);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        
         .liquid-glass {
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.08);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
           border-radius: 16px;
         }
         
         .liquid-glass-button {
-          background: rgba(255, 255, 255, 0.15);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.25);
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
           transition: all 0.3s ease;
         }
         
         .liquid-glass-button:hover {
-          background: rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.15);
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
         }
         
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        
-        /* Enhanced responsive design */
-        @media (max-width: 1024px) {
-          .desktop-sidebar {
-            display: none;
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .mobile-layout {
-            padding: 0.75rem;
-          }
-          
-          .mobile-question-card {
-            margin-top: 5rem;
-            margin-bottom: 8rem;
-          }
-          
-          .mobile-controls {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 50;
-            background: rgba(0, 0, 0, 0.95);
-            backdrop-filter: blur(20px);
-            padding: 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-          }
-          
-          .mobile-stats-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 40;
-            background: rgba(0, 0, 0, 0.95);
-            backdrop-filter: blur(20px);
-            padding: 0.75rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          }
-        }
-        
-        @media (max-width: 640px) {
-          .question-options {
-            gap: 0.5rem;
-          }
-          
-          .option-button {
-            padding: 0.75rem;
-            font-size: 0.875rem;
-          }
-        }
-        
-        /* Warning notification styles */
-        .warning-notification {
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          z-index: 100;
-          background: rgba(239, 68, 68, 0.95);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(239, 68, 68, 0.5);
-          border-radius: 12px;
-          padding: 1rem 1.5rem;
-          color: white;
-          font-weight: 600;
-          animation: slideIn 0.3s ease-out;
-        }
-        
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translate(-50%, -60%);
-          }
-          to {
-            opacity: 1;
-            transform: translate(-50%, -50%);
-          }
+        .liquid-glass-sidebar {
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
       `}</style>
 
-      {showAnsweredWarning && (
-        <div className="warning-notification">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={20} />
-            <span>Siz allaqachon javob bergansiz! Faqat bir marta javob bera olasiz.</span>
-          </div>
-        </div>
-      )}
+      <div className="fixed top-0 left-0 right-0 z-40 liquid-glass border-b border-white/10">
+        <div className="flex items-center justify-between px-4 py-3">
+          {/* Left: Participants and stats */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowSidebar(true)}
+              className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors lg:hidden"
+            >
+              <Users size={20} />
+            </button>
 
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 w-full h-full"
-        style={{
-          backgroundImage: `url(${backgroundImage})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-        }}
-      />
+            <div className="hidden lg:flex items-center gap-4">
+              <div className="flex items-center gap-2 text-white">
+                <Users size={16} />
+                <span className="text-sm font-medium">{participants.length} participants</span>
+              </div>
 
-      {/* Dark Overlay */}
-      <div className="absolute inset-0 bg-black/60" />
-
-      <div className="mobile-stats-header md:fixed md:top-4 md:left-4 md:right-4 md:z-40 md:bg-transparent md:backdrop-filter-none md:border-none md:p-0">
-        <div className="flex justify-between items-center md:justify-start md:gap-4">
-          <div className="liquid-glass rounded-xl px-3 py-2 text-white text-sm">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <Users size={14} />
-                {totalStats.totalUsers}
-              </span>
-              <span className="text-green-400 flex items-center gap-1">
-                <Check size={14} />
-                {totalStats.totalCorrect}
-              </span>
-              <span className="text-red-400 flex items-center gap-1">
-                <X size={14} />
-                {totalStats.totalWrong}
-              </span>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-green-400">{userStatsFromParticipants.correctAnswers}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-red-400">{userStatsFromParticipants.wrongAnswers}</span>
+                </div>
+                <div className="text-white/60">{userStatsFromParticipants.accuracy}% accuracy</div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {quizEndTime && (
-              <div className="liquid-glass rounded-xl px-3 py-2 text-white text-sm flex items-center gap-1">
+          {/* Center: Question progress */}
+          <div className="flex items-center gap-2 text-white">
+            <span className="text-sm font-medium">
+              {currentQuestionIndex + 1} / {allQuestions.length}
+            </span>
+            {quizSession?.mode === "timed" && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-red-500/20 rounded-full">
                 <Clock size={14} />
-                {timeUntilEnd}
+                <span className="text-sm font-mono">{timeLeft}s</span>
               </div>
+            )}
+          </div>
+
+          {/* Right: Admin controls and exit */}
+          <div className="flex items-center gap-2">
+            {isCreator && (
+              <button
+                onClick={() => setShowAdminPanel(true)}
+                className="liquid-glass-button rounded-full p-2 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
+                title="Admin Panel"
+              >
+                <Crown size={20} />
+              </button>
             )}
 
             <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="liquid-glass rounded-full p-2 text-white hover:bg-white/20 transition-colors md:hidden"
+              onClick={() => window.history.back()}
+              className="liquid-glass-button rounded-full p-2 text-red-400 hover:bg-red-500/20 transition-colors"
+              title="Exit Quiz"
             >
-              📊
+              <LogOut size={20} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 lg:hidden ${
+        className={`fixed top-0 left-0 h-full w-80 z-50 liquid-glass-sidebar transform transition-transform duration-300 ${
           showSidebar ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } lg:translate-x-0 lg:w-64`}
       >
         <div className="p-4 border-b border-white/10">
           <div className="flex items-center justify-between">
             <h3 className="text-white font-bold text-lg">Quiz Stats</h3>
-            <button onClick={() => setShowSidebar(false)} className="text-white/60 hover:text-white">
+            <button onClick={() => setShowSidebar(false)} className="text-white/60 hover:text-white lg:hidden">
               <X size={20} />
             </button>
           </div>
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="glass-morphism rounded-lg p-4">
+          {/* User Stats */}
+          <div className="liquid-glass rounded-lg p-4">
             <h4 className="text-white font-semibold mb-3">Your Performance</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Answered:</span>
-                <span className="text-white">{userStats.totalAnswered}</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center">
+                <div className="text-xl font-bold text-green-400">{userStats.correctAnswers}</div>
+                <div className="text-xs text-white/70">Correct</div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-green-400">Correct:</span>
-                <span className="text-green-400">{userStats.correctAnswers}</span>
+              <div className="text-center">
+                <div className="text-xl font-bold text-red-400">{userStats.wrongAnswers}</div>
+                <div className="text-xs text-white/70">Wrong</div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-red-400">Wrong:</span>
-                <span className="text-red-400">{userStats.wrongAnswers}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-blue-400">Accuracy:</span>
-                <span className="text-blue-400">{userStats.accuracy}%</span>
+              <div className="text-center col-span-2">
+                <div className="text-xl font-bold text-blue-400">{userStats.accuracy}%</div>
+                <div className="text-xs text-white/70">Accuracy</div>
               </div>
             </div>
           </div>
 
-          <div className="glass-morphism rounded-lg p-4">
+          {/* Participants List */}
+          <div className="liquid-glass rounded-lg p-4">
             <h4 className="text-white font-semibold mb-3">Participants ({participants.length})</h4>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {participants.map((participant) => (
-                <div key={participant.id} className="flex items-center justify-between text-sm">
-                  <span className="text-white/80">{participant.username}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-400">{participant.correct_answers}</span>
-                    <span className="text-red-400">{participant.wrong_answers}</span>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {participants
+                .sort((a, b) => b.correct_answers - a.correct_answers)
+                .map((participant, index) => (
+                  <div key={participant.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/60 text-xs">#{index + 1}</span>
+                      <span className="text-white text-sm font-medium">{participant.username}</span>
+                      {participant.id === quizSession?.creator_id && <Crown size={12} className="text-yellow-400" />}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-green-400">{participant.correct_answers}</span>
+                      <span className="text-red-400">{participant.wrong_answers}</span>
+                      {isCreator && participant.id !== user?.id && (
+                        <button
+                          onClick={() => handleKickParticipant(participant.id)}
+                          className="text-red-400 hover:text-red-300 ml-2"
+                          title="Kick participant"
+                        >
+                          <UserX size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
+
+          {/* Share Section */}
+          <div className="liquid-glass rounded-lg p-4">
+            <h4 className="text-white font-semibold mb-3">Share Quiz</h4>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={window.location.href}
+                readOnly
+                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-xs"
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href)
+                  // Show toast notification
+                }}
+                className="liquid-glass-button px-3 py-2 rounded-lg text-white text-xs"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+
+          {/* Exit Button */}
+          <button
+            onClick={() => window.history.back()}
+            className="w-full liquid-glass-button rounded-lg p-3 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+          >
+            <LogOut size={16} />
+            Exit Quiz
+          </button>
         </div>
       </div>
 
-      {showSidebar && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setShowSidebar(false)} />
-      )}
-
-      {/* Main content */}
-      <div className="mobile-layout px-4 md:px-6 pt-16 md:pt-24 pb-20 md:pb-20">
-        <div
-          ref={questionContainerRef}
-          className="mobile-question-card glass-morphism rounded-xl p-4 md:p-6 shadow-lg max-w-4xl mx-auto"
-        >
-          {!quizStarted && !isQuizEnded ? (
-            <div className="text-center py-6 md:py-8">
-              <div className="text-white text-lg md:text-xl font-bold mb-4">
-                {connectionStatus === "connected" ? "Quiz Ready" : "Connecting..."}
-              </div>
-              <div className="text-white/70 mb-6">
-                {participants.length} participant{participants.length !== 1 ? "s" : ""} joined
-              </div>
-              {isCreator && (
-                <button
-                  onClick={handleStartQuiz}
-                  disabled={isStartingQuiz || connectionStatus !== "connected"}
-                  className="liquid-glass rounded-full px-6 md:px-8 py-3 text-white font-bold hover:bg-white/20 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto text-sm md:text-base"
-                >
-                  {isStartingQuiz ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <Play size={16} />
-                      Start Quiz
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          ) : isQuizEnded ? (
-            <div className="text-center py-6 md:py-8">
-              <div className="text-white text-lg md:text-xl font-bold mb-4">Quiz Ended</div>
-              <div className="text-white/70 mb-6">Thank you for participating!</div>
-
-              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-                <button
-                  onClick={() => setShowStatsModal(true)}
-                  className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-white/20 transition-colors flex items-center gap-2"
-                >
-                  <Trophy size={16} />
-                  View Results
-                </button>
-                <button
-                  onClick={() => setShowShareModal(true)}
-                  className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-blue-500/20 transition-colors flex items-center gap-2"
-                >
-                  <Share2 size={16} />
-                  Share Quiz
-                </button>
+      <div className={`transition-all duration-300 ${showSidebar ? "lg:ml-64" : "lg:ml-64"}`}>
+        <div className="px-4 pt-20 pb-8 min-h-screen">
+          <div className="max-w-4xl mx-auto">
+            {!quizStarted && !isQuizEnded ? (
+              // Waiting room
+              <div className="liquid-glass rounded-2xl p-8 text-center">
+                <div className="text-white text-2xl font-bold mb-4">
+                  {connectionStatus === "connected" ? "Quiz Ready" : "Connecting..."}
+                </div>
+                <div className="text-white/70 mb-8">
+                  {participants.length} participant{participants.length !== 1 ? "s" : ""} joined
+                </div>
                 {isCreator && (
                   <button
-                    onClick={handleRestartQuiz}
-                    className="liquid-glass text-white px-6 py-3 rounded-xl hover:bg-green-500/20 transition-colors flex items-center gap-2"
+                    onClick={handleStartQuiz}
+                    disabled={isStartingQuiz || connectionStatus !== "connected"}
+                    className="liquid-glass-button rounded-full px-8 py-4 text-white font-bold hover:bg-green-500/20 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto"
                   >
-                    <RefreshCw size={16} />
-                    Restart Quiz
+                    {isStartingQuiz ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Play size={20} />
+                        Start Quiz
+                      </>
+                    )}
                   </button>
                 )}
               </div>
-            </div>
-          ) : currentQuestion ? (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <div className="text-base md:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                  Question {quizSession?.current_question_index + 1 || 1} of {quizSession?.total_questions || "?"}
-                </div>
-                <div className="flex items-center gap-2">
-                  {quizSession?.mode === "timed" && timeLeft > 0 && !hasAnswered && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full border border-red-500/30">
-                      <Clock size={14} />
-                      <span className="text-white font-mono text-sm">{timeLeft}s</span>
-                    </div>
-                  )}
-                  {!hasAnswered && quizSession?.mode === "free" && (
-                    <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/30 rounded-full border border-white/20">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-white/80 text-xs md:text-sm">Live</span>
-                    </div>
-                  )}
-                  {(showRefreshButton || questionLoadError) && (
+            ) : isQuizEnded ? (
+              // Quiz ended
+              <div className="liquid-glass rounded-2xl p-8 text-center">
+                <div className="text-white text-2xl font-bold mb-4">Quiz Completed!</div>
+                <div className="text-white/70 mb-8">Thank you for participating!</div>
+
+                <div className="flex flex-wrap gap-4 justify-center">
+                  <button
+                    onClick={() => setShowResultsModal(true)}
+                    className="liquid-glass-button px-6 py-3 rounded-xl text-white hover:bg-blue-500/20 transition-colors flex items-center gap-2"
+                  >
+                    <Trophy size={16} />
+                    View Results
+                  </button>
+
+                  {isCreator && (
                     <button
-                      onClick={handleRefresh}
-                      className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 rounded-full border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 transition-colors"
+                      onClick={handleRestartQuiz}
+                      className="liquid-glass-button px-6 py-3 rounded-xl text-white hover:bg-green-500/20 transition-colors flex items-center gap-2"
                     >
-                      <RefreshCw size={12} />
-                      <span className="text-xs">Refresh</span>
+                      <RotateCcw size={16} />
+                      Restart Quiz
                     </button>
                   )}
                 </div>
               </div>
-
-              <div className="text-white text-base md:text-lg mb-6 leading-relaxed">{currentQuestion.text}</div>
-
-              {currentQuestion.image && (
+            ) : currentQuestion ? (
+              // Active quiz
+              <div className="liquid-glass rounded-2xl p-6 md:p-8">
                 <div className="mb-6">
-                  <img
-                    src={currentQuestion.image || "/placeholder.svg"}
-                    alt="Question"
-                    className="w-full max-h-48 md:max-h-64 object-cover rounded-lg"
-                  />
+                  <h2 className="text-white text-xl md:text-2xl font-bold mb-4 text-balance">{currentQuestion.text}</h2>
+
+                  {currentQuestion.image && (
+                    <div className="mb-6">
+                      <img
+                        src={currentQuestion.image || "/placeholder.svg"}
+                        alt="Question"
+                        className="w-full max-h-64 object-cover rounded-lg"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
 
-              <div className="question-options grid gap-3 md:gap-4">
-                {currentQuestion.options?.map((option, index) => {
-                  const isSelected = selectedAnswer === option.id
-                  const isCorrect = answerResult?.correctAnswerId === option.id
-                  const isWrong = isSelected && answerResult && !answerResult.isCorrect
+                {/* Question Options */}
+                <div className="grid gap-4 mb-6">
+                  {currentQuestion.options?.map((option, index) => {
+                    const isSelected = selectedAnswer === option.id
+                    const isCorrect = answerResult?.correctAnswerId === option.id
+                    const isWrong = isSelected && answerResult && !answerResult.isCorrect
 
-                  let buttonClass =
-                    "option-button p-3 md:p-4 rounded-xl text-left transition-all duration-300 backdrop-blur-sm border border-white/20 w-full"
+                    let buttonClass = "liquid-glass-button p-4 rounded-xl text-left transition-all duration-300 w-full"
 
-                  if (showingResults) {
-                    if (isCorrect) {
-                      buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
-                    } else if (isWrong) {
-                      buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
-                    } else {
-                      buttonClass += " bg-white/10 opacity-60"
-                    }
-                  } else if (hasAnswered || isSubmittingAnswer || (quizSession?.mode === "timed" && timeLeft === 0)) {
-                    buttonClass += " bg-white/10 cursor-not-allowed opacity-60"
-                  } else {
-                    buttonClass +=
-                      " bg-white/20 hover:bg-white/30 hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
-                  }
-
-                  if (isSelected && !showingResults) {
-                    buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
-                  }
-
-                  return (
-                    <button
-                      key={option.id}
-                      onClick={() =>
-                        !hasAnswered &&
-                        !isSubmittingAnswer &&
-                        !(quizSession?.mode === "timed" && timeLeft === 0) &&
-                        handleAnswerSubmit(option.id)
+                    if (showingResults) {
+                      if (isCorrect) {
+                        buttonClass += " bg-green-500/30 border-green-400 ring-2 ring-green-400"
+                      } else if (isWrong) {
+                        buttonClass += " bg-red-500/30 border-red-400 ring-2 ring-red-400"
+                      } else {
+                        buttonClass += " opacity-60"
                       }
-                      disabled={hasAnswered || isSubmittingAnswer || (quizSession?.mode === "timed" && timeLeft === 0)}
-                      className={buttonClass}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-base ${
-                            showingResults
-                              ? isCorrect
-                                ? "bg-green-500"
-                                : isWrong
-                                  ? "bg-red-500"
+                    } else if (hasAnswered || isSubmittingAnswer) {
+                      buttonClass += " opacity-60 cursor-not-allowed"
+                    } else {
+                      buttonClass += " hover:bg-white/20 hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
+                    }
+
+                    if (isSelected && !showingResults) {
+                      buttonClass += " ring-2 ring-blue-400 bg-blue-500/20"
+                    }
+
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => !hasAnswered && !isSubmittingAnswer && handleAnswerSubmit(option.id)}
+                        disabled={hasAnswered || isSubmittingAnswer}
+                        className={buttonClass}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                              showingResults
+                                ? isCorrect
+                                  ? "bg-green-500"
+                                  : isWrong
+                                    ? "bg-red-500"
+                                    : "bg-white/20"
+                                : isSelected
+                                  ? "bg-blue-500"
                                   : "bg-white/20"
-                              : isSelected
-                                ? "bg-blue-500"
-                                : "bg-white/20"
-                          }`}
-                        >
-                          {showingResults ? (
-                            isCorrect ? (
-                              <Check className="w-3 h-3 md:w-4 md:h-4" />
-                            ) : isWrong ? (
-                              <X className="w-3 h-3 md:w-4 md:h-4" />
+                            }`}
+                          >
+                            {showingResults ? (
+                              isCorrect ? (
+                                <Check className="w-4 h-4" />
+                              ) : isWrong ? (
+                                <X className="w-4 h-4" />
+                              ) : (
+                                String.fromCharCode(65 + index)
+                              )
                             ) : (
                               String.fromCharCode(65 + index)
-                            )
-                          ) : (
-                            String.fromCharCode(65 + index)
-                          )}
+                            )}
+                          </div>
+                          <span className="text-white font-medium">{option.text}</span>
                         </div>
-                        <span className="text-white font-medium text-sm md:text-base">{option.text}</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-6 md:py-8">
-              <div className="text-white/60 mb-4">
-                {questionLoadError ? "Failed to load question" : "Loading question..."}
-              </div>
-              {questionLoadError && (
-                <button
-                  onClick={handleRefresh}
-                  className="liquid-glass text-white px-4 py-2 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2 mx-auto"
-                >
-                  <RefreshCw size={16} />
-                  Try Again
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile layout */}
-      <div className="md:hidden mobile-layout">
-        {/* Mobile header with stats */}
-        <div className="mobile-stats-header">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="text-white font-bold text-lg">
-                {(quizSession?.current_question_index || 0) + 1}/{quizSession?.total_questions || 0}
-              </div>
-              {quizSession?.mode === "timed" && (
-                <div className="flex items-center gap-2">
-                  <Clock size={16} className="text-white" />
-                  <span className="text-white font-mono">
-                    {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
-                  </span>
+                      </button>
+                    )
+                  })}
                 </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowSidebar(true)}
-                className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors flex items-center gap-1"
-              >
-                <BarChart3 size={16} />
-                <span className="text-xs">
-                  {userStats.correctAnswers}/{userStats.totalAnswered}
-                </span>
-              </button>
-              <button
-                onClick={() => setShowParticipantsModal(true)}
-                className="liquid-glass-button rounded-full p-2 text-white hover:bg-white/20 transition-colors"
-              >
-                <Users size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
 
-        {/* Mobile question content */}
-        <div className="mobile-question-card">
-          {currentQuestion && (
-            <div className="liquid-glass rounded-2xl p-4 md:p-6 mb-6">
-              <h2 className="text-white text-lg md:text-xl font-bold mb-4 text-balance">{currentQuestion.text}</h2>
-              {renderQuestionOptions(currentQuestion)}
-            </div>
-          )}
-        </div>
+                {/* Navigation for free mode */}
+                {quizSession?.mode === "free" && (
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={handlePreviousQuestion}
+                      disabled={currentQuestionIndex === 0}
+                      className="liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                      Previous
+                    </button>
 
-        {quizSession?.mode === "free" && (
-          <div className="mobile-controls">
-            <div className="flex items-center justify-between gap-4">
-              {/* Back button */}
-              <button
-                onClick={handlePreviousQuestion}
-                disabled={!canGoBack}
-                className={`liquid-glass-button rounded-full px-4 py-2 text-white flex items-center gap-2 ${
-                  !canGoBack ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-              >
-                <ChevronLeft size={16} />
-                <span className="text-sm">Orqaga</span>
-              </button>
+                    <div className="text-white/60 text-sm">Free Mode - Navigate at your own pace</div>
 
-              {/* Center info */}
-              <div className="flex items-center gap-2 text-white text-sm">
-                <span>
-                  {currentQuestionIndex + 1} / {quizSession?.total_questions || 0}
-                </span>
+                    <button
+                      onClick={handleNextQuestion}
+                      disabled={currentQuestionIndex >= allQuestions.length - 1}
+                      className="liquid-glass-button rounded-full px-6 py-3 text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {/* Next button */}
-              <button
-                onClick={handleNextQuestion}
-                disabled={!canGoNext}
-                className={`liquid-glass-button rounded-full px-4 py-2 text-white flex items-center gap-2 ${
-                  !canGoNext ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-              >
-                <span className="text-sm">Keyingi</span>
-                <ChevronRight size={16} />
-              </button>
-            </div>
+            ) : (
+              // Loading question
+              <div className="liquid-glass rounded-2xl p-8 text-center">
+                <div className="text-white/60 mb-4">Loading question...</div>
+                <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+              </div>
+            )}
           </div>
-        )}
-
-        {isCreator && (quizStarted || isQuizEnded) && (
-          <div className="fixed bottom-4 left-4 right-4 z-10">
-            <button
-              onClick={handleEndQuiz}
-              disabled={isEndingQuiz}
-              className="w-full liquid-glass-button rounded-full px-6 py-3 text-white font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isEndingQuiz ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Tugatilmoqda...
-                </>
-              ) : (
-                <>
-                  <Square size={16} />
-                  Testni Tugatish
-                </>
-              )}
-            </button>
-          </div>
-        )}
+        </div>
       </div>
 
-      {showStatsModal && (
+      {showAdminPanel && isCreator && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass-morphism rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+          <div className="liquid-glass rounded-2xl p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-white font-bold text-xl flex items-center gap-2">
-                <Trophy className="text-yellow-400" size={24} />
-                Quiz Results
+                <Crown className="text-yellow-400" size={24} />
+                Admin Panel
               </h3>
-              <button onClick={() => setShowStatsModal(false)} className="text-white/60 hover:text-white">
+              <button onClick={() => setShowAdminPanel(false)} className="text-white/60 hover:text-white">
                 <X size={20} />
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="glass-morphism rounded-lg p-4">
-                <h4 className="text-white font-semibold mb-3">Your Performance</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-400">{userStats.correctAnswers}</div>
-                    <div className="text-sm text-white/70">Correct</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-400">{userStats.wrongAnswers}</div>
-                    <div className="text-sm text-white/70">Wrong</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{userStats.accuracy}%</div>
-                    <div className="text-sm text-white/70">Accuracy</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-white">{userStats.totalAnswered}</div>
-                    <div className="text-sm text-white/70">Total</div>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={handleEndQuiz}
+                className="w-full liquid-glass-button rounded-lg p-3 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <Square size={16} />
+                End Quiz
+              </button>
 
-              <div className="glass-morphism rounded-lg p-4">
-                <h4 className="text-white font-semibold mb-3">Leaderboard</h4>
-                <div className="space-y-2">
-                  {participants
-                    .sort((a, b) => b.correct_answers - a.correct_answers)
-                    .slice(0, 5)
-                    .map((participant, index) => (
-                      <div key={participant.id} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white/60 text-sm">#{index + 1}</span>
-                          <span className="text-white">{participant.username}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-400">{participant.correct_answers}</span>
-                          <span className="text-white/40">/</span>
-                          <span className="text-white/60">{participant.total_answered}</span>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
+              <button
+                onClick={handleRestartQuiz}
+                className="w-full liquid-glass-button rounded-lg p-3 text-green-400 hover:bg-green-500/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <RotateCcw size={16} />
+                Restart Quiz
+              </button>
+
+              <button
+                onClick={() => setShowResultsModal(true)}
+                className="w-full liquid-glass-button rounded-lg p-3 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <Trophy size={16} />
+                View Results
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {showShareModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass-morphism rounded-xl p-6 max-w-md w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-white font-bold text-xl flex items-center gap-2">
-                <Share2 className="text-blue-400" size={24} />
-                Share Quiz
-              </h3>
-              <button onClick={() => setShowShareModal(false)} className="text-white/60 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="text-white/70 text-center">Share this quiz with your friends!</div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={window.location.href}
-                  readOnly
-                  className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm"
-                />
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.href)
-                    alert("Link copied!")
-                  }}
-                  className="liquid-glass px-4 py-2 rounded-lg text-white hover:bg-white/20 transition-colors"
-                >
-                  Copy
-                </button>
-              </div>
-
-              <button
-                onClick={handleShare}
-                className="w-full liquid-glass py-3 rounded-lg text-white hover:bg-blue-500/20 transition-colors"
-              >
-                Share via System
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Overlay for mobile sidebar */}
+      {showSidebar && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setShowSidebar(false)} />
       )}
 
       {/* Results Modal */}
