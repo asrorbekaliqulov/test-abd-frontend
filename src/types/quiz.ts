@@ -1,52 +1,67 @@
-export interface QuizAnswer {
+export interface Question {
   id: number;
-  letter: string;
-  answer_text: string;
+  text: string;
+  options: Answer[];
+  question_type: 'single' | 'multiple' | 'text';
+  time_limit?: number;
+  category?: Category;
+}
+
+export interface Answer {
+  id: number;
+  text: string;
   is_correct: boolean;
 }
 
-export interface QuizQuestion {
+export interface Category {
   id: number;
-  question_text: string;
-  question_type: 'single' | 'multiple' | 'text_input' | 'true_false';
-  media?: string | null;
-  answers: QuizAnswer[];
+  name: string;
+  description?: string;
 }
 
-export interface QuizSession {
-  id: string;
-  quiz_type: 'timed' | 'first_answer' | 'admin_controlled';
-  time_per_question: number;
+export interface LiveQuiz {
+  id: number;
+  test: Test;
+  mode: 'timed' | 'first_answer' | 'admin_controlled' | 'free';
+  start_time?: string;
+  end_time?: string;
+  description?: string;
+  is_public: boolean;
   is_active: boolean;
+  time_per_question?: number;
+  created_by: User;
+  participants: QuizParticipant[];
   current_question_index: number;
-  admin_id: number;
+  questions: Question[];
+}
+
+export interface Test {
+  id: number;
   title: string;
-  description: string;
-  round_image?: string | null;
+  description?: string;
+  category: Category;
+  questions_count: number;
+  created_by: User;
+}
+
+export interface User {
+  id: number;
+  username: string;
+  profile_image?: string;
 }
 
 export interface QuizParticipant {
   id: number;
-  username: string;
-  profile_image?: string | null;
-  answered: boolean;
-  correct_answers: number;
-  wrong_answers: number;
-  total_answered: number;
-  is_online: boolean;
-  score?: number;
+  user: User;
+  score: number;
+  is_answered: boolean;
+  joined_at: string;
+  current_answer?: number[];
 }
 
-export interface LeaderboardEntry {
-  username: string;
-  score: number;
-  correct: number;
-  wrong: number;
-}
-
-export interface QuizResult {
-  username: string;
-  score: number;
-  correct: number;
-  wrong: number;
+export interface QuizAnswer {
+  question_id: number;
+  selected_answer_ids: number[];
+  written_answer?: string;
+  duration?: number;
 }
