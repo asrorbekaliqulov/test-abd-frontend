@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
-
-
-import { useAuth } from './contexts/AuthContext';
+import React, {useState, useEffect} from 'react';
+import {Routes, Route, Navigate} from 'react-router-dom';
+import {useAuth} from './contexts/AuthContext';
 
 import HomePage from './components/HomePage';
 import SearchPage from './components/SearchPage';
@@ -23,7 +21,7 @@ import ProfilePage from './components/ProfilePage';
 import QuestionPage from './components/QuestionPgaes';
 import EmailVerificationPage from './components/auth/EmailVerificationPgae';
 import CompleteProfilePage from './components/auth/CompleteProfilePgae';
-import { OtherUserProfilePage } from './components/OtherProfile/OtherUserProfilePage'
+import {OtherUserProfilePage} from './components/OtherProfile/OtherUserProfilePage'
 import LogoutPage from './components/auth/LogOutPage';
 import TestDetailPage from './components/TestDetailPages';
 import QuizTakingPage from './components/QuizTalkingPages';
@@ -36,136 +34,130 @@ import NotFound from "./pages/not-found";
 // }
 
 const AppContent: React.FC = () => {
-  const { loading } = useAuth();
+    const {loading} = useAuth();
 
-  // ✅ Tema holatini localStorage orqali boshqarish
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const stored = localStorage.getItem('theme');
-    return stored === 'dark' ? 'dark' : 'light';
-  });
+    // ✅ Tema holatini localStorage orqali boshqarish
+    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+        const stored = localStorage.getItem('theme');
+        return stored === 'dark' ? 'dark' : 'light';
+    });
 
-  const [currentPage, setCurrentPage] = useState('home');
-  const [showSettings, setShowSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
-  const [showTestCreator, setShowTestCreator] = useState(false);
-  const [showQuestionCreator, setShowQuestionCreator] = useState(false);
-  const [showStories, setShowStories] = useState(false);
-  const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
+    const [currentPage, setCurrentPage] = useState('home');
+    const [showSettings, setShowSettings] = useState(false);
+    const [activeTab, setActiveTab] = useState('profile');
+    const [showTestCreator, setShowTestCreator] = useState(false);
+    const [showQuestionCreator, setShowQuestionCreator] = useState(false);
+    const [showStories, setShowStories] = useState(false);
+    const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-  
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-theme-secondary flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary"></div>
-      </div>
-    );
-  }
 
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-  };
-
-  const handlePageChange = (page: string) => {
-    if (currentPage === 'quiz' && page === 'quiz') {
-      setCurrentPage('create');
-    } else if (currentPage === 'create' && page === 'quiz') {
-      setCurrentPage('quiz');
-    } else {
-      setCurrentPage(page);
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-theme-secondary flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary"></div>
+            </div>
+        );
     }
-  };
+
+    const toggleTheme = () => {
+        setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    };
+
+    const handlePageChange = (page: string) => {
+        if (currentPage === 'quiz' && page === 'quiz') {
+            setCurrentPage('create');
+        } else if (currentPage === 'create' && page === 'quiz') {
+            setCurrentPage('quiz');
+        } else {
+            setCurrentPage(page);
+        }
+    };
 
 
+    return (
+        <div className="min-h-screen bg-theme-secondary transition-theme-normal">
+            {/* Pages */}
+            {currentPage === 'home' && <HomePage theme={theme} toggleTheme={toggleTheme}/>}
+            {currentPage === 'search' && <SearchPage theme={theme}/>}
+            {currentPage === 'quiz' && <QuizPage theme={theme}/>}
+            {currentPage === 'create' && <CreatePage onNavigate={handlePageChange}/>}
+            {currentPage === 'map' && <MapPage theme={theme}/>}
+            {currentPage === 'profile' && <ProfilePage onShowSettings={() => setShowSettings(true)}/>}
 
-  return (
-    <div className="min-h-screen bg-theme-secondary transition-theme-normal">
-      {/* Pages */}
-      {currentPage === 'home' && <HomePage theme={theme} toggleTheme={toggleTheme} />}
-      {currentPage === 'search' && <SearchPage theme={theme} />}
-      {currentPage === 'quiz' && <QuizPage theme={theme} />}
-      {currentPage === 'create' && <CreatePage onNavigate={handlePageChange} />}
-      {currentPage === 'map' && <MapPage theme={theme} />}
-      {currentPage === 'profile' && <ProfilePage onShowSettings={() => setShowSettings(true)} />}
-      {/* {currentPage === 'logout' && } */}
+            {/* Bottom Navigation */}
+            <BottomNavigation currentPage={currentPage} onPageChange={handlePageChange}/>
 
-      {/* Bottom Navigation */}
-      <BottomNavigation currentPage={currentPage} onPageChange={handlePageChange} />
+            {/* Modals */}
+            {showTestCreator && (
+                <TestCreator theme={theme} onClose={() => setShowTestCreator(false)}/>
+            )}
 
-      {/* Modals */}
-
-
-      {showTestCreator && (
-        <TestCreator theme={theme} onClose={() => setShowTestCreator(false)} />
-      )}
-
-      {showQuestionCreator && (
-        <QuestionCreator theme={theme} onClose={() => setShowQuestionCreator(false)} />
-      )}
-
-
-    </div>
-  );
+            {showQuestionCreator && (
+                <QuestionCreator theme={theme} onClose={() => setShowQuestionCreator(false)}/>
+            )}
+        </div>
+    );
 };
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({children}) => {
+    const {isAuthenticated, loading} = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-theme-secondary flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary"></div>
-      </div>
-    );
-  }
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-theme-secondary flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary"></div>
+            </div>
+        );
+    }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+    return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace/>;
 };
 
 const App: React.FC = () => {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const stored = localStorage.getItem('theme');
-    return stored === 'dark' ? 'dark' : 'light';
-  });
+    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+        const stored = localStorage.getItem('theme');
+        return stored === 'dark' ? 'dark' : 'light';
+    });
 
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-  };
-  const { isAuthenticated } = useAuth();
+    const toggleTheme = () => {
+        setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    };
+    const {isAuthenticated} = useAuth();
 
-  return (
-    <Routes>
-      <Route
-        path="/login"
-        element={!isAuthenticated ? <LoginPage /> : <Navigate to="/" replace />}
-      />
-      <Route
-        path="/register"
-        element={!isAuthenticated ? <RegisterPage /> : <Navigate to="/" replace />}
-      />
-      <Route path="/profile/:username" element={<OtherUserProfilePage />} />
-      <Route path="/verify-email/:token" element={<EmailVerificationPage />} />
-      <Route path="/complete-profile" element={<CompleteProfilePage />} />
-      <Route path="/tests" element={<ProtectedRoute><TestsPage theme={theme} /></ProtectedRoute>} />
-      <Route path="/tests/:testId" element={<TestDetailPage theme={theme} />} />
-      <Route path="/questions/:id" element={<QuestionPage />} />
-      <Route path="/quiz" element={<QuizTakingPage theme={theme} />} />{" "}
-      <Route path="/create-live-quiz" element={<CreateLiveQuiz theme={theme} toggleTheme={toggleTheme} /> } />
-      <Route path="/live-quiz/:quiz_id" element={<RealTimeQuizPage />} />
-      <Route path="/logout" element={<LogoutPage  />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/admin" element={<ProtectedRoute><AdminPanel theme="light" /></ProtectedRoute>} />
-      <Route path="/chat" element={<ChatApp />} />
-      <Route path="/chat-private" element={<ChatApp />} />
-      <Route path="/chat/:roomId" element={<ChatApp />} />
-      <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
-      <Route element={<NotFound />} />
-    </Routes>
-  );
+    return (
+        <Routes>
+            <Route
+                path="/login"
+                element={!isAuthenticated ? <LoginPage/> : <Navigate to="/" replace/>}
+            />
+            <Route
+                path="/register"
+                element={!isAuthenticated ? <RegisterPage/> : <Navigate to="/" replace/>}
+            />
+            <Route path="/profile/:username" element={<OtherUserProfilePage/>}/>
+            <Route path="/verify-email/:token" element={<EmailVerificationPage/>}/>
+            <Route path="/complete-profile" element={<CompleteProfilePage/>}/>
+            <Route path="/tests" element={<ProtectedRoute><TestsPage theme={theme}/></ProtectedRoute>}/>
+            <Route path="/tests/:testId" element={<TestDetailPage theme={theme}/>}/>
+            <Route path="/questions/:id" element={<QuestionPage theme={theme}/>}/>
+            <Route path="/quiz" element={<QuizTakingPage theme={theme}/>}/>
+            <Route path="/create-live-quiz" element={<CreateLiveQuiz theme={theme} toggleTheme={toggleTheme}/>}/>
+            <Route path="/live-quiz/:quiz_id" element={<RealTimeQuizPage quiz_id={0}/>}/>
+            <Route path="/logout" element={<LogoutPage/>}/>
+            <Route path="/forgot-password" element={<ForgotPasswordPage/>}/>
+            <Route path="/admin" element={<ProtectedRoute><AdminPanel theme="light"/></ProtectedRoute>}/>
+            <Route path="/chat" element={<ChatApp/>}/>
+            <Route path="/chat-private" element={<ChatApp/>}/>
+            <Route path="/chat/:roomId" element={<ChatApp/>}/>
+            <Route path="/*" element={<ProtectedRoute><AppContent/></ProtectedRoute>}/>
+            <Route path="*" element={<NotFound/>}/>
+        </Routes>
+    );
 };
 
 export default App;

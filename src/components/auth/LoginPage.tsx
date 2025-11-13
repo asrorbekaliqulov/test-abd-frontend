@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-
+import letterT from "../assets/images/logo.png";
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -44,8 +44,8 @@ const LoginPage: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-2xl font-bold text-white">T</span>
+          <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <span className="text-2xl font-bold text-white"><img src={letterT} draggable={false} className={"flex w-16 h-16"} loading={"lazy"} decoding={"async"} alt="t"/></span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Xush kelibsiz</h1>
           <p className="text-gray-600">TestAbd hisobingizga kirish</p>
@@ -76,7 +76,7 @@ const LoginPage: React.FC = () => {
                   value={formData.username}
                   onChange={handleChange}
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="Foydalanuvchi nomini kiriting"
                 />
               </div>
@@ -97,7 +97,7 @@ const LoginPage: React.FC = () => {
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-12 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="Parolingizni kiriting"
                 />
                 <button
