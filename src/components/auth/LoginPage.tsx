@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import letterT from "../assets/images/logo.png";
+import letterT from "../assets/images/logo.svg";
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -39,9 +39,10 @@ const LoginPage: React.FC = () => {
   };
 
 
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+        <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -50,7 +51,6 @@ const LoginPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Xush kelibsiz</h1>
           <p className="text-gray-600">TestAbd hisobingizga kirish</p>
         </div>
-
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           {error && (

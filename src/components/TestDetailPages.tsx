@@ -301,9 +301,11 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
                         {/* Author and Date */}
                         <div className="flex items-center space-x-4 mb-8">
                             <img
-                                src={`${test.user.profile_image || "/media/defaultuseravatar.png"}`}
+                                src={test.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
                                 alt={test.user.username}
-                                className="w-12 h-12 rounded-full"
+                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-white/30 cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"
+                                loading="lazy"
+                                decoding={"async"}
                             />
                             <div>
                                 <a href={`/profile/${test.user.username}`} className="text-blue-500">

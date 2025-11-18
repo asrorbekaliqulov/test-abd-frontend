@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, FileText, Settings, Eye } from 'lucide-react';
+import { Save, X, FileText } from 'lucide-react';
 import { quizAPI } from '../../utils/api';
 
 interface TestCreatorProps {
@@ -57,8 +57,8 @@ const TestCreator: React.FC<TestCreatorProps> = ({ theme, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-2xl w-full max-h-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-theme-primary">
           <div className="flex items-center space-x-3">

@@ -319,7 +319,7 @@ export const UserProfilePage: React.FC = () => {
                 </div>
 
                 {/* Tabs */}
-                <div className="bg-white rounded-xl shadow-lg mb-8">
+                <div className="bg-white rounded-xl shadow-lg mb-20">
                     <div className="border-b border-gray-200">
                         <nav className="flex">
                             <button
@@ -347,13 +347,13 @@ export const UserProfilePage: React.FC = () => {
 
                     <div className="p-6">
                         {activeTab === 'tests' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-3 pb-6">
                                 {(tests || []).map((test) => (
                                     <TestCard key={test.id} test={test} onTestClick={handleTestClick} />
                                 ))}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
                                 {(questions || []).map((question) => (
                                     <QuestionCard key={question.id} question={question} onQuestionClick={handleViewQuestions} />
                                 ))}

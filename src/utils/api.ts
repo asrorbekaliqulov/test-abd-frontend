@@ -369,9 +369,8 @@ export const authAPI = {
 
 // Quiz API
 export const quizAPI = {
-  fetchCategories: () => api.get('/quiz/categories/'),
-
-  fetchPublicTests: () => api.get('/quiz/tests/'),
+    fetchCategories: () => api.get('/quiz/categories/'),
+    fetchPublicTests: () => api.get('/quiz/tests/'),
   fetchTestById: (id: number) => api.get(`/quiz/tests/${id}/`),
   createTest: (data: any) => api.post('/quiz/tests/', data),
   fetchMyBookmarks: () => api.get('/quiz/tests/my_bookmarks/'),

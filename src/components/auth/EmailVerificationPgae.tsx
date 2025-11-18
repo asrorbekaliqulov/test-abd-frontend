@@ -38,7 +38,7 @@ const EmailVerificationPage: React.FC = () => {
             localStorage.setItem("verified_email", email);
 
             setTimeout(() => {
-                navigate('/complete-profile', {
+                navigate('/login', {
                     state: {
                         verified: true,
                     },
@@ -76,7 +76,7 @@ const EmailVerificationPage: React.FC = () => {
 
                         <h1 className="text-2xl font-bold text-gray-900 mb-4">Email tasdiqlandi!</h1>
                         <p className="text-gray-600 mb-6">
-                            Email manzilingiz muvaffaqiyatli tasdiqlandi. Endi profilingizni to'ldiring.
+                            Email manzilingiz muvaffaqiyatli tasdiqlandi. Endi profilingiz ga kiring.
                         </p>
 
                         <div className="space-y-4">
@@ -85,14 +85,14 @@ const EmailVerificationPage: React.FC = () => {
                             </div>
 
                             <p className="text-sm text-gray-500">
-                                3 soniyadan keyin profil to'ldirish sahifasiga yo'naltirilasiz...
+                                3 soniyadan keyin login sahifasiga yo'naltirilasiz...
                             </p>
 
                             <button
-                                onClick={() => navigate('/complete-profile', { state: { email, verified: true } })}
+                                onClick={() => navigate('/login', { state: { email, verified: true } })}
                                 className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center justify-center space-x-2"
                             >
-                                <span>Profilni to'ldirish</span>
+                                <span>Login</span>
                                 <ArrowRight size={20} />
                             </button>
                         </div>

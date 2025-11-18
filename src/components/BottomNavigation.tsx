@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, Plus, MapPin, User } from 'lucide-react';
+import { Home, Search, Plus, User, Store } from 'lucide-react';
 
 const LogoImage: React.FC = () => (
   <img src="/logo.jpg" alt="T" className="w-8 h-8 rounded-full" />
@@ -17,7 +17,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ currentPage, onPage
     { id: 'quiz', label: currentPage === 'quiz' || currentPage === 'create' ? 'Create' : 'Quiz', 
       icon: currentPage === 'quiz' || currentPage === 'create' ? Plus : LogoImage, 
       isSpecial: true },
-    { id: 'map', label: 'Map', icon: MapPin },
+    { id: 'map', label: 'Store', icon: Store },
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
@@ -36,7 +36,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ currentPage, onPage
                   onClick={() => onPageChange(item.id)}
                   className="relative p-3"
                 >
-                  <div className={`w-14 h-14 flex items-center justify-center shadow-lg ${
+                  <div className={`w-14 h-14 flex items-center rounded-full justify-center shadow-lg ${
                     currentPage === 'quiz' || currentPage === 'create' 
                       ? 'bg-gradient-to-br from-accent-primary to-accent-secondary rounded-full' 
                       : 'bg-transparent'

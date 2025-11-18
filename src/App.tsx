@@ -4,8 +4,7 @@ import {useAuth} from './contexts/AuthContext';
 
 import HomePage from './components/HomePage';
 import SearchPage from './components/SearchPage';
-import CreatePage from './components/CreatePage';
-import MapPage from './components/MapPage';
+import MapPage from './components/CardsMarket.tsx';
 import QuizPage from './components/QuizPage';
 import BottomNavigation from './components/BottomNavigation';
 import LoginPage from './components/auth/LoginPage';
@@ -15,12 +14,10 @@ import AdminPanel from './components/admin/AdminPanel';
 import TestCreator from './components/create/TestCreator';
 import TestsPage from './components/TestPage';
 import QuestionCreator from './components/create/QuestionCreator';
-// import { StoriesViewer } from './components/stories/StoriesViewer';
 import RealTimeQuizPage from './pages/RealTimeQuizPage';
 import ProfilePage from './components/ProfilePage';
 import QuestionPage from './components/QuestionPgaes';
 import EmailVerificationPage from './components/auth/EmailVerificationPgae';
-import CompleteProfilePage from './components/auth/CompleteProfilePgae';
 import {OtherUserProfilePage} from './components/OtherProfile/OtherUserProfilePage'
 import LogoutPage from './components/auth/LogOutPage';
 import TestDetailPage from './components/TestDetailPages';
@@ -28,10 +25,8 @@ import QuizTakingPage from './components/QuizTalkingPages';
 import CreateLiveQuiz from './components/live_quiz';
 import ChatApp from "./pages/ChatApp";
 import NotFound from "./pages/not-found";
-
-// interface ProfilePageProps {
-//   onShowSettings: () => void;
-// }
+import CreateNewBlock from "./components/CreatePage.tsx";
+import CardsMarket from "./components/CardsMarket.tsx";
 
 const AppContent: React.FC = () => {
     const {loading} = useAuth();
@@ -84,9 +79,12 @@ const AppContent: React.FC = () => {
             {/* Pages */}
             {currentPage === 'home' && <HomePage theme={theme} toggleTheme={toggleTheme}/>}
             {currentPage === 'search' && <SearchPage theme={theme}/>}
-            {currentPage === 'quiz' && <QuizPage theme={theme}/>}
-            {currentPage === 'create' && <CreatePage onNavigate={handlePageChange}/>}
-            {currentPage === 'map' && <MapPage theme={theme}/>}
+            {currentPage === 'quiz' && <QuizPage theme={theme} quizzes={[]}/>}
+            {currentPage === 'create' && <QuestionCreator onNavigate={handlePageChange} theme={""}
+                                                          onClose={function (): void {
+                                                              throw new Error("Function not implemented.");
+                                                          }}/>}
+            {currentPage === 'map' && <CardsMarket theme={theme}/>}
             {currentPage === 'profile' && <ProfilePage onShowSettings={() => setShowSettings(true)}/>}
 
             {/* Bottom Navigation */}
@@ -141,7 +139,6 @@ const App: React.FC = () => {
             />
             <Route path="/profile/:username" element={<OtherUserProfilePage/>}/>
             <Route path="/verify-email/:token" element={<EmailVerificationPage/>}/>
-            <Route path="/complete-profile" element={<CompleteProfilePage/>}/>
             <Route path="/tests" element={<ProtectedRoute><TestsPage theme={theme}/></ProtectedRoute>}/>
             <Route path="/tests/:testId" element={<TestDetailPage theme={theme}/>}/>
             <Route path="/questions/:id" element={<QuestionPage theme={theme}/>}/>
@@ -156,6 +153,7 @@ const App: React.FC = () => {
             <Route path="/chat/:roomId" element={<ChatApp/>}/>
             <Route path="/*" element={<ProtectedRoute><AppContent/></ProtectedRoute>}/>
             <Route path="*" element={<NotFound/>}/>
+            <Route path="/new-block" element={<CreateNewBlock />} />
         </Routes>
     );
 };

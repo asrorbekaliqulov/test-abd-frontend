@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, User, Mail, Lock, ArrowRight, AlertCircle, CheckCircle, ExternalLink, Loader2, X } from 'lucide-react';
 import { checkUsername, checkReferral, authAPI, checkEmail } from '../../utils/api';
-import letterT from "../assets/images/logo.png";
+import letterT from "../assets/images/logo.svg";
 
 // Toast Component
 const Toast = ({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) => {

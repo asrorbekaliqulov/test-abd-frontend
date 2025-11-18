@@ -37,7 +37,6 @@ import {
 } from "lucide-react"
 import {LogOut} from "lucide-react"
 import {quizAPI, authAPI, accountsAPI, updateProfileImage} from "../utils/api"
-import {href} from "react-router-dom"
 
 // Types (keeping the existing ones)
 export interface Country {
@@ -50,6 +49,12 @@ export interface Region {
     id: number
     name: string
     country_id: number
+}
+
+interface Category {
+    id: number;
+    title: string;
+    emoji: string;
 }
 
 export interface District {
@@ -168,7 +173,7 @@ export interface RecentQuestion {
     test_title: string
     type: string
     difficulty: string
-    category: null
+    category: Category | null
     answers: number
     correctRate: number
     created_at: string
@@ -1161,33 +1166,45 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
         }
     }
 
-    const convertToRecentQuestion = (q: any): RecentQuestion => ({
+    const convertToRecentQuestion = (q: any, category: any): RecentQuestion => ({
         id: q.id,
         question: q.question_text,
         type: q.question_type,
         test_title: q.test_title || "No Test",
-        difficulty: q.difficulty_percentage < 33 ? "Oson" : q.difficulty_percentage < 66 ? "O'rtacha" : "Qiyin",
-        category: null,
+        difficulty:
+            q.difficulty_percentage < 33
+                ? "Oson"
+                : q.difficulty_percentage < 66
+                    ? "O'rtacha"
+                    : "Qiyin",
+        category: category || null,
         answers: q.answers?.length || 0,
         correctRate:
-            q.correct_count + q.wrong_count > 0 ? Math.round((q.correct_count / (q.correct_count + q.wrong_count)) * 100) : 0,
+            q.correct_count + q.wrong_count > 0
+                ? Math.round((q.correct_count / (q.correct_count + q.wrong_count)) * 100)
+                : 0,
         created_at: q.created_at,
         updated_at: q.updated_at,
         is_active: q.is_active,
-    })
+    });
 
     useEffect(() => {
-        const fetchRecentQuestions = async () => {
-            try {
-                const res = await quizAPI.fetchRecentQuestions()
-                const converted = res.data.map(convertToRecentQuestion)
-                setRecentQuestions(converted)
-            } catch (err) {
-                console.error("So'nggi savollarni olishda xatolik:", err)
-            }
-        }
-        fetchRecentQuestions()
-    }, [])
+        const load = async () => {
+            const res = await quizAPI.fetchRecentQuestions();
+
+            const recent = await Promise.all(
+                res.data.map(async (q) => {
+                    const testRes = await quizAPI.fetchTestById(q.test);
+
+                    return convertToRecentQuestion(q, testRes.data.category);
+                })
+            );
+
+            setRecentQuestions(recent);
+        };
+
+        load();
+    }, []);
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleString("en-US", {
@@ -1818,6 +1835,7 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                                             className="p-4 hover:shadow-lg transition-shadow">
                                     <div className="flex justify-between items-start mb-3">
                                         <CustomBadge variant="secondary">{question.type}</CustomBadge>
+                                        <CustomBadge variant={"secondary"}> {question.category ? question.category.title : "Noma'lum"}</CustomBadge>
                                         <CustomBadge
                                             variant={
                                                 question.difficulty === "Oson"
@@ -1827,13 +1845,13 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                                                         : "danger"
                                             }
                                         >
-                                            {question.difficulty}
+                                            {question.difficulty ?? "Noma'lum"}
                                         </CustomBadge>
                                     </div>
                                     <h4 className="text-lg font-semibold mb-2 line-clamp-2 dark:text-white">{question.question}</h4>
                                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{question.test_title}</p>
                                     <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                        <span>{question.answers} variantlar</span>
+                                        <span>{Array.isArray(question.answers) ? question.answers.length : 0} variantlar</span>
                                         <span>{question.correctRate}% to'g'ri</span>
                                     </div>
                                     <div className="flex gap-2">
