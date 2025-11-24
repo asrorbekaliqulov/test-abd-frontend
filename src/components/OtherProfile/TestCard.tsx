@@ -67,7 +67,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onTestClick }) => {
             </div>
 
             <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">{test.category.title}</span>
+                <span className="text-sm font-medium text-gray-700">{test.category?.title ?? "Kategoriya yo‘q"}</span>
                 {/* <div className="flex items-center">
                     <Award className="w-4 h-4 mr-1 text-indigo-600" />
                     <span className={`font-bold ${getScoreColor(test.score, test.maxScore)}`}>

@@ -1275,12 +1275,13 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                     onClick={() => handleMultipleChoice(quiz.id, option.id)}
                                     disabled={isAnswered}
                                     className={getOptionStyles(status)}
+                                    style={{ backgroundColor: "transparent", backdropFilter: "blur(10px)" }}
                                 >
                                     <div className="flex items-center space-x-3">
                                         <div className={checkboxClass}>
                                             {(isSelected || status === "correct-unselected") && <Check size={16}/>}
                                         </div>
-                                        <span className="flex-1 text-base sm:text-lg">{option.answer_text}</span>
+                                        <span className="flex-1 text-base sm:text-lg text-white">{option.answer_text}</span>
                                     </div>
                                     {status === "correct-selected" &&
                                         <Check size={22} className="text-green-500 animate-bounce"/>}
@@ -1342,13 +1343,14 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 onClick={() => handleSingleChoice(quiz.id, option.id)}
                                 disabled={isAnswered || isSubmitting}
                                 className={buttonClass}
+                                style={{ backgroundColor: "transparent", backdropFilter: "blur(10px)" }}
                             >
                                 {isTrue ? (
                                     <ThumbsUp size={32} className="text-green-500"/>
                                 ) : (
                                     <ThumbsDown size={32} className="text-red-500"/>
                                 )}
-                                <span className="text-lg sm:text-xl font-semibold">{option.answer_text}</span>
+                                <span className="text-lg sm:text-xl font-semibold text-white">{option.answer_text}</span>
                                 {isSubmitting && isSelected &&
                                     <Loader2 size={20} className="animate-spin text-blue-500"/>}
                                 {status === "correct-selected" &&

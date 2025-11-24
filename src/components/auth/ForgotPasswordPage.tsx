@@ -109,25 +109,10 @@ const ForgotPasswordPage: React.FC = () => {
           </h1>
           <p className="text-gray-600">
             {step === 1
-              ? 'Parolni tiklash uchun email yoki telefon raqamingizni kiriting'
+              ? 'Parolni tiklash uchun emailingizni kiriting'
               : `${method === 'email' ? email : phone} ga yuborilgan kodni kiriting`
             }
           </p>
-        </div>
-
-        {/* Progress Indicator */}
-        <div className="flex items-center justify-center mb-8">
-          <div className="flex items-center space-x-4">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
-              }`}>
-              {step > 1 ? <CheckCircle size={16} /> : '1'}
-            </div>
-            <div className={`w-16 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'
-              }`}>
-              2
-            </div>
-          </div>
         </div>
 
         {/* Form */}
@@ -143,28 +128,17 @@ const ForgotPasswordPage: React.FC = () => {
             {step === 1 && (
               <>
                 {/* Method Selection */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="flex flex-row flex-wrap justify-center items-center w-full gap-4 mb-6">
                   <button
                     type="button"
                     onClick={() => setMethod('email')}
-                    className={`p-4 rounded-lg border-2 transition-all ${method === 'email'
+                    className={`p-4 px-10 hidden rounded-lg border-2 transition-all ${method === 'email'
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                         : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <Mail size={24} className="mx-auto mb-2" />
                     <span className="text-sm font-medium">Email</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMethod('sms')}
-                    className={`p-4 rounded-lg border-2 transition-all ${method === 'sms'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                  >
-                    <MessageSquare size={24} className="mx-auto mb-2" />
-                    <span className="text-sm font-medium">SMS</span>
                   </button>
                 </div>
 
@@ -182,29 +156,13 @@ const ForgotPasswordPage: React.FC = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        className="w-full pl-10 pr-4 py-3 border outline-none border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                         placeholder="Email manzilingizni kiriting"
                       />
                     </div>
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Telefon raqami
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <MessageSquare size={20} className="text-gray-400" />
-                      </div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        required
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                        placeholder="+998 90 123 45 67"
-                      />
-                    </div>
                   </div>
                 )}
               </>

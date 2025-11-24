@@ -4,7 +4,6 @@ import {useAuth} from './contexts/AuthContext';
 
 import HomePage from './components/HomePage';
 import SearchPage from './components/SearchPage';
-import MapPage from './components/CardsMarket.tsx';
 import QuizPage from './components/QuizPage';
 import BottomNavigation from './components/BottomNavigation';
 import LoginPage from './components/auth/LoginPage';

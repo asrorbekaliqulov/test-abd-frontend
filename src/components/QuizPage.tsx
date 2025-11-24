@@ -1,12 +1,19 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import {useState, useEffect, useRef, useCallback} from "react"
 import {Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter} from "lucide-react"
-import { quizAPI, accountsAPI } from "../utils/api"
+import {quizAPI, accountsAPI} from "../utils/api"
 
 interface QuizPageProps {
     theme: string
+}
+
+export interface Category {
+    id: number;
+    title: string;
+    slug: string;
+    emoji: string;
 }
 
 interface Quiz {
@@ -36,9 +43,10 @@ interface Quiz {
     }
     created_at: string
     round_image: string | null
+    category?: string | Category | Category[] | null;
 }
 
-const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
+const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     const [currentQuizIndex, setCurrentQuizIndex] = useState(0)
     const [userInteractions, setUserInteractions] = useState({
         follows: new Set<string>(),
@@ -53,7 +61,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const [showShareMenu, setShowShareMenu] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
     const [nextPageUrl, setNextPageUrl] = useState<string | undefined>(undefined)
-    const [quizData, setQuizzes] = useState<Quiz[]>([])
+    const [quizData, setQuizData] = useState<Quiz[]>([])
     const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set())
     const [batchIndices, setBatchIndices] = useState<number[]>([])
     const [animateIn, setAnimateIn] = useState(true)
@@ -66,6 +74,62 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const [questionStartTimes, setQuestionStartTimes] = useState<Map<number, number>>(new Map())
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
     const [currentTimerQuestionId, setCurrentTimerQuestionId] = useState<number | null>(null)
+
+    // Categoriyani textga aylantiruvchi helper
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string>("All");
+    const [displayedQuizzes, setDisplayedQuizzes] = useState<Quiz[]>([]);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [alertShown, setAlertShown] = useState(false);
+
+    useEffect(() => {
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                const quizzesRes = await quizAPI.fetchQuestions();
+                const categoriesRes = await quizAPI.fetchCategories();
+                setQuizData(quizzesRes.data.results || quizzesRes.data);
+                setCategories(categoriesRes.data);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    const getCategoryName = (category: Quiz["category"]) => {
+        if (!category) return "Unknown";
+        if (typeof category === "string") return category;
+        if (Array.isArray(category)) return category.map(c => (c as Category).title).join(", ");
+        return (category as Category).title;
+    };
+
+    useEffect(() => {
+        if (loading || quizData.length === 0) return;
+
+        const filteredQuizzes =
+            selectedCategory === "All"
+                ? quizData
+                : quizData.filter(q => {
+                    if (!q.category) return false;
+                    if (typeof q.category === "string") return q.category === selectedCategory;
+                    if (Array.isArray(q.category))
+                        return q.category.some(c => (c as Category).title === selectedCategory);
+                    return (q.category as Category).title === selectedCategory;
+                });
+
+        if (!loading && selectedCategory !== "All" && filteredQuizzes.length === 0 && !alertShown) {
+            alert(`Category "${selectedCategory}" uchun savol topilmadi!`);
+            setAlertShown(true); // faqat bir marta alert ko'rsatiladi
+            const shuffled = [...quizData].sort(() => Math.random() - 0.5);
+            setDisplayedQuizzes(shuffled);
+        } else if (filteredQuizzes.length > 0) {
+            setDisplayedQuizzes(filteredQuizzes);
+            setAlertShown(false); // boshqa category tanlansa alert yana chiqishi mumkin
+        }
+    }, [selectedCategory, quizData, loading, alertShown]);
 
     // Preload images function
     const preloadImages = useCallback(
@@ -164,7 +228,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             setBatchIndices((prev) => [...prev, newBatchStart])
 
             // Remove duplicates by ID
-            setQuizzes((prev) => {
+            setQuizData((prev) => {
                 const existingIds = new Set(prev.map((quiz) => quiz.id))
                 const newQuizzes = data.results.filter((quiz: Quiz) => !existingIds.has(quiz.id))
                 const updatedQuizzes = [...prev, ...newQuizzes]
@@ -279,7 +343,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
             }))
 
-            setQuizzes((prevQuizzes) =>
+            setQuizData((prevQuizzes) =>
                 prevQuizzes.map((quiz) =>
                     quiz.id === quizId
                         ? {
@@ -340,7 +404,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
             }))
 
-            setQuizzes((prevQuizzes) =>
+            setQuizData((prevQuizzes) =>
                 prevQuizzes.map((quiz) =>
                     quiz.id === quizId
                         ? {
@@ -385,7 +449,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
             }))
 
-            setQuizzes((prevQuizzes) =>
+            setQuizData((prevQuizzes) =>
                 prevQuizzes.map((quiz) =>
                     quiz.id === quizId
                         ? {
@@ -440,7 +504,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         try {
             await accountsAPI.toggleFollow(user_id)
 
-            setQuizzes((prev) =>
+            setQuizData((prev) =>
                 prev.map((quiz) =>
                     quiz.user.id === user_id
                         ? {
@@ -461,10 +525,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
     const handleSave = (quizId: number) => {
         quizAPI
-            .bookmarkQuestion({ question: quizId })
+            .bookmarkQuestion({question: quizId})
             .then((res) => {
-                setQuizzes((prev) =>
-                    prev.map((quiz) => (quiz.id === quizId ? { ...quiz, is_bookmarked: !quiz.is_bookmarked } : quiz)),
+                setQuizData((prev) =>
+                    prev.map((quiz) => (quiz.id === quizId ? {...quiz, is_bookmarked: !quiz.is_bookmarked} : quiz)),
                 )
             })
             .catch((err) => {
@@ -482,7 +546,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 timeoutId = setTimeout(handleScroll, 50)
             }
 
-            container.addEventListener("scroll", throttledScroll, { passive: true })
+            container.addEventListener("scroll", throttledScroll, {passive: true})
             return () => {
                 container.removeEventListener("scroll", throttledScroll)
                 clearTimeout(timeoutId)
@@ -531,9 +595,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                     className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${answerState === "correct" ? "bg-green-500" : "bg-red-500"}`}
                                 >
                                     {answerState === "correct" ? (
-                                        <Check size={16} className="text-white" />
+                                        <Check size={16} className="text-white"/>
                                     ) : (
-                                        <X size={16} className="text-white" />
+                                        <X size={16} className="text-white"/>
                                     )}
                                 </div>
                             )}
@@ -549,7 +613,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                     : "opacity-50 cursor-not-allowed"
                             }`}
                         >
-                            {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                            {isSubmitting ? <Loader2 size={20} className="animate-spin"/> : <Send size={20}/>}
                             <span>{isSubmitting ? "Yuborilmoqda..." : "Javobni yuborish"}</span>
                         </button>
 
@@ -604,8 +668,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                                     : "bg-white/30 text-white"
                                         }`}
                                     >
-                                        {(isSelected || showCorrect) && <Check size={optionsCount <= 3 ? 16 : 14} />}
-                                        {showIncorrect && <X size={optionsCount <= 3 ? 16 : 14} />}
+                                        {(isSelected || showCorrect) && <Check size={optionsCount <= 3 ? 16 : 14}/>}
+                                        {showIncorrect && <X size={optionsCount <= 3 ? 16 : 14}/>}
                                     </div>
                                     <span
                                         className={`flex-1 font-medium text-white ${optionsCount <= 3 ? "text-base sm:text-lg" : "text-sm sm:text-base"}`}
@@ -623,7 +687,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                             disabled={isSubmitting}
                             className={`w-full py-4 sm:py-5 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center justify-center gap-2 transition-all text-base sm:text-lg shadow-lg ${isSubmitting ? "bg-blue-500/40" : "hover:bg-black/50 hover:border-white/40"} disabled:opacity-50`}
                         >
-                            {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                            {isSubmitting ? <Loader2 size={20} className="animate-spin"/> : <Send size={20}/>}
                             <span>Javobni yuborish ({selectedAnswers.length} ta tanlangan)</span>
                         </button>
                     )}
@@ -658,14 +722,15 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                 className={`flex flex-col items-center justify-center gap-3 sm:gap-4 py-6 sm:py-8 px-4 sm:px-6 rounded-xl bg-black/40 backdrop-blur-lg border transition-all shadow-lg ${getButtonClass()} disabled:opacity-70`}
                             >
                                 {isTrue ? (
-                                    <ThumbsUp size={28} className="text-green-400 sm:w-8 sm:h-8" />
+                                    <ThumbsUp size={28} className="text-green-400 sm:w-8 sm:h-8"/>
                                 ) : (
-                                    <ThumbsDown size={28} className="text-red-400 sm:w-8 sm:h-8" />
+                                    <ThumbsDown size={28} className="text-red-400 sm:w-8 sm:h-8"/>
                                 )}
-                                <span className="text-base sm:text-lg font-medium text-white">{option.answer_text}</span>
-                                {isSubmitting && isSelected && <Loader2 size={16} className="animate-spin text-white" />}
-                                {isUserCorrect && <Check size={20} className="text-green-400" />}
-                                {showIncorrect && <X size={20} className="text-red-400" />}
+                                <span
+                                    className="text-base sm:text-lg font-medium text-white">{option.answer_text}</span>
+                                {isSubmitting && isSelected && <Loader2 size={16} className="animate-spin text-white"/>}
+                                {isUserCorrect && <Check size={20} className="text-green-400"/>}
+                                {showIncorrect && <X size={20} className="text-red-400"/>}
                             </button>
                         )
                     })}
@@ -722,9 +787,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                 {option.letter}
                             </div>
                             <span className={`flex-1 ${fontSize} font-medium text-white`}>{option.answer_text}</span>
-                            {isSubmitting && isSelected && <Loader2 size={16} className="animate-spin text-white" />}
-                            {isUserCorrect && <Check size={18} className="text-green-400" />}
-                            {showIncorrect && <X size={18} className="text-red-400" />}
+                            {isSubmitting && isSelected && <Loader2 size={16} className="animate-spin text-white"/>}
+                            {isUserCorrect && <Check size={18} className="text-green-400"/>}
+                            {showIncorrect && <X size={18} className="text-red-400"/>}
                         </button>
                     )
                 })}
@@ -797,77 +862,79 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             <div
                 ref={containerRef}
                 className="h-full overflow-y-scroll snap-y snap-mandatory scrollbar-hide relative z-10 bg-theme-primary"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                style={{scrollbarWidth: "none", msOverflowStyle: "none"}}
             >
-                {quizData?.map((quiz, idx) => {
-                    const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || []
-                    const answerState = userInteractions.answerStates.get(quiz.id)
-                    const hasSelected = selectedAnswers.length > 0 || answerState !== undefined
-                    const isSubmitting = submittingQuestions.has(quiz.id)
-                    const optionsCount = quiz.answers.length
-                    const isCurrentQuestion = idx === currentQuizIndex
 
-                    return (
-                        <div
-                            key={`${quiz.id}-${idx}`}
-                            className="h-screen w-full snap-start flex justify-center items-center relative"
-                        >
+                {displayedQuizzes?.map((quiz, idx) => {
+                        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || []
+                        const answerState = userInteractions.answerStates.get(quiz.id)
+                        const hasSelected = selectedAnswers.length > 0 || answerState !== undefined
+                        const isSubmitting = submittingQuestions.has(quiz.id)
+                        const optionsCount = quiz.answers.length
+                        const isCurrentQuestion = idx === currentQuizIndex
+
+                        return (
                             <div
-                                className="relative w-full h-full max-w-2xl mx-auto px-4 sm:px-6 overflow-hidden"
-                                style={{
-                                    backgroundImage: `url(${quiz.round_image || "/placeholder.svg?height=800&width=400"})`,
-                                    backgroundSize: "cover",
-                                    backgroundPosition: "center",
-                                    backgroundRepeat: "no-repeat",
-                                }}
+                                key={`${quiz.id}-${idx}`}
+                                className="h-screen w-full snap-start flex justify-center items-center relative"
                             >
                                 <div
-                                    className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
-                                <div
-                                    className={`absolute bottom-20 left-5sm:bottom-4 sm:left-3 column items-center space-x-3 z-10 glass-morphism rounded-xl p-3 max-w-xs`}>
-                                    <div className={"flex flex-row items-center justify-start gap-4"}>
-                                        <a href={`/profile/${quiz.user.username}`}
-                                           className="flex items-center space-x-3">
-                                            <img
-                                                src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
-                                                alt="Creator"
-                                                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"
-                                                loading="lazy"
-                                                decoding={"async"}
-                                            />
+                                    className="relative w-full h-full max-w-2xl mx-auto px-4 sm:px-6 overflow-hidden"
+                                    style={{
+                                        backgroundImage: `url(${quiz.round_image || "/placeholder.svg?height=800&width=400"})`,
+                                        backgroundSize: "cover",
+                                        backgroundPosition: "center",
+                                        backgroundRepeat: "no-repeat",
+                                    }}
+                                >
+                                    <div
+                                        className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
+                                    <div
+                                        className={`absolute bottom-20 left-5sm:bottom-4 sm:left-3 column items-center space-x-3 z-10 glass-morphism rounded-xl p-3 max-w-xs`}>
+                                        <div className={"flex flex-row items-center justify-start gap-4"}>
+                                            <a href={`/profile/${quiz.user.username}`}
+                                               className="flex items-center space-x-3">
+                                                <img
+                                                    src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
+                                                    alt="Creator"
+                                                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"
+                                                    loading="lazy"
+                                                    decoding={"async"}
+                                                />
 
-                                            <div>
+                                                <div>
                                                 <span
                                                     className="text-white font-medium text-sm">@{quiz.user.username}</span>
-                                                <div className="text-white/60 text-xs">{quiz.test_title}</div>
-                                            </div>
-                                        </a>
-                                        <button
-                                            title={`${quiz.user.is_following ? `Unfollow ${quiz.user.username}` : `Follow ${quiz.user.username}`}`}
-                                            onClick={() => handleFollow(quiz.user.id)}
-                                            className={`follow-btn w-auto h-auto sm:w-auto sm:h-auto py-0.5 px-2 border-2 rounded-sm border-white/30 backdrop-blur-sm flex items-center justify-center font-medium transition-all hover:scale-105 text-xs sm:text-sm ${quiz.user.is_following ? "bg-green-500 text-white" : "bg-transparent text-white"}`}
-                                        >
-                                            {quiz.user.is_following ? "Following" : "Follow"}
-                                        </button>
-                                    </div>
-                                    {quiz.test_description && (
-                                        <p className="text-white/70 text-xs mt-2 line-clamp-2">{quiz.test_description}</p>
-                                    )}
-                                </div>
-
-                                <div
-                                    className={`absolute top-24 left-4 right-4 sm:top-23 sm:left-6 sm:right-6 bg-black/40 backdrop-blur-lg border border-white/30 rounded-xl p-4 sm:p-6 z-5 shadow-lg`}
-                                >
-                                    <div className="flex justify-between items-center mb-3">
-                                        <div
-                                            className="text-base sm:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                                            Savol
+                                                    <div className="text-white/60 text-xs">{quiz.test_title}</div>
+                                                </div>
+                                            </a>
+                                            <button
+                                                title={`${quiz.user.is_following ? `Unfollow ${quiz.user.username}` : `Follow ${quiz.user.username}`}`}
+                                                onClick={() => handleFollow(quiz.user.id)}
+                                                className={`follow-btn w-auto h-auto sm:w-auto sm:h-auto py-0.5 px-2 border-2 rounded-sm border-white/30 backdrop-blur-sm flex items-center justify-center font-medium transition-all hover:scale-105 text-xs sm:text-sm ${quiz.user.is_following ? "bg-green-500 text-white" : "bg-transparent text-white"}`}
+                                            >
+                                                {quiz.user.is_following ? "Following" : "Follow"}
+                                            </button>
                                         </div>
-                                        {!userInteractions.answerStates.has(quiz.id) && (
+                                        {quiz.test_description && (
+                                            <p className="text-white/70 text-xs mt-2 line-clamp-2">{quiz.test_description}</p>
+                                        )}
+                                    </div>
+
+                                    <div
+                                        className={`absolute top-24 left-4 right-4 sm:top-23 sm:left-6 sm:right-6 bg-black/40 backdrop-blur-lg border border-white/30 rounded-xl p-4 sm:p-6 z-5 shadow-lg`}
+                                    >
+                                        <div className="flex justify-between items-center mb-3">
                                             <div
-                                                className="flex items-center gap-2 px-3 py-1 bg-black/30 rounded-full border border-white/20">
-                                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                                <span className="text-white text-sm font-mono">
+                                                className="text-base sm:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                                                Savol
+                                            </div>
+                                            {!userInteractions.answerStates.has(quiz.id) && (
+                                                <div
+                                                    className="flex items-center gap-2 px-3 py-1 bg-black/30 rounded-full border border-white/20">
+                                                    <div
+                                                        className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                                    <span className="text-white text-sm font-mono">
                           {(() => {
                               const currentTime = questionTimers.get(quiz.id) || 0
                               const minutes = Math.floor(currentTime / 60)
@@ -875,105 +942,151 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                               return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
                           })()}
                         </span>
-                                            </div>
-                                        )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div
+                                            className="text-sm sm:text-base leading-relaxed text-white text-opacity-95">
+                                            {quiz.question_text}
+                                        </div>
                                     </div>
-                                    <div className="text-sm sm:text-base leading-relaxed text-white text-opacity-95">
-                                        {quiz.question_text}
+
+                                    {/* Filter button */}
+                                    <div className="flex flex-row items-center gap-1 absolute top-2 left-2">
+                                        <button
+                                            title={"Filter"}
+                                            onClick={() => setModalOpen(true)}
+                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white hover:bg-black/50 transition-all shadow-lg"
+                                        >
+                                            <Filter size={18}/>
+                                        </button>
                                     </div>
-                                </div>
 
-                                {/* Filter button */}
-                                <div className="flex flex-col items-center gap-1 absolute top-2 left-2">
-                                    <button
-                                        title={"Filter"}
-                                        className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white hover:bg-black/50 transition-all shadow-lg"
-                                    >
-                                        <Filter size={18}/>
-                                    </button>
-                                </div>
-
-                                <div
-                                    className={`absolute ${isTrueFalseQuestion(quiz)
-                                        ? "top-1/3"
-                                        : optionsCount <= 3
-                                            ? "top-1/3"
-                                            : optionsCount === 4
-                                                ? "top-[30%]"
-                                                : "top-[28%]"
-                                    } left-4 right-8 sm:left-6 sm:right-20 z-5 ${optionsCount >= 5 ? "max-h-[45vh]" : ""}`}
-                                >
-                                    {quiz.answers && quiz.answers.length > 0 ? (
-                                        renderQuestionContent(quiz)
-                                    ) : (
-                                        <div className="flex items-center justify-center py-8">
-                                            <div className="flex items-center gap-3 text-white">
-                                                <Loader2 size={24} className="animate-spin"/>
-                                                <span className="text-base sm:text-lg">Variantlar yuklanmoqda...</span>
+                                    {/* Modal */}
+                                    {modalOpen && (
+                                        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+                                            <div className="bg-gray-800 p-6 rounded-lg w-80 max-w-[90%] relative">
+                                                <button
+                                                    onClick={() => setModalOpen(false)}
+                                                    className="absolute top-3 right-3 p-1 rounded-full hover:bg-gray-700"
+                                                >
+                                                    <X size={20} />
+                                                </button>
+                                                <h2 className="text-lg font-semibold text-white mb-4">Select Category</h2>
+                                                <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedCategory("All")
+                                                            setModalOpen(false)
+                                                        }}
+                                                        className={`px-4 py-2 rounded-md text-white font-semibold ${selectedCategory === "All" ? "bg-blue-600" : "bg-gray-700"}`}
+                                                    >
+                                                        All
+                                                    </button>
+                                                    {categories.map(cat => (
+                                                        <button
+                                                            key={cat.id}
+                                                            onClick={() => {
+                                                                setSelectedCategory(cat.title)
+                                                                setModalOpen(false)
+                                                            }}
+                                                            className={`px-4 py-2 rounded-md font-semibold text-white ${
+                                                                selectedCategory === cat.title ? "bg-blue-600" : "bg-gray-700"
+                                                            }`}
+                                                        >
+                                                            {cat.title}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
-                                </div>
 
-                                <div
-                                    className={`absolute right-3 mobile-sidebar flex flex-col gap-2 sm:gap-3 z-10`}
-                                    style={{bottom: "15vh"}}
-                                >
-                                    <div className="flex flex-col items-center">
-                                        <button
-                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center transition-all shadow-lg">
-                                            <div
-                                                className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                                <span className="text-white text-xs font-bold">✓</span>
+                                    <div
+                                        className={`absolute ${isTrueFalseQuestion(quiz)
+                                            ? "top-1/3"
+                                            : optionsCount <= 3
+                                                ? "top-1/3"
+                                                : optionsCount === 4
+                                                    ? "top-[30%]"
+                                                    : "top-[28%]"
+                                        } left-4 right-8 sm:left-6 sm:right-20 z-5 ${optionsCount >= 5 ? "max-h-[45vh]" : ""}`}
+                                    >
+                                        {quiz.answers && quiz.answers.length > 0 ? (
+                                            renderQuestionContent(quiz)
+                                        ) : (
+                                            <div className="flex items-center justify-center py-8">
+                                                <div className="flex items-center gap-3 text-white">
+                                                    <Loader2 size={24} className="animate-spin"/>
+                                                    <span
+                                                        className="text-base sm:text-lg">Variantlar yuklanmoqda...</span>
+                                                </div>
                                             </div>
-                                        </button>
-                                        <span
-                                            className="text-xs sm:text-sm font-medium text-white text-center">{quiz.correct_count}</span>
+                                        )}
                                     </div>
 
-                                    <div className="flex flex-col items-center">
-                                        <button
-                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white transition-all shadow-lg">
-                                            <div
-                                                className="w-7 h-7 sm:w-8 sm:h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                                <span className="text-white text-xs font-bold">✗</span>
-                                            </div>
-                                        </button>
-                                        <span
-                                            className="text-xs sm:text-sm font-medium text-white text-center">{quiz.wrong_count}</span>
-                                    </div>
+                                    <div
+                                        className={`absolute right-3 mobile-sidebar flex flex-col gap-2 sm:gap-3 z-10`}
+                                        style={{bottom: "15vh"}}
+                                    >
+                                        <div className="flex flex-col items-center">
+                                            <button
+                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center transition-all shadow-lg">
+                                                <div
+                                                    className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                                                    <span
+                                                                        className="text-white text-xs font-bold">✓</span>
+                                                </div>
+                                            </button>
+                                            <span
+                                                className="text-xs sm:text-sm font-medium text-white text-center">{quiz.correct_count}</span>
+                                        </div>
 
-                                    <div className="flex flex-col items-center gap-1">
-                                        <button
-                                            title={"Share"}
-                                            onClick={() => shareQuestion(quiz.id)}
-                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white hover:bg-black/50 transition-all shadow-lg"
-                                        >
-                                            <Share size={18} className="sm:w-5 sm:h-5"/>
-                                        </button>
-                                    </div>
+                                        <div className="flex flex-col items-center">
+                                            <button
+                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white transition-all shadow-lg">
+                                                <div
+                                                    className="w-7 h-7 sm:w-8 sm:h-8 bg-red-500 rounded-full flex items-center justify-center">
+                                                                    <span
+                                                                        className="text-white text-xs font-bold">✗</span>
+                                                </div>
+                                            </button>
+                                            <span
+                                                className="text-xs sm:text-sm font-medium text-white text-center">{quiz.wrong_count}</span>
+                                        </div>
 
-                                    <div className="flex flex-col items-center">
-                                        <button
-                                            title={"Save"}
-                                            onClick={() => handleSave(quiz.id)}
-                                            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full backdrop-blur-lg border border-white/30 flex items-center justify-center transition-all shadow-lg ${quiz.is_bookmarked
-                                                ? "bg-yellow-500/30 text-yellow-400"
-                                                : "bg-black/40 text-white hover:bg-black/50"
-                                            }`}
-                                        >
-                                            <Bookmark size={18}
-                                                      className={`sm:w-5 sm:h-5 ${quiz.is_bookmarked ? "fill-current" : ""}`}/>
-                                        </button>
+                                        <div className="flex flex-col items-center gap-1">
+                                            <button
+                                                title={"Share"}
+                                                onClick={() => shareQuestion(quiz.id)}
+                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white hover:bg-black/50 transition-all shadow-lg"
+                                            >
+                                                <Share size={18} className="sm:w-5 sm:h-5"/>
+                                            </button>
+                                        </div>
+
+                                        <div className="flex flex-col items-center">
+                                            <button
+                                                title={"Save"}
+                                                onClick={() => handleSave(quiz.id)}
+                                                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full backdrop-blur-lg border border-white/30 flex items-center justify-center transition-all shadow-lg ${quiz.is_bookmarked
+                                                    ? "bg-yellow-500/30 text-yellow-400"
+                                                    : "bg-black/40 text-white hover:bg-black/50"
+                                                }`}
+                                            >
+                                                <Bookmark size={18}
+                                                          className={`sm:w-5 sm:h-5 ${quiz.is_bookmarked ? "fill-current" : ""}`}/>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )
-                })}
+                        )
+                    })}
 
                 {loading && (
-                    <div className="h-screen w-full flex justify-center items-center animate-fade-in">
+                    <div
+                        className="h-screen w-full flex justify-center items-center animate-fade-in">
                         <div
                             className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
@@ -1018,7 +1131,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
         </div>
     )
 }

@@ -407,7 +407,7 @@ const RegisterPage: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-24 h-24 bg-gradient-to-br from-green-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-2xl font-bold text-white"><img src={letterT} draggable={false} className={"flex w-16 h-16"} loading={"lazy"} decoding={"async"} alt="t"/></span>
+            <span className="text-2xl font-bold text-white"><img src={letterT} draggable={false} className={"flex w-16 h-16"} alt="T"/></span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {step === 1 ? "TestAbd'ga qo'shiling" : "Profilingizni to'ldiring"}

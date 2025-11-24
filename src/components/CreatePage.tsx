@@ -74,7 +74,7 @@ function CreateNewBlock(props: {
                             autoCorrect="on"
                         />
                         {props.title.isLoading && (
-                            <div className="flex flex-row items-center justify-start text-theme-secondary gap-1 pt-2">
+                            <div className={`flex flex-row items-center justify-start text-theme-secondary gap-1 pt-2`}>
                                 <RefreshCw className="animate-spin w-5 h-5 text-theme-secondary" /> Tuzatyapti...
                             </div>
                         )}

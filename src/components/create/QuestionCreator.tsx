@@ -524,9 +524,9 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                     {answers.map((answer, index) => (
                         <div key={index}
                              className="flex items-center space-x-3 p-4 border border-theme-primary rounded-lg">
-                            <div className="flex items-center min-w-[100px]">
+                            <div className="flex items-center min-w-[100px] gap-2">
                                 <span
-                                    className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center font-semibold text-sm mr-3">
+                                    className="w-7 h-7 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center font-semibold text-lg">
                                     {answer.letter}
                                 </span>
                                 <div className="flex items-center">
@@ -776,7 +776,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                 placeholder="Savolingizni bu yerga yozing..."
                             />
                             {questionText.isLoading &&
-                                <span className={"flex flex-row items-center justify-start py-2 gap-1"}> <RefreshCw
+                                <span className={`flex flex-row items-center justify-start py-2 gap-1 ${theme === 'dark' ? 'text-black' : 'text-white'}`}> <RefreshCw
                                     className="animate-spin w-5 h-5 text-gray-600"/> Tekshirilmoqda...</span>}
                         </div>
 
@@ -793,7 +793,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                 placeholder="Qo'shimcha tavsif yoki tushuntirish qo'shing..."
                             />
                             {descriptionText.isLoading &&
-                                <span className={"flex flex-row items-center justify-start py-2 gap-1"}> <RefreshCw
+                                <span className={`flex flex-row items-center justify-start py-2 gap-1 ${theme === 'dark' ? 'text-black' : 'text-white'}`}> <RefreshCw
                                     className="animate-spin w-5 h-5 text-gray-600"/> Tekshirilmoqda...</span>}
                         </div>
 

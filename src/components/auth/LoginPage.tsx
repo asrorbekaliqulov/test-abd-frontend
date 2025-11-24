@@ -46,7 +46,7 @@ const LoginPage: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-2xl font-bold text-white"><img src={letterT} draggable={false} className={"flex w-16 h-16"} loading={"lazy"} decoding={"async"} alt="t"/></span>
+            <span className="text-2xl font-bold text-white"><img src={letterT} draggable={false} className={"flex w-16 h-16"} alt="T"/></span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Xush kelibsiz</h1>
           <p className="text-gray-600">TestAbd hisobingizga kirish</p>
