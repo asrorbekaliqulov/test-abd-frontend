@@ -26,6 +26,7 @@ import ChatApp from "./pages/ChatApp";
 import NotFound from "./pages/not-found";
 import CreateNewBlock from "./components/CreatePage.tsx";
 import CardsMarket from "./components/CardsMarket.tsx";
+import Leaderboard from "./components/LeaderBoard.tsx";
 
 const AppContent: React.FC = () => {
     const {loading} = useAuth();
@@ -59,7 +60,7 @@ const AppContent: React.FC = () => {
     }
 
     const toggleTheme = () => {
-        setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+        setTheme('dark');
     };
 
     const handlePageChange = (page: string) => {
@@ -153,6 +154,7 @@ const App: React.FC = () => {
             <Route path="/*" element={<ProtectedRoute><AppContent/></ProtectedRoute>}/>
             <Route path="*" element={<NotFound/>}/>
             <Route path="/new-block" element={<CreateNewBlock />} />
+            <Route path="/leader-board" element={<Leaderboard />} />
         </Routes>
     );
 };

@@ -25,7 +25,7 @@ import {
 } from "lucide-react"
 import {quizAPI, authAPI, accountsAPI} from "../utils/api"
 import AnimatedLiveProfile from './AnimatedLiveProfile';
-import {useNavigate} from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
 import {StoriesViewer} from "./stories/StoriesViewer"
 import ExpandableText from "./ExpandableText.tsx";
 
@@ -1503,9 +1503,10 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
                             <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full"/>
-                            <h1 className="text-xl font-bold text-blue-600">TestAbd</h1>
                         </div>
                         <div className="flex items-center space-x-2">
+                            <Link to={"/leader-board"} title={"Leaderboard"} className={`px-2 py-1 font-semibold rounded-sm transition-all duration-200 hover:scale-110 transform text-xs border-2 border-blue-400 ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
+                            }`}>Meroschi</Link>
                             <button
                                 onClick={toggleTheme}
                                 className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"

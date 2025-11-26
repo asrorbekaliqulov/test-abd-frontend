@@ -123,7 +123,7 @@ interface UserData {
     categories_of_interest: number[]
 }
 
-interface UserFollowData {
+export interface UserFollowData {
     followers: UserType[]
     following: UserType[]
 }

@@ -4,6 +4,8 @@ import type React from "react"
 import {useState, useEffect, useRef, useCallback} from "react"
 import {Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter} from "lucide-react"
 import {quizAPI, accountsAPI} from "../utils/api"
+import {Link} from "react-router-dom";
+import adsIcon from "./assets/images/ads.svg";
 
 interface QuizPageProps {
     theme: string
@@ -77,59 +79,73 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
 
     // Categoriyani textga aylantiruvchi helper
     const [categories, setCategories] = useState<Category[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string>("All");
-    const [displayedQuizzes, setDisplayedQuizzes] = useState<Quiz[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
-    const [alertShown, setAlertShown] = useState(false);
 
-    useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                const quizzesRes = await quizAPI.fetchQuestions();
-                const categoriesRes = await quizAPI.fetchCategories();
-                setQuizData(quizzesRes.data.results || quizzesRes.data);
-                setCategories(categoriesRes.data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
+    // --- Helper: Category nomini olish
+    const getQuizCategoryName = (quiz: Quiz): string => {
+        const cat = quiz.category;
+        if (!cat) return "Noma'lum";
+        if (Array.isArray(cat)) return cat.map(c => c.title).join(", ");
+        if (typeof cat === "object" && "title" in cat) return cat.title;
+        if (typeof cat === "string") return cat;
+        return "Noma'lum";
+    };
+
+    // --- Barcha quizlarni pagination orqali olish
+    const loadAllQuizzes = async () => {
+        try {
+            let allQuizzes: Quiz[] = [];
+            let url: string | null = "/quiz/questions/"; // boshlang'ich endpoint
+
+            while (url) {
+                const res = await quizAPI.fetchQuestions(url);
+                const data: Quiz[] = Array.isArray(res.data.results) ? res.data.results : [];
+                // console.log("RES DATA:", res.data);
+                allQuizzes = [...allQuizzes, ...data];
+                url = res.data.next; // keyingi sahifa
             }
-        };
-        loadData();
-    }, []);
 
-    const getCategoryName = (category: Quiz["category"]) => {
-        if (!category) return "Unknown";
-        if (typeof category === "string") return category;
-        if (Array.isArray(category)) return category.map(c => (c as Category).title).join(", ");
-        return (category as Category).title;
+            // --- Sorting: yangi savollar birinchi
+            allQuizzes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+            setQuizData(allQuizzes);
+        } catch (err) {
+            console.error("Quiz API error:", err);
+            setQuizData([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- Categorylarni API dan olish
+    const loadCategories = async () => {
+        try {
+            const res = await quizAPI.fetchCategories();
+            const data: Category[] = Array.isArray(res.data) ? res.data : res.data.results || [];
+            setCategories(data);
+        } catch (err) {
+            console.error("Category API error:", err);
+            setCategories([]);
+        }
     };
 
     useEffect(() => {
-        if (loading || quizData.length === 0) return;
+        loadAllQuizzes();
+        loadCategories();
+    }, []);
 
-        const filteredQuizzes =
-            selectedCategory === "All"
-                ? quizData
-                : quizData.filter(q => {
-                    if (!q.category) return false;
-                    if (typeof q.category === "string") return q.category === selectedCategory;
-                    if (Array.isArray(q.category))
-                        return q.category.some(c => (c as Category).title === selectedCategory);
-                    return (q.category as Category).title === selectedCategory;
-                });
-
-        if (!loading && selectedCategory !== "All" && filteredQuizzes.length === 0 && !alertShown) {
-            alert(`Category "${selectedCategory}" uchun savol topilmadi!`);
-            setAlertShown(true); // faqat bir marta alert ko'rsatiladi
-            const shuffled = [...quizData].sort(() => Math.random() - 0.5);
-            setDisplayedQuizzes(shuffled);
-        } else if (filteredQuizzes.length > 0) {
-            setDisplayedQuizzes(filteredQuizzes);
-            setAlertShown(false); // boshqa category tanlansa alert yana chiqishi mumkin
-        }
-    }, [selectedCategory, quizData, loading, alertShown]);
+    // --- Quizlarni frontendda filterlash
+    const filteredQuizzes = selectedCategory && selectedCategory !== "All"
+        ? quizData.filter(q => {
+            const cat = q.category;
+            if (!cat) return false;
+            if (typeof cat === "string") return cat === selectedCategory;
+            if (Array.isArray(cat)) return cat.some(c => c.title === selectedCategory);
+            if (typeof cat === "object" && "title" in cat) return cat.title === selectedCategory;
+            return false;
+        })
+        : quizData;
 
     // Preload images function
     const preloadImages = useCallback(
@@ -633,8 +649,6 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
         }
 
         if (quiz.question_type === "multiple") {
-            const paddingClass =
-                optionsCount <= 3 ? "p-4 sm:p-5 md:p-6" : optionsCount === 4 ? "p-3 sm:p-4 md:p-5" : "p-3 sm:p-3 md:p-4"
 
             return (
                 <div className="space-y-3 sm:space-y-4">
@@ -649,7 +663,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                     key={option.id}
                                     onClick={() => handleMultipleChoice(quiz.id, option.id)}
                                     disabled={answerState !== undefined}
-                                    className={`flex items-center gap-3 sm:gap-4 ${paddingClass} rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${showCorrect
+                                    className={`flex items-center gap-3 sm:gap-4 px-5 py-4 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${showCorrect
                                         ? "border-green-400/60 bg-green-500/30"
                                         : showIncorrect
                                             ? "border-red-400/60 bg-red-500/30"
@@ -659,7 +673,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                     } disabled:opacity-70`}
                                 >
                                     <div
-                                        className={`${optionsCount <= 3 ? "w-6 h-6 sm:w-7 sm:h-7" : "w-5 h-5 sm:w-6 sm:h-6"} rounded flex items-center justify-center transition-all ${showCorrect
+                                        className={`${optionsCount <= 3 ? "w-5 h-5 sm:w-6 sm:h-6" : "w-4 h-4 sm:w-5 sm:h-5"} rounded flex items-center justify-center transition-all ${showCorrect
                                             ? "bg-green-500 text-white"
                                             : showIncorrect
                                                 ? "bg-red-500 text-white"
@@ -779,7 +793,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                             key={option.id}
                             onClick={() => selectAnswer(quiz.id, option.id)}
                             disabled={hasSelected || isSubmitting}
-                            className={`flex items-center gap-3 sm:gap-4 ${paddingClass} rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${getButtonClass()} disabled:opacity-70`}
+                            className={`flex items-center gap-3 sm:gap-4 px-3 py-3 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${getButtonClass()} disabled:opacity-70`}
                         >
                             <div
                                 className={`${circleSize} rounded-full flex items-center justify-center font-medium text-sm sm:text-base ${getCircleClass()}`}
@@ -865,94 +879,79 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                 style={{scrollbarWidth: "none", msOverflowStyle: "none"}}
             >
 
-                {displayedQuizzes?.map((quiz, idx) => {
-                        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || []
-                        const answerState = userInteractions.answerStates.get(quiz.id)
-                        const hasSelected = selectedAnswers.length > 0 || answerState !== undefined
-                        const isSubmitting = submittingQuestions.has(quiz.id)
-                        const optionsCount = quiz.answers.length
-                        const isCurrentQuestion = idx === currentQuizIndex
+                {filteredQuizzes.length === 0 ? (
+                    <div className={"flex w-full h-full items-center justify-center"}><p
+                        className="text-center text-gray-500 mx-auto my-auto">
+                        Ushbu kategoriya bo'yicha savollar topilmadi.
+                    </p></div>
+                ) : (filteredQuizzes?.map((quiz, idx) => {
+                    const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || []
+                    const answerState = userInteractions.answerStates.get(quiz.id)
+                    const hasSelected = selectedAnswers.length > 0 || answerState !== undefined
+                    const isSubmitting = submittingQuestions.has(quiz.id)
+                    const optionsCount = quiz.answers.length
+                    const isCurrentQuestion = idx === currentQuizIndex
 
-                        return (
+                    return (
+                        <div
+                            key={`${quiz.id}-${idx}`}
+                            className="h-screen w-full snap-start flex justify-center items-center relative"
+                        >
                             <div
-                                key={`${quiz.id}-${idx}`}
-                                className="h-screen w-full snap-start flex justify-center items-center relative"
+                                className="relative w-full h-full max-w-2xl mx-auto px-4 sm:px-6 overflow-hidden"
+                                style={{
+                                    backgroundImage: `url(${quiz.round_image || "/placeholder.svg?height=800&width=400"})`,
+                                    backgroundSize: "cover",
+                                    backgroundPosition: "center",
+                                    backgroundRepeat: "no-repeat",
+                                }}
                             >
                                 <div
-                                    className="relative w-full h-full max-w-2xl mx-auto px-4 sm:px-6 overflow-hidden"
-                                    style={{
-                                        backgroundImage: `url(${quiz.round_image || "/placeholder.svg?height=800&width=400"})`,
-                                        backgroundSize: "cover",
-                                        backgroundPosition: "center",
-                                        backgroundRepeat: "no-repeat",
-                                    }}
-                                >
-                                    <div
-                                        className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
-                                    <div
-                                        className={`absolute bottom-20 left-5sm:bottom-4 sm:left-3 column items-center space-x-3 z-10 glass-morphism rounded-xl p-3 max-w-xs`}>
-                                        <div className={"flex flex-row items-center justify-start gap-4"}>
-                                            <a href={`/profile/${quiz.user.username}`}
-                                               className="flex items-center space-x-3">
-                                                <img
-                                                    src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
-                                                    alt="Creator"
-                                                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"
-                                                    loading="lazy"
-                                                    decoding={"async"}
-                                                />
+                                    className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/70 z-1"></div>
+                                <div
+                                    className={`absolute bottom-20 left-5sm:bottom-4 sm:left-3 column items-center space-x-3 z-10 glass-morphism rounded-xl p-3 max-w-xs`}>
+                                    <div className={"flex flex-row items-center justify-start gap-4"}>
+                                        <a href={`/profile/${quiz.user.username}`}
+                                           className="flex items-center space-x-3">
+                                            <img
+                                                src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
+                                                alt="Creator"
+                                                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"
+                                                loading="lazy"
+                                                decoding={"async"}
+                                            />
 
-                                                <div>
+                                            <div>
                                                 <span
                                                     className="text-white font-medium text-sm">@{quiz.user.username}</span>
-                                                    <div className="text-white/60 text-xs">{quiz.test_title}</div>
-                                                </div>
-                                            </a>
-                                            <button
-                                                title={`${quiz.user.is_following ? `Unfollow ${quiz.user.username}` : `Follow ${quiz.user.username}`}`}
-                                                onClick={() => handleFollow(quiz.user.id)}
-                                                className={`follow-btn w-auto h-auto sm:w-auto sm:h-auto py-0.5 px-2 border-2 rounded-sm border-white/30 backdrop-blur-sm flex items-center justify-center font-medium transition-all hover:scale-105 text-xs sm:text-sm ${quiz.user.is_following ? "bg-green-500 text-white" : "bg-transparent text-white"}`}
-                                            >
-                                                {quiz.user.is_following ? "Following" : "Follow"}
-                                            </button>
-                                        </div>
-                                        {quiz.test_description && (
-                                            <p className="text-white/70 text-xs mt-2 line-clamp-2">{quiz.test_description}</p>
-                                        )}
-                                    </div>
-
-                                    <div
-                                        className={`absolute top-24 left-4 right-4 sm:top-23 sm:left-6 sm:right-6 bg-black/40 backdrop-blur-lg border border-white/30 rounded-xl p-4 sm:p-6 z-5 shadow-lg`}
-                                    >
-                                        <div className="flex justify-between items-center mb-3">
-                                            <div
-                                                className="text-base sm:text-lg font-bold text-white bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                                                Savol
+                                                <div className="text-white/60 text-xs">{quiz.test_title}</div>
                                             </div>
-                                            {!userInteractions.answerStates.has(quiz.id) && (
-                                                <div
-                                                    className="flex items-center gap-2 px-3 py-1 bg-black/30 rounded-full border border-white/20">
-                                                    <div
-                                                        className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                                    <span className="text-white text-sm font-mono">
-                          {(() => {
-                              const currentTime = questionTimers.get(quiz.id) || 0
-                              const minutes = Math.floor(currentTime / 60)
-                              const seconds = currentTime % 60
-                              return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-                          })()}
-                        </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div
-                                            className="text-sm sm:text-base leading-relaxed text-white text-opacity-95">
-                                            {quiz.question_text}
-                                        </div>
+                                        </a>
+                                        <button
+                                            title={`${quiz.user.is_following ? `Unfollow ${quiz.user.username}` : `Follow ${quiz.user.username}`}`}
+                                            onClick={() => handleFollow(quiz.user.id)}
+                                            className={`follow-btn w-auto h-auto sm:w-auto sm:h-auto py-0.5 px-2 border-2 rounded-sm border-white/30 backdrop-blur-sm flex items-center justify-center font-medium transition-all hover:scale-105 text-xs sm:text-sm ${quiz.user.is_following ? "bg-transparent text-white" : "bg-green-500 text-white"}`}
+                                        >
+                                            {quiz.user.is_following ? "Following" : "Follow"}
+                                        </button>
                                     </div>
+                                    {quiz.test_description && (
+                                        <p className="text-white/70 text-xs mt-2 line-clamp-2">{quiz.test_description}</p>
+                                    )}
+                                </div>
 
-                                    {/* Filter button */}
-                                    <div className="flex flex-row items-center gap-1 absolute top-2 left-2">
+                                <div
+                                    className={`absolute top-24 left-4 right-4 sm:top-23 sm:left-6 sm:right-6 bg-black/40 backdrop-blur-lg border border-white/30 rounded-xl p-4 sm:p-6 z-5 shadow-lg`}
+                                >
+                                    <div
+                                        className="text-sm sm:text-base leading-relaxed text-white text-opacity-95">
+                                        {quiz.question_text}
+                                    </div>
+                                </div>
+
+                                {/* Filter button */}
+                                <div className="flex flex-row items-center justify-between gap-1 absolute top-2 left-2 w-[95%]">
+                                    <div className={"flex flex-row items-center justify-center gap-1"}>
                                         <button
                                             title={"Filter"}
                                             onClick={() => setModalOpen(true)}
@@ -960,129 +959,146 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                         >
                                             <Filter size={18}/>
                                         </button>
+                                        <p className="text-white/70 text-xs mt-2 line-clamp-2">
+                                            Kategoriya: {getQuizCategoryName(quiz)}
+                                        </p>
                                     </div>
+                                    <Link to={"https://t.me/testabduz"} className={"flex w-10 h-10 bg-black/40 rounded-full border border-gray-600"}><img src={adsIcon} alt="ads" className={"flex w-full h-full"}/></Link>
+                                </div>
 
-                                    {/* Modal */}
-                                    {modalOpen && (
-                                        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-                                            <div className="bg-gray-800 p-6 rounded-lg w-80 max-w-[90%] relative">
+                                {/* Modal */}
+                                {modalOpen && (
+                                    <div
+                                        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+                                        <div className="bg-white rounded-lg p-6 w-80">
+                                            <h2 className="text-lg font-semibold mb-4">Select Category</h2>
+
+                                            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
                                                 <button
-                                                    onClick={() => setModalOpen(false)}
-                                                    className="absolute top-3 right-3 p-1 rounded-full hover:bg-gray-700"
+                                                    className={`px-4 py-2 rounded ${
+                                                        selectedCategory === null || selectedCategory === "All"
+                                                            ? "bg-blue-600 text-white"
+                                                            : "bg-gray-200"
+                                                    }`}
+                                                    onClick={() => setSelectedCategory("All")}
                                                 >
-                                                    <X size={20} />
+                                                    All
                                                 </button>
-                                                <h2 className="text-lg font-semibold text-white mb-4">Select Category</h2>
-                                                <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+
+                                                {categories.map(cat => (
                                                     <button
-                                                        onClick={() => {
-                                                            setSelectedCategory("All")
-                                                            setModalOpen(false)
-                                                        }}
-                                                        className={`px-4 py-2 rounded-md text-white font-semibold ${selectedCategory === "All" ? "bg-blue-600" : "bg-gray-700"}`}
+                                                        key={cat.id}
+                                                        className={`px-4 py-2 rounded ${
+                                                            selectedCategory === cat.title
+                                                                ? "bg-blue-600 text-white"
+                                                                : "bg-gray-200"
+                                                        }`}
+                                                        onClick={() => setSelectedCategory(cat.title)}
                                                     >
-                                                        All
+                                                        {cat.emoji} {cat.title}
                                                     </button>
-                                                    {categories.map(cat => (
-                                                        <button
-                                                            key={cat.id}
-                                                            onClick={() => {
-                                                                setSelectedCategory(cat.title)
-                                                                setModalOpen(false)
-                                                            }}
-                                                            className={`px-4 py-2 rounded-md font-semibold text-white ${
-                                                                selectedCategory === cat.title ? "bg-blue-600" : "bg-gray-700"
-                                                            }`}
-                                                        >
-                                                            {cat.title}
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                                ))}
+                                            </div>
+
+                                            <div className="mt-4 flex justify-end gap-2">
+                                                <button
+                                                    className="px-4 py-2 bg-gray-300 rounded"
+                                                    onClick={() => setModalOpen(false)}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded"
+                                                    onClick={() => setModalOpen(false)}
+                                                >
+                                                    Apply
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div
+                                    className={`absolute ${isTrueFalseQuestion(quiz)
+                                        ? "top-1/3"
+                                        : optionsCount <= 3
+                                            ? "top-1/3"
+                                            : optionsCount === 4
+                                                ? "top-[30%]"
+                                                : "top-[28%]"
+                                    } left-4 right-8 sm:left-6 sm:right-20 z-5 ${optionsCount >= 5 ? "max-h-[45vh]" : ""}`}
+                                >
+                                    {quiz.answers && quiz.answers.length > 0 ? (
+                                        renderQuestionContent(quiz)
+                                    ) : (
+                                        <div className="flex items-center justify-center py-8">
+                                            <div className="flex items-center gap-3 text-white">
+                                                <Loader2 size={24} className="animate-spin"/>
+                                                <span
+                                                    className="text-base sm:text-lg">Variantlar yuklanmoqda...</span>
                                             </div>
                                         </div>
                                     )}
+                                </div>
 
-                                    <div
-                                        className={`absolute ${isTrueFalseQuestion(quiz)
-                                            ? "top-1/3"
-                                            : optionsCount <= 3
-                                                ? "top-1/3"
-                                                : optionsCount === 4
-                                                    ? "top-[30%]"
-                                                    : "top-[28%]"
-                                        } left-4 right-8 sm:left-6 sm:right-20 z-5 ${optionsCount >= 5 ? "max-h-[45vh]" : ""}`}
-                                    >
-                                        {quiz.answers && quiz.answers.length > 0 ? (
-                                            renderQuestionContent(quiz)
-                                        ) : (
-                                            <div className="flex items-center justify-center py-8">
-                                                <div className="flex items-center gap-3 text-white">
-                                                    <Loader2 size={24} className="animate-spin"/>
-                                                    <span
-                                                        className="text-base sm:text-lg">Variantlar yuklanmoqda...</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div
-                                        className={`absolute right-3 mobile-sidebar flex flex-col gap-2 sm:gap-3 z-10`}
-                                        style={{bottom: "15vh"}}
-                                    >
-                                        <div className="flex flex-col items-center">
-                                            <button
-                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center transition-all shadow-lg">
-                                                <div
-                                                    className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                <div
+                                    className={`absolute right-3 mobile-sidebar flex flex-col gap-2 sm:gap-3 z-10`}
+                                    style={{bottom: "15vh"}}
+                                >
+                                    <div className="flex flex-col items-center">
+                                        <button
+                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all">
+                                            <div
+                                                className="w-9 h-9 sm:w-8 sm:h-8 bg-green-500 rounded-full flex items-center justify-center">
                                                                     <span
                                                                         className="text-white text-xs font-bold">✓</span>
-                                                </div>
-                                            </button>
-                                            <span
-                                                className="text-xs sm:text-sm font-medium text-white text-center">{quiz.correct_count}</span>
-                                        </div>
+                                            </div>
+                                        </button>
+                                        <span
+                                            className="text-xs sm:text-sm font-medium text-white text-center">{quiz.correct_count}</span>
+                                    </div>
 
-                                        <div className="flex flex-col items-center">
-                                            <button
-                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white transition-all shadow-lg">
-                                                <div
-                                                    className="w-7 h-7 sm:w-8 sm:h-8 bg-red-500 rounded-full flex items-center justify-center">
+                                    <div className="flex flex-col items-center">
+                                        <button
+                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full  flex items-center justify-center text-white transition-all">
+                                            <div
+                                                className="w-9 h-9 sm:w-8 sm:h-8 bg-red-500 rounded-full flex items-center justify-center">
                                                                     <span
                                                                         className="text-white text-xs font-bold">✗</span>
-                                                </div>
-                                            </button>
-                                            <span
-                                                className="text-xs sm:text-sm font-medium text-white text-center">{quiz.wrong_count}</span>
-                                        </div>
+                                            </div>
+                                        </button>
+                                        <span
+                                            className="text-xs sm:text-sm font-medium text-white text-center">{quiz.wrong_count}</span>
+                                    </div>
 
-                                        <div className="flex flex-col items-center gap-1">
-                                            <button
-                                                title={"Share"}
-                                                onClick={() => shareQuestion(quiz.id)}
-                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white hover:bg-black/50 transition-all shadow-lg"
-                                            >
-                                                <Share size={18} className="sm:w-5 sm:h-5"/>
-                                            </button>
-                                        </div>
+                                    <div className="flex flex-col items-center gap-1">
+                                        <button
+                                            title={"Share"}
+                                            onClick={() => shareQuestion(quiz.id)}
+                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white transition-all"
+                                        >
+                                            <Share size={20} className="sm:w-5 sm:h-5"/>
+                                        </button>
+                                    </div>
 
-                                        <div className="flex flex-col items-center">
-                                            <button
-                                                title={"Save"}
-                                                onClick={() => handleSave(quiz.id)}
-                                                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full backdrop-blur-lg border border-white/30 flex items-center justify-center transition-all shadow-lg ${quiz.is_bookmarked
-                                                    ? "bg-yellow-500/30 text-yellow-400"
-                                                    : "bg-black/40 text-white hover:bg-black/50"
-                                                }`}
-                                            >
-                                                <Bookmark size={18}
-                                                          className={`sm:w-5 sm:h-5 ${quiz.is_bookmarked ? "fill-current" : ""}`}/>
-                                            </button>
-                                        </div>
+                                    <div className="flex flex-col items-center">
+                                        <button
+                                            title={"Save"}
+                                            onClick={() => handleSave(quiz.id)}
+                                            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${quiz.is_bookmarked
+                                                ? "bg-transparent text-yellow-400"
+                                                : "bg-transparent text-white"
+                                            }`}
+                                        >
+                                            <Bookmark size={20}
+                                                      className={`sm:w-5 sm:h-5 ${quiz.is_bookmarked ? "fill-current" : ""}`}/>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                        )
-                    })}
+                        </div>
+                    )
+                }))}
 
                 {loading && (
                     <div

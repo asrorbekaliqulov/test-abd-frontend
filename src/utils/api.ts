@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useState } from 'react';
 
-const API_BASE_URL = 'https://backend.testabd.uz';
+export const API_BASE_URL = 'https://backend.testabd.uz';
 
 // axios.defaults.withCredentials = true;
 
@@ -32,7 +32,7 @@ const csrfManager = {
 
 
 // Public API (auth oldidan ishlatiladigan)
-const publicApi = axios.create({
+export const publicApi = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -261,29 +261,36 @@ export interface LeaderboardFilters {
 }
 
 export const leaderboardApi = {
-  async getLeaderboardData(filters: LeaderboardFilters = {}): Promise<UserLeaderboardData[]> {
-    try {
-      const queryParams = new URLSearchParams()
-  
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) {
-          queryParams.append(key, value)
+    async getLeaderboardData(): Promise<LeaderboardUser[]> {
+        try {
+            const response = await api.get('/accounts/leaderboard/')
+            // Backend shunchaki kerakli maydonlarni qaytarsin
+            return response.data.results.map((u: any) => ({
+                username: u.username,
+                profile_image: u.profile_image,
+                tests_solved: u.tests_solved,
+                coins: u.coins,
+                today_rank: u.today_rank,
+                yesterday_rank: u.yesterday_rank,
+                is_following: u.is_following,
+            }))
+        } catch (error) {
+            console.error('Error fetching leaderboard data:', error)
+            throw error
         }
-      })
-  
-      const url = `${API_BASE_URL}/accounts/leaderboard/?${queryParams.toString()}`
-      const response = await api.get(url)
-  
-      const data = response.data
-      return data.results || data
-    } catch (error) {
-      console.error("Error fetching leaderboard data:", error)
-      throw error
-    }
-  }
-  
+    },
 
+    toggleFollow: async (userId: number) => {
+        try {
+            const res = await api.post(`/accounts/followers/${userId}/toggle/`)
+            return res.data
+        } catch (error) {
+            console.error('Error toggling follow:', error)
+            throw error
+        }
+    },
 }
+
 
      
 
@@ -437,6 +444,14 @@ export const quizAPI = {
     url ? api.get(url) : api.get('/quiz/recommended/'),
 };
 
+export const getLeaderboard = (page = 1) =>
+    authApi.get(`/accounts/leaderboard/?page=${page}`);
+
+export const toggleFollow = async (userId: number) => {
+    const res = await publicApi.post(`/accounts/followers/${userId}/toggle/`)
+    return res.data
+}
+
 interface FollowUser {
   id: number;
   username: string;
@@ -447,6 +462,21 @@ interface FollowDataResponse {
   followers: FollowUser[];
   following: FollowUser[];
 }
+
+
+export const authApi = axios.create({
+    baseURL: API_BASE_URL,
+});
+
+// Token qo‘shib qo‘yish
+authApi.interceptors.request.use((config) => {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
 
 // Accounts API
 export const accountsAPI = {
