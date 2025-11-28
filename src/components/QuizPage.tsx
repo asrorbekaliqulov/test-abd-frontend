@@ -92,8 +92,18 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
         return "Noma'lum";
     };
 
-    // --- Barcha quizlarni pagination orqali olish
-    const loadAllQuizzes = async () => {
+    // Helper: massivni tasodifiy tartibda aralashtirish
+    const shuffleArray = <T>(array: T[]): T[] => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    };
+
+    const loadAllQuizzes = async (): Promise<void> => {
+        setLoading(true);
         try {
             let allQuizzes: Quiz[] = [];
             let url: string | null = "/quiz/questions/"; // boshlang'ich endpoint
@@ -101,13 +111,12 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
             while (url) {
                 const res = await quizAPI.fetchQuestions(url);
                 const data: Quiz[] = Array.isArray(res.data.results) ? res.data.results : [];
-                // console.log("RES DATA:", res.data);
-                allQuizzes = [...allQuizzes, ...data];
-                url = res.data.next; // keyingi sahifa
+                allQuizzes = allQuizzes.concat(data);
+                url = res.data.next || null; // keyingi sahifa
             }
 
-            // --- Sorting: yangi savollar birinchi
-            allQuizzes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            // ❗ Random tartibda aralashtirish
+            allQuizzes = shuffleArray(allQuizzes);
 
             setQuizData(allQuizzes);
         } catch (err) {
@@ -117,6 +126,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
             setLoading(false);
         }
     };
+
 
     // --- Categorylarni API dan olish
     const loadCategories = async () => {
@@ -969,11 +979,12 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                 {/* Modal */}
                                 {modalOpen && (
                                     <div
-                                        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                                        <div className="bg-white rounded-lg p-6 w-80">
+                                        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 overflow-auto"
+                                    >
+                                        <div className="bg-white rounded-lg p-6 w-80 max-h-[80vh] overflow-y-auto shadow-lg">
                                             <h2 className="text-lg font-semibold mb-4">Select Category</h2>
 
-                                            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                                            <div className="flex flex-col gap-2">
                                                 <button
                                                     className={`px-4 py-2 rounded ${
                                                         selectedCategory === null || selectedCategory === "All"
@@ -1002,13 +1013,13 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
 
                                             <div className="mt-4 flex justify-end gap-2">
                                                 <button
-                                                    className="px-4 py-2 bg-gray-300 rounded"
+                                                    className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 transition"
                                                     onClick={() => setModalOpen(false)}
                                                 >
                                                     Cancel
                                                 </button>
                                                 <button
-                                                    className="px-4 py-2 bg-blue-600 text-white rounded"
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                                                     onClick={() => setModalOpen(false)}
                                                 >
                                                     Apply

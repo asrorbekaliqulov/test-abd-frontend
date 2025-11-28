@@ -187,3 +187,23 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+.gradient-text {
+    background: linear-gradient(90deg, #93c5fd, #60a5fa, #3b82f6, #1e40af);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientMove 3s linear infinite;
+}
+
+@keyframes gradientMove {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}

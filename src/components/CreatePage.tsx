@@ -68,14 +68,14 @@ function CreateNewBlock(props: {
                             value={props.title.value}
                             onChange={props.onChange}
                             required
-                            className="block w-full px-3 py-3 outline-none border bg-theme-primary border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                            className="block w-full px-3 py-3 text-white outline-none border bg-theme-primary border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                             placeholder="Enter test title"
                             spellCheck={true}
                             autoCorrect="on"
                         />
                         {props.title.isLoading && (
-                            <div className={`flex flex-row items-center justify-start text-theme-secondary gap-1 pt-2`}>
-                                <RefreshCw className="animate-spin w-5 h-5 text-theme-secondary" /> Tuzatyapti...
+                            <div className={`flex flex-row items-center justify-start text-white gap-1 pt-2`}>
+                                <RefreshCw className="animate-spin w-5 h-5 text-white" /> Tuzatyapti...
                             </div>
                         )}
                     </div>
@@ -92,14 +92,14 @@ function CreateNewBlock(props: {
                             value={props.description.value}
                             onChange={props.onChange1}
                             required
-                            className="block w-full px-3 py-3 outline-none border bg-theme-primary border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                            className="block w-full px-3 py-3 outline-none text-white border bg-theme-primary border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                             placeholder="Describe what this test covers"
                             spellCheck={true}
                             autoCorrect="on"
                         />
                         {props.description.isLoading && (
-                            <div className="flex flex-row items-center justify-start gap-1 text-theme-secondary pt-2">
-                                <RefreshCw className="animate-spin w-5 h-5 text-theme-secondary" /> Tuzatyapti...
+                            <div className="flex flex-row items-center justify-start gap-1 text-white pt-2">
+                                <RefreshCw className="animate-spin w-5 h-5 ttext-white" /> Tuzatyapti...
                             </div>
                         )}
                     </div>

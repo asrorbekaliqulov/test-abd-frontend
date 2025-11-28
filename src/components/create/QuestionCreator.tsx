@@ -10,7 +10,6 @@ import {motion, AnimatePresence} from "framer-motion";
 import {spellCheck} from "../AISpellCheck.tsx";
 import CategoryDropdown from "../CategoryDropdown.tsx";
 
-
 declare global {
     interface Window {
         spellTimer: Record<number, any>;
@@ -69,6 +68,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
     const [categoryId, setCategoryId] = useState<number | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const categoryDropdownRef = useRef<HTMLDivElement>(null);
+    const [createdQuestions, setCreatedQuestions] = useState<string[]>([]);
 
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
@@ -311,13 +311,123 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
         }
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        setError("")
-        console.log("SUBMIT PAYTIDA category:", formData.category_id)
+    // const handleSubmit = async (e: React.FormEvent) => {
+    //     e.preventDefault()
+    //     setLoading(true)
+    //     setError("")
+    //
+    //     if (createdQuestions.includes(formData.question_text.trim())) {
+    //         setError("Bu savol allaqachon yaratilgan!");
+    //         return;
+    //     }
+    //
+    //     // Validation based on question type
+    //     if (formData.question_type === "text_input") {
+    //         if (!formData.correct_answer_text.trim()) {
+    //             setError("Matn kiritish savollari uchun to'g'ri javob matni talab qilinadi")
+    //             setLoading(false)
+    //             return
+    //         }
+    //         if (!formData.answer_language.trim()) {
+    //             setError("Matn kiritish savollari uchun javob tili talab qilinadi")
+    //             setLoading(false)
+    //             return
+    //         }
+    //     } else {
+    //         const correctAnswers = answers.filter((a) => a.is_correct && a.answer_text.trim())
+    //         if (correctAnswers.length === 0) {
+    //             setError("Kamida bitta javob to'g'ri deb belgilanishi kerak")
+    //             setLoading(false)
+    //             return
+    //         }
+    //
+    //         const validAnswers = answers.filter((a) => a.answer_text.trim())
+    //         if (validAnswers.length < 2 && formData.question_type !== "text_input") {
+    //             setError("Kamida ikkita javob talab qilinadi")
+    //             setLoading(false)
+    //             return
+    //         }
+    //
+    //         // For multiple choice, check that user doesn't select all answers as correct
+    //         if (formData.question_type === "multiple" && correctAnswers.length >= validAnswers.length) {
+    //             setError("Ko'p tanlovli savollar uchun kamida bitta noto'g'ri javob bo'lishi kerak")
+    //             setLoading(false)
+    //             return
+    //         }
+    //     }
+    //
+    //     try {
+    //         // Prepare data as JSON
+    //         const questionData: any = {
+    //             test: Number.parseInt(formData.test),
+    //             question_text: formData.question_text,
+    //             question_type: formData.question_type,
+    //             order_index: formData.order_index,
+    //             category_id: formData.category_id,
+    //         }
+    //
+    //         if (formData.description.trim()) {
+    //             questionData.feedback = formData.description
+    //         }
+    //
+    //         // For text input questions
+    //         if (formData.question_type === "text_input") {
+    //             questionData.correct_answer_text = formData.correct_answer_text
+    //             questionData.answer_language = formData.answer_language
+    //         } else {
+    //             // For choice-based questions, include answers
+    //             const validAnswers = answers.filter((a) => a.answer_text.trim())
+    //             questionData.answers = validAnswers.map((answer) => ({
+    //                 letter: answer.letter,
+    //                 answer_text: answer.answer_text,
+    //                 is_correct: answer.is_correct,
+    //             }))
+    //         }
+    //
+    //         // If there's a media file, use FormData, otherwise use JSON
+    //         if (mediaFile) {
+    //             const formDataToSend = new FormData()
+    //
+    //             // Add all question data
+    //             Object.keys(questionData).forEach((key) => {
+    //                 if (key === "answers") {
+    //                     formDataToSend.append("answers", JSON.stringify(questionData.answers))
+    //                 } else {
+    //                     formDataToSend.append(key, questionData[key].toString())
+    //                 }
+    //             });
+    //
+    //             formDataToSend.append("media", mediaFile)
+    //
+    //             const questionResponse = await quizAPI.createQuestion(formDataToSend)
+    //         } else {
+    //             // Send as JSON
+    //             const questionResponse = await quizAPI.createQuestion(questionData)
+    //         }
+    //
+    //         onClose()
+    //     } catch (err: any) {
+    //         console.error("Savol yaratishda xatolik:", err)
+    //         setError(err.response?.data?.detail || err.response?.data?.message || "Savol yaratishda xatolik yuz berdi")
+    //     } finally {
+    //         alert("Savol muvaffaqiyatli yaratildi!")
+    //         setLoading(false)
+    //     }
+    // }
 
-        // Validation based on question type
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const trimmedQuestion = formData.question_text.trim();
+
+        if (createdQuestions.includes(trimmedQuestion)) {
+            setError("Bu savol allaqachon yaratilgan!");
+            return;
+        }
+
+        setLoading(true);
+        setError("");
+
         if (formData.question_type === "text_input") {
             if (!formData.correct_answer_text.trim()) {
                 setError("Matn kiritish savollari uchun to'g'ri javob matni talab qilinadi")
@@ -344,7 +454,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                 return
             }
 
-            // For multiple choice, check that user doesn't select all answers as correct
             if (formData.question_type === "multiple" && correctAnswers.length >= validAnswers.length) {
                 setError("Ko'p tanlovli savollar uchun kamida bitta noto'g'ri javob bo'lishi kerak")
                 setLoading(false)
@@ -353,7 +462,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
         }
 
         try {
-            // Prepare data as JSON
             const questionData: any = {
                 test: Number.parseInt(formData.test),
                 question_text: formData.question_text,
@@ -362,16 +470,12 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                 category_id: formData.category_id,
             }
 
-            if (formData.description.trim()) {
-                questionData.feedback = formData.description
-            }
+            if (formData.description.trim()) questionData.feedback = formData.description
 
-            // For text input questions
             if (formData.question_type === "text_input") {
                 questionData.correct_answer_text = formData.correct_answer_text
                 questionData.answer_language = formData.answer_language
             } else {
-                // For choice-based questions, include answers
                 const validAnswers = answers.filter((a) => a.answer_text.trim())
                 questionData.answers = validAnswers.map((answer) => ({
                     letter: answer.letter,
@@ -380,12 +484,8 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                 }))
             }
 
-            console.log("Kategoriyaga ketayotgan:", formData.category_id);
-            // If there's a media file, use FormData, otherwise use JSON
             if (mediaFile) {
                 const formDataToSend = new FormData()
-
-                // Add all question data
                 Object.keys(questionData).forEach((key) => {
                     if (key === "answers") {
                         formDataToSend.append("answers", JSON.stringify(questionData.answers))
@@ -393,21 +493,21 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                         formDataToSend.append(key, questionData[key].toString())
                     }
                 });
-
                 formDataToSend.append("media", mediaFile)
-
-                const questionResponse = await quizAPI.createQuestion(formDataToSend)
+                await quizAPI.createQuestion(formDataToSend)
             } else {
-                // Send as JSON
-                const questionResponse = await quizAPI.createQuestion(questionData)
+                await quizAPI.createQuestion(questionData)
             }
 
+            setCreatedQuestions(prev => [...prev, trimmedQuestion]);
+
             onClose()
+            alert("Savol muvaffaqiyatli yaratildi!")
+
         } catch (err: any) {
             console.error("Savol yaratishda xatolik:", err)
-            setError(err.response?.data?.detail || err.response?.data?.message || "Savol yaratishda xatolik yuz berdi")
+            // setError(err.response?.data?.detail || err.response?.data?.message || "Savol yaratishda xatolik yuz berdi")
         } finally {
-            alert("Savol muvaffaqiyatli yaratildi!")
             setLoading(false)
         }
     }
@@ -818,12 +918,11 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                         <div className="flex space-x-4 pt-4">
                             <button
                                 type="submit"
-                                disabled={loading}
+                                disabled={loading || createdQuestions.includes(formData.question_text.trim())} // ❗ Duplicate tekshiruv qo'shildi
                                 className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                             >
                                 {loading ? (
-                                    <div
-                                        className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
                                 ) : (
                                     <>
                                         <Save size={20}/>

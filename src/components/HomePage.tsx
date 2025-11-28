@@ -28,6 +28,7 @@ import AnimatedLiveProfile from './AnimatedLiveProfile';
 import {Link, useNavigate} from 'react-router-dom';
 import {StoriesViewer} from "./stories/StoriesViewer"
 import ExpandableText from "./ExpandableText.tsx";
+import "../index.css";
 
 interface HomePageProps {
     theme: string
@@ -1503,17 +1504,18 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
                             <img src="/logo.jpg" alt="TestAbd" className="h-8 w-8 rounded-full"/>
+                            <h1 className="text-xl font-bold gradient-text">TestAbd</h1>
                         </div>
                         <div className="flex items-center space-x-2">
                             <Link to={"/leader-board"} title={"Leaderboard"} className={`px-2 py-1 font-semibold rounded-sm transition-all duration-200 hover:scale-110 transform text-xs border-2 border-blue-400 ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
                             }`}>Meroschi</Link>
-                            <button
-                                onClick={toggleTheme}
-                                className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
-                                }`}
-                            >
-                                {theme === "dark" ? <Sun size={20}/> : <Moon size={20}/>}
-                            </button>
+                            {/*<button*/}
+                            {/*    onClick={toggleTheme}*/}
+                            {/*    className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"*/}
+                            {/*    }`}*/}
+                            {/*>*/}
+                            {/*    {theme === "dark" ? <Sun size={20}/> : <Moon size={20}/>}*/}
+                            {/*</button>*/}
                             <button
                                 onClick={() => setShowNotifications(true)}
                                 className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
