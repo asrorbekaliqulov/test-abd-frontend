@@ -52,7 +52,7 @@ export default function ExpandableText({ text }: { text: string }) {
                     className="text-blue-500 mt-1 font-medium"
                     onClick={() => setExpanded((prev) => !prev)}
                 >
-                    {expanded ? "Yopish" : "Ko‘proq o‘qish"}
+                    {expanded ? "Yopish" : "Ko'proq o'qish"}
                 </button>
             )}
         </div>

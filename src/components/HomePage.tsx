@@ -5,8 +5,6 @@ import {
     Share,
     Bookmark,
     CheckCircle,
-    Sun,
-    Moon,
     Loader2,
     X,
     Send,
@@ -1509,13 +1507,6 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                         <div className="flex items-center space-x-2">
                             <Link to={"/leader-board"} title={"Leaderboard"} className={`px-2 py-1 font-semibold rounded-sm transition-all duration-200 hover:scale-110 transform text-xs border-2 border-blue-400 ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
                             }`}>Meroschi</Link>
-                            {/*<button*/}
-                            {/*    onClick={toggleTheme}*/}
-                            {/*    className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"*/}
-                            {/*    }`}*/}
-                            {/*>*/}
-                            {/*    {theme === "dark" ? <Sun size={20}/> : <Moon size={20}/>}*/}
-                            {/*</button>*/}
                             <button
                                 onClick={() => setShowNotifications(true)}
                                 className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"

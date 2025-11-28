@@ -77,23 +77,31 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
     const [currentTimerQuestionId, setCurrentTimerQuestionId] = useState<number | null>(null)
 
-    // Categoriyani textga aylantiruvchi helper
+    // Categoriyalar
     const [categories, setCategories] = useState<Category[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<number | "All" | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
 
-    // --- Helper: Category nomini olish
+
+// --- Helper: Quiz kategoriyasining nomini olish
     const getQuizCategoryName = (quiz: Quiz): string => {
         const cat = quiz.category;
+
         if (!cat) return "Noma'lum";
-        if (Array.isArray(cat)) return cat.map(c => c.title).join(", ");
-        if (typeof cat === "object" && "title" in cat) return cat.title;
-        if (typeof cat === "string") return cat;
+
+        // backend: number bo‘lib keladi (ID)
+        if (typeof cat === "number") {
+            const found = categories.find(c => c.id === cat);
+            return found?.title || "Noma'lum";
+        }
+
         return "Noma'lum";
     };
 
-    // Helper: massivni tasodifiy tartibda aralashtirish
-    const shuffleArray = <T>(array: T[]): T[] => {
+
+// Massivni tasodifiy aralashtirish (xatosiz)
+    const shuffleArray = <T,>(array: T[]): T[] => {
+        if (!Array.isArray(array) || array.length === 0) return [];
         const arr = [...array];
         for (let i = arr.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -102,23 +110,23 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
         return arr;
     };
 
+
+// --- Quizlarni yuklash
     const loadAllQuizzes = async (): Promise<void> => {
         setLoading(true);
         try {
             let allQuizzes: Quiz[] = [];
-            let url: string | null = "/quiz/questions/"; // boshlang'ich endpoint
+            let url: string | null = "/quiz/questions/";
 
             while (url) {
                 const res = await quizAPI.fetchQuestions(url);
                 const data: Quiz[] = Array.isArray(res.data.results) ? res.data.results : [];
                 allQuizzes = allQuizzes.concat(data);
-                url = res.data.next || null; // keyingi sahifa
+                url = res.data.next || null;
             }
 
-            // ❗ Random tartibda aralashtirish
-            allQuizzes = shuffleArray(allQuizzes);
+            setQuizData(shuffleArray(allQuizzes));
 
-            setQuizData(allQuizzes);
         } catch (err) {
             console.error("Quiz API error:", err);
             setQuizData([]);
@@ -128,7 +136,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     };
 
 
-    // --- Categorylarni API dan olish
+// --- Categorylarni yuklash
     const loadCategories = async () => {
         try {
             const res = await quizAPI.fetchCategories();
@@ -145,17 +153,12 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
         loadCategories();
     }, []);
 
-    // --- Quizlarni frontendda filterlash
-    const filteredQuizzes = selectedCategory && selectedCategory !== "All"
-        ? quizData.filter(q => {
-            const cat = q.category;
-            if (!cat) return false;
-            if (typeof cat === "string") return cat === selectedCategory;
-            if (Array.isArray(cat)) return cat.some(c => c.title === selectedCategory);
-            if (typeof cat === "object" && "title" in cat) return cat.title === selectedCategory;
-            return false;
-        })
-        : quizData;
+
+// --- FRONTEND FILTER — backenddan číslo kelgan category ID bo‘yicha!
+    const filteredQuizzes =
+        selectedCategory && selectedCategory !== "All"
+            ? quizData.filter(q => q.category === selectedCategory)
+            : quizData;
 
     // Preload images function
     const preloadImages = useCallback(
@@ -895,12 +898,12 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                         Ushbu kategoriya bo'yicha savollar topilmadi.
                     </p></div>
                 ) : (filteredQuizzes?.map((quiz, idx) => {
-                    const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || []
-                    const answerState = userInteractions.answerStates.get(quiz.id)
-                    const hasSelected = selectedAnswers.length > 0 || answerState !== undefined
-                    const isSubmitting = submittingQuestions.has(quiz.id)
-                    const optionsCount = quiz.answers.length
-                    const isCurrentQuestion = idx === currentQuizIndex
+                    const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
+                    const answerState = userInteractions.answerStates.get(quiz.id);
+                    const hasSelected = selectedAnswers.length > 0 || answerState !== undefined;
+                    const isSubmitting = submittingQuestions.has(quiz.id);
+                    const optionsCount = quiz.answers.length;
+                    const isCurrentQuestion = idx === currentQuizIndex;
 
                     return (
                         <div
@@ -959,35 +962,47 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                     </div>
                                 </div>
 
-                                {/* Filter button */}
+                                {/* Filter Button */}
                                 <div className="flex flex-row items-center justify-between gap-1 absolute top-2 left-2 w-[95%]">
-                                    <div className={"flex flex-row items-center justify-center gap-1"}>
+                                    <div className="flex flex-row items-center justify-center gap-1">
+
                                         <button
-                                            title={"Filter"}
+                                            title="Filter"
                                             onClick={() => setModalOpen(true)}
                                             className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/40 backdrop-blur-lg border border-white/30 flex items-center justify-center text-white hover:bg-black/50 transition-all shadow-lg"
                                         >
                                             <Filter size={18}/>
                                         </button>
+
                                         <p className="text-white/70 text-xs mt-2 line-clamp-2">
-                                            Kategoriya: {getQuizCategoryName(quiz)}
+                                            Kategoriya: {
+                                            selectedCategory === "All" || selectedCategory === null
+                                                ? "All"
+                                                : categories.find(c => c.id === selectedCategory)?.title || "Noma'lum"
+                                        }
                                         </p>
                                     </div>
-                                    <Link to={"https://t.me/testabduz"} className={"flex w-10 h-10 bg-black/40 rounded-full border border-gray-600"}><img src={adsIcon} alt="ads" className={"flex w-full h-full"}/></Link>
+
+                                    <Link
+                                        to="https://t.me/testabduz"
+                                        className="flex w-10 h-10 bg-black/40 rounded-full border border-gray-600"
+                                    >
+                                        <img src={adsIcon} alt="ads" className="flex w-full h-full"/>
+                                    </Link>
                                 </div>
+
 
                                 {/* Modal */}
                                 {modalOpen && (
-                                    <div
-                                        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 overflow-auto"
-                                    >
-                                        <div className="bg-white rounded-lg p-6 w-80 max-h-[80vh] overflow-y-auto shadow-lg">
+                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                                        <div className="bg-white rounded-lg shadow-lg w-80 sm:w-96 md:w-[28rem] lg:w-[32rem] max-h-[80vh] overflow-y-auto p-6">
+
                                             <h2 className="text-lg font-semibold mb-4">Select Category</h2>
 
                                             <div className="flex flex-col gap-2">
                                                 <button
                                                     className={`px-4 py-2 rounded ${
-                                                        selectedCategory === null || selectedCategory === "All"
+                                                        selectedCategory === "All" || selectedCategory === null
                                                             ? "bg-blue-600 text-white"
                                                             : "bg-gray-200"
                                                     }`}
@@ -1000,11 +1015,11 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                                     <button
                                                         key={cat.id}
                                                         className={`px-4 py-2 rounded ${
-                                                            selectedCategory === cat.title
+                                                            selectedCategory === cat.id
                                                                 ? "bg-blue-600 text-white"
                                                                 : "bg-gray-200"
                                                         }`}
-                                                        onClick={() => setSelectedCategory(cat.title)}
+                                                        onClick={() => setSelectedCategory(cat.id)}
                                                     >
                                                         {cat.emoji} {cat.title}
                                                     </button>
