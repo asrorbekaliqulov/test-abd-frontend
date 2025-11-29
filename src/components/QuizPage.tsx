@@ -83,35 +83,16 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     const [modalOpen, setModalOpen] = useState(false);
 
 
-// --- Helper: Quiz kategoriyasining nomini olish
     const getQuizCategoryName = (quiz: Quiz): string => {
         const cat = quiz.category;
-
         if (!cat) return "Noma'lum";
-
-        // backend: number bo‘lib keladi (ID)
         if (typeof cat === "number") {
             const found = categories.find(c => c.id === cat);
             return found?.title || "Noma'lum";
         }
-
         return "Noma'lum";
     };
 
-
-// Massivni tasodifiy aralashtirish (xatosiz)
-    const shuffleArray = <T,>(array: T[]): T[] => {
-        if (!Array.isArray(array) || array.length === 0) return [];
-        const arr = [...array];
-        for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        return arr;
-    };
-
-
-// --- Quizlarni yuklash
     const loadAllQuizzes = async (): Promise<void> => {
         setLoading(true);
         try {
@@ -124,9 +105,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                 allQuizzes = allQuizzes.concat(data);
                 url = res.data.next || null;
             }
-
-            setQuizData(shuffleArray(allQuizzes));
-
+            setQuizData(allQuizzes);
         } catch (err) {
             console.error("Quiz API error:", err);
             setQuizData([]);
@@ -135,8 +114,6 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
         }
     };
 
-
-// --- Categorylarni yuklash
     const loadCategories = async () => {
         try {
             const res = await quizAPI.fetchCategories();
@@ -154,7 +131,6 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     }, []);
 
 
-// --- FRONTEND FILTER — backenddan číslo kelgan category ID bo‘yicha!
     const filteredQuizzes =
         selectedCategory && selectedCategory !== "All"
             ? quizData.filter(q => q.category === selectedCategory)

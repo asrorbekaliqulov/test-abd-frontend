@@ -37,9 +37,8 @@ const Leaderboard: React.FC = () => {
             setLeaderboardData(results.sort((a, b) => b.created_tests - a.created_tests));
             setCurrentPage(page);
 
-            // totalPages ni hisoblash
             const count = response.data.count || results.length;
-            const pageSize = results.length || 10; // agar backend page_size qaytarmasa default 10
+            const pageSize = results.length || 10;
             setTotalPages(Math.ceil(count / pageSize));
 
         } catch (err: any) {
