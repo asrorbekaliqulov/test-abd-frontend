@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import {useState, useEffect, useRef, useCallback} from "react"
 import {Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter} from "lucide-react"
 import {quizAPI, accountsAPI} from "../utils/api"
@@ -81,7 +81,6 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<number | "All" | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
-
 
     const getQuizCategoryName = (quiz: Quiz): string => {
         const cat = quiz.category;
@@ -223,33 +222,42 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
     )
 
     const fetchQuizzes = async (url?: string) => {
-        if (loading) return
-        setLoading(true)
+        if (loading) return;
+        setLoading(true);
+
         try {
-            const response = await quizAPI.fetchRecommendedTests(url)
-            const data = response.data
+            const response = await quizAPI.fetchRecommendedTests(url);
+            const data = response.data;
 
-            const newBatchStart = quizData.length
-            setBatchIndices((prev) => [...prev, newBatchStart])
+            const newBatchStart = quizData.length;
+            setBatchIndices((prev) => [...prev, newBatchStart]);
 
-            // Remove duplicates by ID
+            // Remove duplicates
+            const existingIds = new Set(quizData.map((q) => q.id));
+            let newQuizzes = data.results.filter((q: Quiz) => !existingIds.has(q.id));
+
+            newQuizzes = newQuizzes.sort(() => Math.random() - 0.5);
+
             setQuizData((prev) => {
-                const existingIds = new Set(prev.map((quiz) => quiz.id))
-                const newQuizzes = data.results.filter((quiz: Quiz) => !existingIds.has(quiz.id))
-                const updatedQuizzes = [...prev, ...newQuizzes]
-                setTimeout(() => preloadImages(newBatchStart, 10), 100)
-                return updatedQuizzes
-            })
-            setNextPageUrl(data.next)
-            setHasMore(!!data.next)
-            setPage((prevPage) => prevPage + 1)
+                const updated = [...prev, ...newQuizzes];
+
+                // preload
+                setTimeout(() => preloadImages(newBatchStart, 10), 100);
+
+                return updated;
+            });
+
+            setNextPageUrl(data.next);
+            setHasMore(!!data.next);
+            setPage((prevPage) => prevPage + 1);
+
         } catch (error) {
-            console.error("Savollarni yuklashda xatolik:", error)
-            alert("Savollarni yuklashda xato yuz berdi. Qaytadan urinib ko‘ring.")
+            console.error("Savollarni yuklashda xatolik:", error);
+            alert("Savollarni yuklashda xato yuz berdi. Qaytadan urinib ko‘ring.");
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
     useEffect(() => {
         fetchQuizzes()
@@ -869,10 +877,12 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
             >
 
                 {filteredQuizzes.length === 0 ? (
-                    <div className={"flex w-full h-full items-center justify-center"}><p
-                        className="text-center text-gray-500 mx-auto my-auto">
-                        Ushbu kategoriya bo'yicha savollar topilmadi.
-                    </p></div>
+                    <div
+                        className="h-screen w-full flex justify-center items-center animate-fade-in gap-3">
+                        <div
+                            className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className={"text-xl font-medium text-white"}>Yuklanmoqda...</span>
+                    </div>
                 ) : (filteredQuizzes?.map((quiz, idx) => {
                     const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
                     const answerState = userInteractions.answerStates.get(quiz.id);
@@ -970,39 +980,51 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
 
                                 {/* Modal */}
                                 {modalOpen && (
-                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-                                        <div className="bg-white rounded-lg shadow-lg w-80 sm:w-96 md:w-[28rem] lg:w-[32rem] max-h-[80vh] overflow-y-auto p-6">
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center">
+                                        {/* Background */}
+                                        <div
+                                            className="absolute inset-0 bg-black bg-opacity-50"
+                                            onClick={() => setModalOpen(false)}
+                                        />
 
-                                            <h2 className="text-lg font-semibold mb-4">Select Category</h2>
+                                        {/* Modal */}
+                                        <div className="relative bg-white rounded-xl shadow-lg w-80 sm:w-96 md:w-[28rem] lg:w-[32rem] max-h-[85vh] flex flex-col">
 
-                                            <div className="flex flex-col gap-2">
-                                                <button
-                                                    className={`px-4 py-2 rounded ${
-                                                        selectedCategory === "All" || selectedCategory === null
-                                                            ? "bg-blue-600 text-white"
-                                                            : "bg-gray-200"
-                                                    }`}
-                                                    onClick={() => setSelectedCategory("All")}
-                                                >
-                                                    All
-                                                </button>
+                                            <h2 className="text-lg font-semibold p-4 border-b">Select Category</h2>
 
-                                                {categories.map(cat => (
+                                            {/* Scrollable content */}
+                                            <div className="p-4 overflow-y-auto flex-1">
+                                                <div className="flex flex-col gap-2">
+
                                                     <button
-                                                        key={cat.id}
                                                         className={`px-4 py-2 rounded ${
-                                                            selectedCategory === cat.id
+                                                            selectedCategory === "All" || selectedCategory === null
                                                                 ? "bg-blue-600 text-white"
                                                                 : "bg-gray-200"
                                                         }`}
-                                                        onClick={() => setSelectedCategory(cat.id)}
+                                                        onClick={() => setSelectedCategory("All")}
                                                     >
-                                                        {cat.emoji} {cat.title}
+                                                        All
                                                     </button>
-                                                ))}
+
+                                                    {categories.map(cat => (
+                                                        <button
+                                                            key={cat.id}
+                                                            className={`px-4 py-2 rounded ${
+                                                                selectedCategory === cat.id
+                                                                    ? "bg-blue-600 text-white"
+                                                                    : "bg-gray-200"
+                                                            }`}
+                                                            onClick={() => setSelectedCategory(cat.id)}
+                                                        >
+                                                            {cat.emoji} {cat.title}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
 
-                                            <div className="mt-4 flex justify-end gap-2">
+                                            {/* Footer */}
+                                            <div className="p-4 border-t flex justify-end gap-2">
                                                 <button
                                                     className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 transition"
                                                     onClick={() => setModalOpen(false)}

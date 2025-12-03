@@ -102,7 +102,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
     // debug
     useEffect(() => {
         if (typeof window !== "undefined") {
-            // eslint-disable-next-line no-console
             console.log("RealTimeQuizPage debug -> quizId:", quizId, "accessToken?", !!accessToken, "wsUrl:", wsUrl)
         }
     }, [quizId, accessToken, wsUrl])
@@ -214,7 +213,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
                 setUser(userData)
                 setUserError(null)
             } catch (err) {
-                // eslint-disable-next-line no-console
                 console.error("Failed to load user data:", err)
                 setUserError(err instanceof Error ? err.message : "Failed to load user data")
             } finally {

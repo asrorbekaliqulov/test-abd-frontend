@@ -32,9 +32,9 @@ const AppContent: React.FC = () => {
     const {loading} = useAuth();
 
     // ✅ Tema holatini localStorage orqali boshqarish
-    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const [theme, setTheme] = useState<'dark'>(() => {
         const stored = localStorage.getItem('theme');
-        return stored === 'dark' ? 'dark' : 'light';
+        return stored === 'dark' ? 'dark' : 'dark';
     });
 
     const [currentPage, setCurrentPage] = useState('home');
