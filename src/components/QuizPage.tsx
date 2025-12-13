@@ -557,14 +557,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                         >
                                             <Filter size={18}/>
                                         </button>
-
-                                        <p className="text-white/70 text-xs mt-2 line-clamp-2">
-                                            Kategoriya: {
-                                            selectedCategory === "All" || selectedCategory === null
-                                                ? "All"
-                                                : categories.find(c => c.id === selectedCategory)?.title || "Noma'lum"
-                                        }
-                                        </p>
                                     </div>
 
                                     <Link
