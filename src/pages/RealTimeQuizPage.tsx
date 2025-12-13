@@ -80,33 +80,144 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
     const [userLoading, setUserLoading] = useState(true)
     const [userError, setUserError] = useState<string | null>(null)
 
-    // quiz id derivation (robust for Next.js prop or react-router / vite URL)
-    const deriveQuizId = (): number | null => {
-        if (quiz_id !== undefined && quiz_id !== null) return Number(quiz_id)
-        if (typeof window !== "undefined") {
-            const path = window.location.pathname
-            // try common patterns: /quiz/123, /quizzes/123, /app/quiz/123
-            const m = path.match(/\/quiz(?:zes)?\/?\/?(\d+)/) || path.match(/\/quiz\/(\d+)/) || path.match(/\/(\d+)(?:\/?$)/)
-            if (m && m[1]) return Number(m[1])
-        }
-        return null
-    }
+    // quiz id state (initially null)
+    const [quizId, setQuizId] = useState<number | null>(null);
+    const [session, setSession] = useState<UserData | null>(null)
 
-    const quizId = deriveQuizId()
-
-    // safe localStorage access
-    const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
-    const WS_BASE_URL = "wss://backend.testabd.uz"
-    const wsUrl = quizId && accessToken ? `${WS_BASE_URL}/ws/quiz/${quizId}/?token=${accessToken}` : null
-
-    // debug
+    // --------------------------
+// QUIZ ID — URL orqali fallback
+// --------------------------
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            console.log("RealTimeQuizPage debug -> quizId:", quizId, "accessToken?", !!accessToken, "wsUrl:", wsUrl)
-        }
-    }, [quizId, accessToken, wsUrl])
+        const deriveQuizId = (): number | null => {
 
-    const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl)
+            // 1) Props orqali
+            if (quiz_id !== undefined && quiz_id !== null) {
+                const id = Number(quiz_id);
+                if (!isNaN(id)) return id;
+            }
+
+            // 2) Query params orqali
+            const params = new URLSearchParams(window.location.search);
+            const qp = params.get("id") || params.get("quiz_id");
+            if (qp) {
+                const id = Number(qp);
+                if (!isNaN(id)) return id;
+            }
+
+            // 3) Path orqali (universal regex)
+            const path = window.location.pathname;
+
+            const patterns = [
+                /live-quiz\/(\d+)/i,
+                /quiz(?:zes)?\/(\d+)/i,
+                /quiz\/start\/(\d+)/i,
+                /start\/quiz\/(\d+)/i,
+                /\/(\d+)(?:\/)?$/i,
+            ];
+
+            for (const rx of patterns) {
+                const m = path.match(rx);
+                if (m?.[1]) {
+                    const id = Number(m[1]);
+                    if (!isNaN(id)) return id;
+                }
+            }
+
+            return null;
+        };
+
+        const derived = deriveQuizId();
+
+        if (derived !== null && quizId === null) {
+            setQuizId(derived);
+        }
+    }, [quiz_id]); // QUIZ ID URL fallback
+
+
+// --------------------------
+// TOKEN
+// --------------------------
+    const accessToken =
+        typeof window !== "undefined"
+            ? localStorage.getItem("access_token")
+            : null;
+
+// --------------------------
+// UNIVERSAL WS URL
+// --------------------------
+    const WS_BASE_URL = "wss://backend.testabd.uz";
+    const wsUrl = accessToken
+        ? `${WS_BASE_URL}/ws/quiz/all/?token=${accessToken}`
+        : null;
+
+// debug WS URL
+    useEffect(() => {
+        console.log("token exists:", !!accessToken);
+        console.log("wsUrl:", wsUrl);
+    }, [accessToken, wsUrl]);
+
+
+// --------------------------
+// WEBSOCKET HOOK
+// --------------------------
+    const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl ?? "", {
+        shouldReconnect: () => true,
+    });
+
+
+// --------------------------
+// WS — QUIZ ID OLIB BERADI
+// --------------------------
+    useEffect(() => {
+        if (!lastMessage) return;
+
+        let raw = lastMessage;
+
+        if (typeof raw === "object" && "data" in raw) {
+            raw = raw.data;
+        }
+
+        let msg: any;
+        try {
+            msg = typeof raw === "string" ? JSON.parse(raw) : raw;
+        } catch (err) {
+            console.warn("WS JSON parse error:", err);
+            return;
+        }
+
+        console.log("WS MESSAGE:", msg);
+
+        // 👉 PRIORITY: WS orqali kelgan quiz_id
+        if (msg.quiz_id !== undefined && msg.quiz_id !== null) {
+            const parsed = Number(msg.quiz_id);
+            if (!isNaN(parsed)) {
+                console.log("WS → QUIZ ID OLINDI:", parsed);
+                setQuizId(parsed);
+            }
+        }
+
+        // agar WS session yuborsa → update
+        if (msg.session) {
+            setSession(prev => ({
+                ...(prev ?? {}),
+                ...msg.session
+            }));
+        }
+    }, [lastMessage]);
+
+
+// --------------------------
+// DEBUG
+// --------------------------
+    useEffect(() => {
+        console.log("quizId:", quizId);
+        console.log("wsUrl:", wsUrl);
+        console.log("isConnected:", isConnected);
+        console.log("session:", session);
+        console.log("PATH =", window.location.pathname);
+        console.log("SEARCH =", window.location.search);
+        console.log("FULL URL =", window.location.href);
+    }, [quizId, wsUrl, session]);
 
     const [quizSession, setQuizSession] = useState<QuizSession | null>(null)
     const [participants, setParticipants] = useState<Participant[]>([])
@@ -213,7 +324,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
                 setUser(userData)
                 setUserError(null)
             } catch (err) {
-                console.error("Failed to load user data:", err)
                 setUserError(err instanceof Error ? err.message : "Failed to load user data")
             } finally {
                 setUserLoading(false)
@@ -242,23 +352,30 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
     }, [isConnected, error, user, hasJoined, sendMessage])
 
     // answer submit
-    const handleAnswerSubmit = async (answerId: number | string) => {
-        if (hasAnswered || !currentQuestion || !user) return
+    const handleAnswerSubmit = (answerId: number | string) => {
+        if (hasAnswered || !currentQuestion || !user || isSubmittingAnswer) return;
 
-        setIsSubmittingAnswer(true)
-        setSelectedAnswer(answerId)
-        setHasAnswered(true)
+        // Darhol tanlangan javobni set qilamiz
+        setSelectedAnswer(answerId);
+        setHasAnswered(true);
+        setIsSubmittingAnswer(true);
 
-        const responseTime = (Date.now() - questionStartTimeRef.current) / 1000
+        const responseTime = (Date.now() - questionStartTimeRef.current) / 1000;
 
+        // Websocket yuborish
         sendMessage({
             action: "submit_answer",
             user_id: user.id,
             question_id: currentQuestion.id,
             answer_id: answerId,
             response_time: responseTime,
-        })
-    }
+        });
+
+        // UI qotib qolmasligi uchun kichik delay bilan isSubmittingAnswer-ni false qilamiz
+        setTimeout(() => {
+            setIsSubmittingAnswer(false);
+        }, 150); // 150ms yetarli
+    };
 
     // define handleEndQuiz before other callbacks that reference it to avoid TDZ
     const handleEndQuiz = useCallback(() => {
@@ -391,184 +508,181 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
 
     // incoming websocket messages
     useEffect(() => {
-        if (!lastMessage) return
+        if (!lastMessage) return;
+
+        let data: any;
         try {
-            const data = JSON.parse(lastMessage.data)
-            switch (data.type) {
-                case "all_questions_loaded":
-                    if (Array.isArray(data.questions)) {
-                        setAllQuestions(data.questions)
-                        if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions))
+            data = JSON.parse(lastMessage); // lastMessage string
+        } catch (err) {
+            console.error("Failed to parse WS message:", lastMessage, err);
+            setQuestionLoadError(true);
+            return;
+        }
+
+        switch (data.type) {
+            case "all_questions_loaded":
+            case "quiz_state":
+                if (Array.isArray(data.questions)) {
+                    setAllQuestions(data.questions);
+                    if (typeof window !== "undefined") {
+                        localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions));
                     }
-                    break
+                }
+                if (data.quiz_session) setQuizSession(data.quiz_session);
+                if (data.participants) setParticipants(data.participants);
+                setIsStartingQuiz(false);
+                setIsEndingQuiz(false);
+                break;
 
-                case "quiz_started":
-                    setQuizStarted(true)
-                    if (data.quiz_session) setQuizSession(data.quiz_session)
-                    if (data.all_questions && Array.isArray(data.all_questions)) {
-                        setAllQuestions(data.all_questions)
-                        if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions))
+            case "quiz_started":
+                setQuizStarted(true);
+                if (data.quiz_session) setQuizSession(data.quiz_session);
+                if (Array.isArray(data.all_questions)) {
+                    setAllQuestions(data.all_questions);
+                    if (typeof window !== "undefined") {
+                        localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions));
                     }
-                    break
+                }
+                break;
 
-                case "timed_question_change":
-                    if (typeof data.question_index === "number") {
-                        setCurrentQuestionIndex(data.question_index)
-                        setHasAnswered(false)
-                        setSelectedAnswer(null)
-                        setAnswerResult(null)
-                        setShowingResults(false)
-                        questionStartTimeRef.current = Date.now()
-                    }
-                    break
+            case "timed_question_change":
+                if (typeof data.question_index === "number") {
+                    setCurrentQuestionIndex(data.question_index);
+                    setHasAnswered(false);
+                    setSelectedAnswer(null);
+                    setAnswerResult(null);
+                    setShowingResults(false);
+                    questionStartTimeRef.current = Date.now();
+                }
+                break;
 
-                case "quiz_state":
-                    if (data.quiz_session) setQuizSession(data.quiz_session)
-                    if (data.questions && Array.isArray(data.questions)) {
-                        setAllQuestions(data.questions)
-                        if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions))
-                    }
-                    if (data.quiz_session?.current_question && data.quiz_session.is_active) {
-                        setQuizStarted(true)
-                        questionStartTimeRef.current = Date.now()
-                    }
-                    if (data.participants) setParticipants(data.participants)
-                    setIsStartingQuiz(false)
-                    setIsEndingQuiz(false)
-                    break
+            case "new_question":
+                if (data.question) {
+                    setQuizSession((prev) => {
+                        const prevIndex = prev?.current_question_index ?? -1;
+                        const computedIndex = typeof data.question_index === "number" ? data.question_index : prevIndex + 1;
+                        return {
+                            ...prev,
+                            current_question: data.question,
+                            current_question_index: computedIndex,
+                            time_per_question: data.time_per_question ?? prev?.time_per_question ?? 15,
+                            is_active: data.is_active ?? prev?.is_active ?? true,
+                            total_questions: data.total_questions ?? prev?.total_questions ?? (Array.isArray(data.all_questions) ? data.all_questions.length : 0),
+                        } as QuizSession;
+                    });
 
-                case "new_question":
-                    if (data.question) {
-                        // merge into quizSession safely
-                        setQuizSession((prev) => {
-                            const prevIndex = prev && typeof prev.current_question_index === "number" ? prev.current_question_index : -1
-                            const computedIndex =
-                                typeof data.question_index === "number" ? data.question_index : prevIndex >= 0 ? prevIndex + 1 : 0
-                            return {
-                                ...(prev ?? {}),
-                                current_question: data.question,
-                                current_question_index: computedIndex,
-                                time_per_question: data.time_per_question ?? (prev?.time_per_question ?? 15),
-                                is_active: data.is_active ?? prev?.is_active ?? true,
-                                total_questions: data.total_questions ?? prev?.total_questions ?? (Array.isArray(data.all_questions) ? data.all_questions.length : prev?.total_questions ?? 0),
-                            } as QuizSession
-                        })
+                    setHasAnswered(false);
+                    setSelectedAnswer(null);
+                    setAnswerResult(null);
+                    setShowingResults(false);
+                    setIsSubmittingAnswer(false);
+                    setCanMoveToNext(false);
+                    questionStartTimeRef.current = Date.now();
 
-                        setHasAnswered(false)
-                        setSelectedAnswer(null)
-                        setAnswerResult(null)
-                        setShowingResults(false)
-                        setIsSubmittingAnswer(false)
-                        setCanMoveToNext(false)
-                        questionStartTimeRef.current = Date.now()
-
-                        if (typeof data.time_per_question === "number") setTimeLeft(data.time_per_question)
-                        if (data.all_questions && Array.isArray(data.all_questions)) {
-                            setAllQuestions(data.all_questions)
-                            if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions))
+                    if (typeof data.time_per_question === "number") setTimeLeft(data.time_per_question);
+                    if (Array.isArray(data.all_questions)) {
+                        setAllQuestions(data.all_questions);
+                        if (typeof window !== "undefined") {
+                            localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions));
                         }
                     }
-                    break
+                }
+                break;
 
-                case "answer_result":
-                    if (quizSession?.current_question) {
-                        setUserAnswerHistory((prev) => ({
-                            ...prev,
-                            [quizSession.current_question.id]: {
-                                answerId: selectedAnswer ? String(selectedAnswer) : "",
-                                isCorrect: data.is_correct,
-                            },
-                        }))
-                    }
-                    setAnswerResult({
-                        isCorrect: data.is_correct,
-                        correctAnswerId: data.correct_answer_id ?? null,
-                        explanation: data.explanation,
-                        responseTime: data.response_time,
-                    })
-                    setShowingResults(true)
-                    setIsSubmittingAnswer(false)
-                    setCanMoveToNext(Boolean(data.has_next_question))
+            case "answer_result":
+                if (quizSession?.current_question) {
+                    setUserAnswerHistory((prev) => ({
+                        ...prev,
+                        [quizSession.current_question.id]: {
+                            answerId: selectedAnswer ? String(selectedAnswer) : "",
+                            isCorrect: data.is_correct,
+                        },
+                    }));
+                }
+                setAnswerResult({
+                    isCorrect: data.is_correct,
+                    correctAnswerId: data.correct_answer_id ?? null,
+                    explanation: data.explanation,
+                    responseTime: data.response_time,
+                });
+                setShowingResults(true);
+                setIsSubmittingAnswer(false);
+                setCanMoveToNext(Boolean(data.has_next_question));
 
-                    if (!data.has_next_question) {
-                        setTimeout(() => {
-                            setIsQuizEnded(true)
-                            setQuizStarted(false)
-                            sendMessage({ action: "get_final_results" })
-                        }, 3000)
-                    }
-                    break
+                if (!data.has_next_question) {
+                    setTimeout(() => {
+                        setIsQuizEnded(true);
+                        setQuizStarted(false);
+                        sendMessage({ action: "get_final_results" });
+                    }, 3000);
+                }
+                break;
 
-                case "stats_update":
-                    setTotalStats({
-                        totalUsers: data.stats.total_participants ?? 0,
-                        totalAnswered: data.stats.total_attempts ?? 0,
-                        totalCorrect: data.stats.correct_attempts ?? 0,
-                        totalWrong: data.stats.wrong_attempts ?? 0,
-                    })
-                    break
+            case "stats_update":
+                setTotalStats({
+                    totalUsers: data.stats?.total_participants ?? 0,
+                    totalAnswered: data.stats?.total_attempts ?? 0,
+                    totalCorrect: data.stats?.correct_attempts ?? 0,
+                    totalWrong: data.stats?.wrong_attempts ?? 0,
+                });
+                break;
 
-                case "final_results":
-                    setFinalResults(data.results ?? [])
-                    setShowResultsModal(true)
-                    break
+            case "final_results":
+                setFinalResults(data.results ?? []);
+                setShowResultsModal(true);
+                break;
 
-                case "user_results":
-                    setUserResults(data.results)
-                    break
+            case "user_results":
+                setUserResults(data.results);
+                break;
 
-                case "quiz_restarted":
-                    setIsQuizEnded(false)
-                    setQuizStarted(false)
-                    setHasAnswered(false)
-                    setSelectedAnswer(null)
-                    setAnswerResult(null)
-                    setShowingResults(false)
-                    setFinalResults([])
-                    setUserResults(null)
-                    setShowResultsModal(false)
-                    setCurrentQuestionIndex(0)
-                    setAllQuestions([])
-                    setUserAnswerHistory({})
-                    if (typeof window !== "undefined") {
-                        localStorage.removeItem(`quiz_${quizId}_questions`)
-                        localStorage.removeItem(`quiz_${quizId}_current_index`)
-                        localStorage.removeItem(`quiz_${quizId}_answer_history`)
-                    }
-                    break
+            case "quiz_restarted":
+                setIsQuizEnded(false);
+                setQuizStarted(false);
+                setHasAnswered(false);
+                setSelectedAnswer(null);
+                setAnswerResult(null);
+                setShowingResults(false);
+                setFinalResults([]);
+                setUserResults(null);
+                setShowResultsModal(false);
+                setCurrentQuestionIndex(0);
+                setAllQuestions([]);
+                setUserAnswerHistory({});
+                if (typeof window !== "undefined") {
+                    localStorage.removeItem(`quiz_${quizId}_questions`);
+                    localStorage.removeItem(`quiz_${quizId}_current_index`);
+                    localStorage.removeItem(`quiz_${quizId}_answer_history`);
+                }
+                break;
 
-                case "participants_update":
-                    setParticipants(data.participants ?? [])
-                    break
+            case "participants_update":
+                setParticipants(data.participants ?? []);
+                break;
 
-                case "quiz_ended":
-                    setIsQuizEnded(true)
-                    setQuizStarted(false)
-                    setIsEndingQuiz(false)
-                    setCanMoveToNext(false)
-                    sendMessage({ action: "get_final_results" })
-                    if (user) sendMessage({ action: "get_user_results", user_id: user.id })
-                    break
+            case "quiz_ended":
+                setIsQuizEnded(true);
+                setQuizStarted(false);
+                setIsEndingQuiz(false);
+                setCanMoveToNext(false);
+                sendMessage({ action: "get_final_results" });
+                if (user) sendMessage({ action: "get_user_results", user_id: user.id });
+                break;
 
-                case "time_update":
-                    if (typeof data.time_left === "number" && quizSession?.mode === "timed") {
-                        setTimeLeft(data.time_left)
-                    }
-                    break
+            case "time_update":
+                if (typeof data.time_left === "number" && quizSession?.mode === "timed") {
+                    setTimeLeft(data.time_left);
+                }
+                break;
 
-                case "error":
-                    setQuestionLoadError(true)
-                    break
+            case "error":
+                setQuestionLoadError(true);
+                break;
 
-                default:
-                    break
-            }
-        } catch (err) {
-            // eslint-disable-next-line no-console
-            console.error("Failed to parse ws message:", err)
-            setQuestionLoadError(true)
+            default:
+                break;
         }
-    }, [lastMessage, quizId, quizSession?.mode, quizSession, selectedAnswer, sendMessage, user])
+    }, [lastMessage, quizId, quizSession?.mode, quizSession, selectedAnswer, sendMessage, user]);
 
     // keep user stats from participants in sync
     useEffect(() => {

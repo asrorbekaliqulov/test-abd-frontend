@@ -7,6 +7,7 @@ import {useNavigate} from "react-router-dom";
 import rank1Img from "./assets/images/rank1.png";
 import rank2Img from "./assets/images/rank2.png";
 import rank3Img from "./assets/images/rank3.png";
+import defaultUserAvatar from "../components/assets/images/defaultuseravatar.png";
 
 interface LeaderboardUser {
     id: number;
@@ -142,16 +143,15 @@ const Leaderboard: React.FC = () => {
             <div className="w-full flex flex-row items-end justify-center gap-4 sm:gap-6 md:gap-10 py-6">
                 {top3Users.map((user, idx) => {
                     let orderClass = "";
-                    if (idx === 0) orderClass = "order-2"; // 1-o'rin markazda
-                    else if (idx === 1) orderClass = "order-1"; // 2-o'rin chapda
-                    else if (idx === 2) orderClass = "order-3"; // 3-o'rin o'ngda
+                    if (idx === 0) orderClass = "order-2";
+                    else if (idx === 1) orderClass = "order-1";
+                    else if (idx === 2) orderClass = "order-3";
 
                     let rankImg = "";
-                    if (idx === 0) rankImg = rank1Img; // 1-o'rin rasm
-                    else if (idx === 1) rankImg = rank2Img; // 2-o'rin rasm
-                    else if (idx === 2) rankImg = rank3Img; // 3-o'rin rasm
+                    if (idx === 0) rankImg = rank1Img;
+                    else if (idx === 1) rankImg = rank2Img;
+                    else if (idx === 2) rankImg = rank3Img;
 
-                    // 1-o'rin kattaroq bo'lishi uchun o'lchamlarni alohida sozlash
                     const sizeClass = idx === 0
                         ? "w-24 h-24 sm:w-40 sm:h-40 md:w-32 md:h-32"
                         : "w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28";
@@ -205,40 +205,37 @@ const Leaderboard: React.FC = () => {
                     >
                         {/* Left: Rank + Avatar + Username */}
                         <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto mb-2 sm:mb-0">
-                            <span
-                                className="text-gray-400 text-base sm:text-2xl font-bold w-7 sm:w-8 flex justify-center">
-                                {index + 4}
-                            </span>
+                <span
+                    className="text-gray-400 text-base sm:text-2xl font-bold w-7 sm:w-8 flex justify-center"
+                >
+                    {index + 4}
+                </span>
                             <div className="flex items-center gap-2 sm:gap-3">
-                                {u.profile_image ? (
-                                    <img
-                                        src={u.profile_image}
-                                        className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border border-gray-600 object-cover"
-                                    />
-                                ) : (
-                                    <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gray-600 rounded-full"/>
-                                )}
-                                <span
-                                    className="text-white text-xs sm:text-sm md:text-base font-medium">{u.username}</span>
-                                <span
-                                    className="text-yellow-400 text-xs sm:text-sm md:text-base font-semibold">🪙 {u.coins}</span>
+                                <img
+                                    src={u.profile_image || defaultUserAvatar}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).src = defaultUserAvatar;
+                                    }}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border border-gray-600 object-cover"
+                                    alt={u.username}
+                                />
+                                <span className="text-white text-xs sm:text-sm md:text-base font-medium">{u.username}</span>
+                                <span className="text-yellow-400 text-xs sm:text-sm md:text-base font-semibold">🪙 {u.coins}</span>
                             </div>
                         </div>
 
-                        {/* Right: Coins + Follow */}
-                        <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-0">
-                            {u.id !== currentUserId && (
-                                <button
-                                    onClick={() => toggleFollow(u)}
-                                    className={`
-                                        px-2 sm:px-3 md:px-4 py-1 rounded-md font-medium text-xs sm:text-sm md:text-base transition
-                                        ${u.is_following ? "bg-gray-500 text-gray-200 hover:bg-gray-600" : "bg-blue-500 text-white hover:bg-blue-600"}
-                                    `}
-                                >
-                                    {u.is_following ? "Unfollow" : "Follow"}
-                                </button>
-                            )}
-                        </div>
+                        {/* Right: Follow Button */}
+                        {u.id !== currentUserId && (
+                            <button
+                                onClick={() => toggleFollow(u)}
+                                className={`
+                        px-2 sm:px-3 md:px-4 py-1 rounded-md font-medium text-xs sm:text-sm md:text-base transition
+                        ${u.is_following ? "bg-gray-500 text-gray-200 hover:bg-gray-600" : "bg-blue-500 text-white hover:bg-blue-600"}
+                    `}
+                            >
+                                {u.is_following ? "Unfollow" : "Follow"}
+                            </button>
+                        )}
                     </div>
                 );
             })}

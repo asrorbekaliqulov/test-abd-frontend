@@ -50,7 +50,6 @@ const AppContent: React.FC = () => {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-
     if (loading) {
         return (
             <div className="min-h-screen bg-theme-secondary flex items-center justify-center">

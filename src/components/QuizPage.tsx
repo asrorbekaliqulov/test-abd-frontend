@@ -1,694 +1,306 @@
-"use client"
+"use client";
 
-import React from "react"
-import {useState, useEffect, useRef, useCallback} from "react"
-import {Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter} from "lucide-react"
-import {quizAPI, accountsAPI} from "../utils/api"
-import {Link} from "react-router-dom";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter } from "lucide-react";
+import { quizAPI, accountsAPI } from "../utils/api";
+import { Link } from "react-router-dom";
 import adsIcon from "./assets/images/ads.svg";
+import defaultAvatar from "../components/assets/images/defaultuseravatar.png";
 
-interface QuizPageProps {
-    theme: string
-}
+interface QuizPageProps { theme?: string }
 
-export interface Category {
-    id: number;
-    title: string;
-    slug: string;
-    emoji: string;
-}
+export interface Category { id: number; title: string; slug: string; emoji: string; }
 
 interface Quiz {
-    id: number
-    question_text: string
-    question_type: string
-    media: string | null
-    answers: Array<{
-        id: number
-        letter: string
-        answer_text: string
-        is_correct: boolean
-    }>
-    correct_count: number
-    wrong_count: number
-    test_title: string
-    test_description: string
-    difficulty_percentage: number
-    is_bookmarked?: boolean
-    user: {
-        id: number
-        username: string
-        profile_image: string | null
-        is_badged?: boolean
-        is_premium?: boolean
-        is_following?: boolean
-    }
-    created_at: string
-    round_image: string | null
+    id: number;
+    question_text: string;
+    question_type: string;
+    media: string | null;
+    answers: Array<{ id: number; letter: string; answer_text: string; is_correct: boolean }>;
+    correct_count: number;
+    wrong_count: number;
+    test_title: string;
+    test_description: string;
+    difficulty_percentage: number;
+    is_bookmarked?: boolean;
+    user: { id: number; username: string; profile_image: string | null; is_following?: boolean };
+    created_at: string;
+    round_image: string | null;
     category?: string | Category | Category[] | null;
 }
 
-const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
-    const [currentQuizIndex, setCurrentQuizIndex] = useState(0)
+const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
+    const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+    const [quizData, setQuizData] = useState<Quiz[]>([]);
     const [userInteractions, setUserInteractions] = useState({
-        follows: new Set<string>(),
-        saves: new Set<number>(),
         selectedAnswers: new Map<number, number[]>(),
         textAnswers: new Map<number, string>(),
         answerStates: new Map<number, "correct" | "incorrect">(),
-    })
-    const [page, setPage] = useState(1)
-    const [hasMore, setHasMore] = useState(true)
-    const [loading, setLoading] = useState(false)
-    const [showShareMenu, setShowShareMenu] = useState(false)
-    const containerRef = useRef<HTMLDivElement>(null)
-    const [nextPageUrl, setNextPageUrl] = useState<string | undefined>(undefined)
-    const [quizData, setQuizData] = useState<Quiz[]>([])
-    const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set())
-    const [batchIndices, setBatchIndices] = useState<number[]>([])
-    const [animateIn, setAnimateIn] = useState(true)
-    const [direction, setDirection] = useState<"up" | "down">("up")
-    const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
-    const [isScrolling, setIsScrolling] = useState(false)
-
-    // Timer states
-    const [questionTimers, setQuestionTimers] = useState<Map<number, number>>(new Map())
-    const [questionStartTimes, setQuestionStartTimes] = useState<Map<number, number>>(new Map())
-    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
-    const [currentTimerQuestionId, setCurrentTimerQuestionId] = useState<number | null>(null)
-
-    // Categoriyalar
+    });
+    const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set());
+    const [loading, setLoading] = useState(false);
+    const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
     const [categories, setCategories] = useState<Category[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<number | "All" | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<number | "All" | null>("All");
+    const [batchIndices, setBatchIndices] = useState<number[]>([]);
+    const [nextPageUrl, setNextPageUrl] = useState<string | undefined>();
     const [modalOpen, setModalOpen] = useState(false);
+    const [showShareMenu, setShowShareMenu] = useState(false);
 
-    const getQuizCategoryName = (quiz: Quiz): string => {
-        const cat = quiz.category;
-        if (!cat) return "Noma'lum";
-        if (typeof cat === "number") {
-            const found = categories.find(c => c.id === cat);
-            return found?.title || "Noma'lum";
-        }
-        return "Noma'lum";
-    };
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    const loadAllQuizzes = async (): Promise<void> => {
+    // ------------------- UTILITIES -------------------
+    const shuffleArray = <T,>(arr: T[]): T[] => arr.sort(() => Math.random() - 0.5);
+
+    const preloadImages = useCallback((quizzes: Quiz[]) => {
+        quizzes.forEach(q => {
+            [q.round_image, q.user.profile_image].forEach(src => {
+                if (src && !preloadedImages.has(src)) {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.src = src;
+                    setPreloadedImages(prev => new Set(prev).add(src!));
+                }
+            });
+        });
+    }, [preloadedImages]);
+
+    // ------------------- FETCH DATA -------------------
+    const fetchQuizzes = useCallback(async () => {
+        if (loading) return;
         setLoading(true);
         try {
-            let allQuizzes: Quiz[] = [];
-            let url: string | null = "/quiz/questions/";
+            const res = await quizAPI.fetchRecommendedTests(nextPageUrl);
+            let results: Quiz[] = Array.isArray(res.data.results) ? res.data.results : [];
+            results = shuffleArray(results).slice(0, 10);
+            const existingIds = new Set(quizData.map(q => q.id));
+            const newQuizzes = results.filter(q => !existingIds.has(q.id));
+            if (!newQuizzes.length) return;
+            const batchStart = quizData.length;
+            setBatchIndices(prev => [...prev, batchStart]);
+            setQuizData(prev => [...prev, ...newQuizzes]);
+            setNextPageUrl(res.data.next);
+            preloadImages(newQuizzes);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    }, [loading, nextPageUrl, quizData, preloadImages]);
 
-            while (url) {
-                const res = await quizAPI.fetchQuestions(url);
-                const data: Quiz[] = Array.isArray(res.data.results) ? res.data.results : [];
-                allQuizzes = allQuizzes.concat(data);
-                url = res.data.next || null;
-            }
-            setQuizData(allQuizzes);
-        } catch (err) {
-            console.error("Quiz API error:", err);
-            setQuizData([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
         try {
             const res = await quizAPI.fetchCategories();
             const data: Category[] = Array.isArray(res.data) ? res.data : res.data.results || [];
             setCategories(data);
-        } catch (err) {
-            console.error("Category API error:", err);
-            setCategories([]);
-        }
-    };
-
-    useEffect(() => {
-        loadAllQuizzes();
-        loadCategories();
+        } catch { setCategories([]); }
     }, []);
 
+    useEffect(() => { fetchQuizzes(); loadCategories(); }, []);
 
-    const filteredQuizzes =
-        selectedCategory && selectedCategory !== "All"
-            ? quizData.filter(q => q.category === selectedCategory)
-            : quizData;
-
-    // Preload images function
-    const preloadImages = useCallback(
-        (startIndex: number, count = 5) => {
-            for (let i = startIndex; i < Math.min(startIndex + count, quizData.length); i++) {
-                const quiz = quizData[i]
-                if (quiz?.round_image && !preloadedImages.has(quiz.round_image)) {
-                    const img = new Image()
-                    img.crossOrigin = "anonymous"
-                    img.onload = () => {
-                        setPreloadedImages((prev) => new Set(prev).add(quiz.round_image!))
-                    }
-                    img.onerror = () => {
-                        console.warn(`Failed to preload image: ${quiz.round_image}`)
-                    }
-                    img.src = quiz.round_image
-                }
-
-                if (quiz?.user.profile_image && !preloadedImages.has(quiz.user.profile_image)) {
-                    const img = new Image()
-                    img.crossOrigin = "anonymous"
-                    img.onload = () => {
-                        setPreloadedImages((prev) => new Set(prev).add(quiz.user.profile_image!))
-                    }
-                    img.onerror = () => {
-                        console.warn(`Failed to preload profile image: ${quiz.user.profile_image}`)
-                    }
-                    img.src = quiz.user.profile_image
-                }
-            }
-        },
-        [quizData, preloadedImages],
-    )
-
-    // Start question timer
-    const startQuestionTimer = useCallback(
-        (quizId: number) => {
-            if (userInteractions.answerStates.has(quizId)) {
-                return
-            }
-
-            if (timerIntervalRef.current) {
-                clearInterval(timerIntervalRef.current)
-                timerIntervalRef.current = null
-            }
-
-            const now = Date.now()
-            setQuestionStartTimes((prev) => new Map(prev).set(quizId, now))
-            setQuestionTimers((prev) => new Map(prev).set(quizId, 0))
-            setCurrentTimerQuestionId(quizId)
-
-            timerIntervalRef.current = setInterval(() => {
-                setQuestionTimers((prev) => {
-                    const newMap = new Map(prev)
-                    const startTime = questionStartTimes.get(quizId)
-                    if (startTime) {
-                        const elapsed = Math.floor((Date.now() - startTime) / 1000)
-                        newMap.set(quizId, elapsed)
-                    }
-                    return newMap
-                })
-            }, 1000)
-        },
-        [userInteractions.answerStates],
-    )
-
-    // Stop question timer
-    const stopQuestionTimer = useCallback(
-        (quizId: number) => {
-            if (timerIntervalRef.current) {
-                clearInterval(timerIntervalRef.current)
-                timerIntervalRef.current = null
-            }
-
-            setCurrentTimerQuestionId(null)
-
-            const startTime = questionStartTimes.get(quizId)
-            if (startTime) {
-                const finalDuration = Math.floor((Date.now() - startTime) / 1000)
-                setQuestionTimers((prev) => new Map(prev).set(quizId, finalDuration))
-                return finalDuration
-            }
-            return 0
-        },
-        [questionStartTimes],
-    )
-
-    const fetchQuizzes = async (url?: string) => {
-        if (loading) return;
-        setLoading(true);
-
-        try {
-            const response = await quizAPI.fetchRecommendedTests(url);
-            const data = response.data;
-
-            const newBatchStart = quizData.length;
-            setBatchIndices((prev) => [...prev, newBatchStart]);
-
-            // Remove duplicates
-            const existingIds = new Set(quizData.map((q) => q.id));
-            let newQuizzes = data.results.filter((q: Quiz) => !existingIds.has(q.id));
-
-            newQuizzes = newQuizzes.sort(() => Math.random() - 0.5);
-
-            setQuizData((prev) => {
-                const updated = [...prev, ...newQuizzes];
-
-                // preload
-                setTimeout(() => preloadImages(newBatchStart, 10), 100);
-
-                return updated;
-            });
-
-            setNextPageUrl(data.next);
-            setHasMore(!!data.next);
-            setPage((prevPage) => prevPage + 1);
-
-        } catch (error) {
-            console.error("Savollarni yuklashda xatolik:", error);
-            alert("Savollarni yuklashda xato yuz berdi. Qaytadan urinib ko‘ring.");
-        } finally {
-            setLoading(false);
-        }
+    // ------------------- FILTER -------------------
+    const quizHasCategory = (quizCategory: Quiz["category"], selectedCategory: number) => {
+        if (!quizCategory) return false;
+        if (typeof quizCategory === "number") return quizCategory === selectedCategory;
+        if (Array.isArray(quizCategory)) return quizCategory.some(cat => cat.id === selectedCategory);
+        if (typeof quizCategory === "object") return quizCategory.id === selectedCategory;
+        return false;
     };
+    const filteredQuizzes = useMemo(() => {
+        if (selectedCategory === "All") return quizData;
+        return quizData.filter(q => quizHasCategory(q.category, Number(selectedCategory)));
+    }, [quizData, selectedCategory]);
 
-    useEffect(() => {
-        fetchQuizzes()
-    }, [])
-    ////////////////////////////////////////////////////////////
-
-    useEffect(() => {
-        if (quizData.length > 0) {
-            preloadImages(currentQuizIndex + 1, 3)
-        }
-    }, [currentQuizIndex, preloadImages])
-
-    useEffect(() => {
-        if (quizData.length > 0 && currentQuizIndex >= 0 && currentQuizIndex < quizData.length) {
-            const currentQuiz = quizData[currentQuizIndex]
-            if (currentQuiz) {
-                startQuestionTimer(currentQuiz.id)
-            }
-        }
-    }, [quizData.length, currentQuizIndex, startQuestionTimer])
-
-    useEffect(() => {
-        return () => {
-            if (timerIntervalRef.current) {
-                clearInterval(timerIntervalRef.current)
-            }
-        }
-    }, [])
-
+    // ------------------- SCROLL -------------------
     const handleScroll = useCallback(() => {
-        if (!containerRef.current || !hasMore) return
+        if (!containerRef.current) return;
+        const newIndex = Math.floor(containerRef.current.scrollTop / containerRef.current.clientHeight);
+        if (newIndex !== currentQuizIndex && newIndex >= 0 && newIndex < filteredQuizzes.length) setCurrentQuizIndex(newIndex);
 
-        const container = containerRef.current
-        const scrollTop = container.scrollTop
-        const clientHeight = container.clientHeight
-        const newIndex = Math.floor(scrollTop / clientHeight)
+        const batchStart = batchIndices[batchIndices.length - 1] ?? 0;
+        if (newIndex - batchStart === 7) fetchQuizzes();
+    }, [currentQuizIndex, filteredQuizzes.length, batchIndices, fetchQuizzes]);
 
-        if (!isScrolling) {
-            setIsScrolling(true)
-            setTimeout(() => setIsScrolling(false), 150)
-        }
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        let timeoutId: NodeJS.Timeout;
+        const throttledScroll = () => { clearTimeout(timeoutId); timeoutId = setTimeout(handleScroll, 50); };
+        container.addEventListener("scroll", throttledScroll, { passive: true });
+        return () => { container.removeEventListener("scroll", throttledScroll); clearTimeout(timeoutId); };
+    }, [handleScroll]);
 
-        if (newIndex !== currentQuizIndex && newIndex >= 0 && newIndex < quizData.length) {
-            setDirection(newIndex > currentQuizIndex ? "up" : "down")
-            setAnimateIn(false)
+    useEffect(() => {
+        if (!quizData.length) return;
+        preloadImages(filteredQuizzes.slice(currentQuizIndex + 1, currentQuizIndex + 4));
+    }, [currentQuizIndex, filteredQuizzes, preloadImages]);
 
-            setTimeout(() => {
-                setCurrentQuizIndex(newIndex)
-                setAnimateIn(true)
-
-                const newQuiz = quizData[newIndex]
-                if (newQuiz) {
-                    startQuestionTimer(newQuiz.id)
-                }
-            }, 30)
-        }
-
-        // Load more content at question 8
-        if (newIndex >= 0 && newIndex < quizData.length) {
-            const currentBatchIndex = batchIndices.findIndex((startIndex, i) => {
-                const endIndex = i < batchIndices.length - 1 ? batchIndices[i + 1] - 1 : quizData.length - 1
-                return newIndex >= startIndex && newIndex <= endIndex
-            })
-
-            if (currentBatchIndex !== -1) {
-                const batchStartIndex = batchIndices[currentBatchIndex]
-                const relativeIndex = newIndex - batchStartIndex
-
-                if (relativeIndex === 8 && nextPageUrl && !loading) {
-                    fetchQuizzes(nextPageUrl)
-                }
-            }
-        }
-    }, [currentQuizIndex, quizData, hasMore, nextPageUrl, batchIndices, loading, isScrolling, startQuestionTimer])
-
+    // ------------------- ANSWER HANDLERS -------------------
     const selectAnswer = async (quizId: number, answerId: number) => {
-        const selectedAnswers = userInteractions.selectedAnswers.get(quizId) || []
-        if (selectedAnswers.length > 0 || submittingQuestions.has(quizId)) return
-
-        const duration = stopQuestionTimer(quizId)
-
-        setSubmittingQuestions((prev) => new Set(prev).add(quizId))
-
+        if (submittingQuestions.has(quizId)) return;
+        setSubmittingQuestions(prev => new Set(prev).add(quizId));
         try {
-            const res = await quizAPI.submitAnswers({
-                question: quizId,
-                selected_answer_ids: [answerId],
-                duration: duration,
-            })
-
-            const isCorrect = res.data.is_correct
-
-            setUserInteractions((prev) => ({
+            const res = await quizAPI.submitAnswers({ question: quizId, selected_answer_ids: [answerId] });
+            const isCorrect = res.data.is_correct;
+            setUserInteractions(prev => ({
                 ...prev,
                 selectedAnswers: new Map(prev.selectedAnswers).set(quizId, [answerId]),
                 answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
-            }))
-
-            setQuizData((prevQuizzes) =>
-                prevQuizzes.map((quiz) =>
-                    quiz.id === quizId
-                        ? {
-                            ...quiz,
-                            correct_count: isCorrect ? quiz.correct_count + 1 : quiz.correct_count,
-                            wrong_count: !isCorrect ? quiz.wrong_count + 1 : quiz.wrong_count,
-                        }
-                        : quiz,
-                ),
-            )
-        } catch (err) {
-            console.error("Yechim jo'natishda xato:", err)
-            alert("Javobni yuborishda xato yuz berdi. Qaytadan urinib ko‘ring.")
-        } finally {
-            setSubmittingQuestions((prev) => {
-                const newSet = new Set(prev)
-                newSet.delete(quizId)
-                return newSet
-            })
-        }
-    }
+            }));
+            setQuizData(prev => prev.map(q => q.id === quizId
+                ? { ...q, correct_count: isCorrect ? q.correct_count + 1 : q.correct_count, wrong_count: !isCorrect ? q.wrong_count + 1 : q.wrong_count }
+                : q));
+        } catch (err) { console.error(err); alert("Javobni yuborishda xato."); }
+        finally { setSubmittingQuestions(prev => { const newSet = new Set(prev); newSet.delete(quizId); return newSet; }); }
+    };
 
     const handleMultipleChoice = (quizId: number, answerId: number) => {
-        const answerState = userInteractions.answerStates.get(quizId)
-        if (answerState) return
-
-        setUserInteractions((prev) => {
-            const current = prev.selectedAnswers.get(quizId) || []
-            const newAnswers = current.includes(answerId) ? current.filter((id) => id !== answerId) : [...current, answerId]
-            const updated = new Map(prev.selectedAnswers)
-            updated.set(quizId, newAnswers)
-            return {
-                ...prev,
-                selectedAnswers: updated,
-            }
-        })
-    }
+        const answerState = userInteractions.answerStates.get(quizId);
+        if (answerState) return;
+        setUserInteractions(prev => {
+            const current = prev.selectedAnswers.get(quizId) || [];
+            const newAnswers = current.includes(answerId) ? current.filter(id => id !== answerId) : [...current, answerId];
+            return { ...prev, selectedAnswers: new Map(prev.selectedAnswers).set(quizId, newAnswers) };
+        });
+    };
 
     const submitMultipleChoice = async (quizId: number) => {
-        const selected = userInteractions.selectedAnswers.get(quizId) || []
-        if (selected.length === 0 || submittingQuestions.has(quizId)) return
-
-        const duration = stopQuestionTimer(quizId)
-
-        setSubmittingQuestions((prev) => new Set(prev).add(quizId))
-
+        const selected = userInteractions.selectedAnswers.get(quizId) || [];
+        if (!selected.length || submittingQuestions.has(quizId)) return;
+        setSubmittingQuestions(prev => new Set(prev).add(quizId));
         try {
-            const response = await quizAPI.submitAnswers({
-                question: quizId,
-                selected_answer_ids: selected,
-                duration: duration,
-            })
-
-            const isCorrect = response.data.is_correct
-
-            setUserInteractions((prev) => ({
-                ...prev,
-                answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
-            }))
-
-            setQuizData((prevQuizzes) =>
-                prevQuizzes.map((quiz) =>
-                    quiz.id === quizId
-                        ? {
-                            ...quiz,
-                            correct_count: isCorrect ? quiz.correct_count + 1 : quiz.correct_count,
-                            wrong_count: !isCorrect ? quiz.wrong_count + 1 : quiz.wrong_count,
-                        }
-                        : quiz,
-                ),
-            )
-        } catch (error) {
-            console.error("Javobni yuborishda xatolik:", error)
-            alert("Javobni yuborishda xato yuz berdi. Qaytadan urinib ko‘ring.")
-        } finally {
-            setSubmittingQuestions((prev) => {
-                const newSet = new Set(prev)
-                newSet.delete(quizId)
-                return newSet
-            })
-        }
-    }
+            const res = await quizAPI.submitAnswers({ question: quizId, selected_answer_ids: selected });
+            const isCorrect = res.data.is_correct;
+            setUserInteractions(prev => ({ ...prev, answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect") }));
+            setQuizData(prev => prev.map(q => q.id === quizId
+                ? { ...q, correct_count: isCorrect ? q.correct_count + 1 : q.correct_count, wrong_count: !isCorrect ? q.wrong_count + 1 : q.wrong_count }
+                : q));
+        } catch (err) { console.error(err); alert("Javobni yuborishda xato."); }
+        finally { setSubmittingQuestions(prev => { const newSet = new Set(prev); newSet.delete(quizId); return newSet; }); }
+    };
 
     const handleTextAnswer = async (quizId: number) => {
-        const textAnswer = userInteractions.textAnswers.get(quizId)
-        if (!textAnswer?.trim() || submittingQuestions.has(quizId)) return
-
-        const duration = stopQuestionTimer(quizId)
-
-        setSubmittingQuestions((prev) => new Set(prev).add(quizId))
-
+        const textAnswer = userInteractions.textAnswers.get(quizId)?.trim();
+        if (!textAnswer || submittingQuestions.has(quizId)) return;
+        setSubmittingQuestions(prev => new Set(prev).add(quizId));
         try {
-            const response = await quizAPI.submitTextAnswers({
-                question: quizId,
-                written_answer: textAnswer.trim(),
-                duration: duration,
-            })
+            const res = await quizAPI.submitTextAnswers({ question: quizId, written_answer: textAnswer });
+            const isCorrect = res.data.is_correct;
+            setUserInteractions(prev => ({ ...prev, answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect") }));
+            setQuizData(prev => prev.map(q => q.id === quizId
+                ? { ...q, correct_count: isCorrect ? q.correct_count + 1 : q.correct_count, wrong_count: !isCorrect ? q.wrong_count + 1 : q.wrong_count }
+                : q));
+        } catch (err) { console.error(err); alert("Javobni yuborishda xato."); }
+        finally { setSubmittingQuestions(prev => { const newSet = new Set(prev); newSet.delete(quizId); return newSet; }); }
+    };
 
-            const isCorrect = response.data.is_correct
-
-            setUserInteractions((prev) => ({
-                ...prev,
-                answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
-            }))
-
-            setQuizData((prevQuizzes) =>
-                prevQuizzes.map((quiz) =>
-                    quiz.id === quizId
-                        ? {
-                            ...quiz,
-                            correct_count: isCorrect ? quiz.correct_count + 1 : quiz.correct_count,
-                            wrong_count: !isCorrect ? quiz.wrong_count + 1 : quiz.wrong_count,
-                        }
-                        : quiz,
-                ),
-            )
-        } catch (error) {
-            console.error("Javobni yuborishda xatolik:", error)
-            alert("Javobni yuborishda xato yuz berdi. Qaytadan urinib ko‘ring.")
-        } finally {
-            setSubmittingQuestions((prev) => {
-                const newSet = new Set(prev)
-                newSet.delete(quizId)
-                return newSet
-            })
-        }
-    }
-
-    const shareQuestion = (quizId: number) => {
-        const shareUrl = `${window.location.origin}/questions/${quizId}`
-
-        if (navigator.share) {
-            navigator
-                .share({
-                    title: "TestAbd savoli",
-                    text: "Mana bir qiziqarli savol!",
-                    url: shareUrl,
-                })
-                .then(() => {
-                    console.log("Ulashildi!")
-                })
-                .catch((err) => {
-                    console.error("Ulashishda xatolik:", err)
-                })
-        } else {
-            navigator.clipboard
-                .writeText(shareUrl)
-                .then(() => {
-                    alert("Havola nusxalandi: " + shareUrl)
-                })
-                .catch(() => {
-                    console.error("Havolani nusxalab bo'lmadi.")
-                })
-        }
-    }
-
+    // ------------------- FOLLOW / SAVE -------------------
     const handleFollow = async (user_id: number) => {
         try {
-            await accountsAPI.toggleFollow(user_id)
-
-            setQuizData((prev) =>
-                prev.map((quiz) =>
-                    quiz.user.id === user_id
-                        ? {
-                            ...quiz,
-                            user: {
-                                ...quiz.user,
-                                is_following: !quiz.user.is_following,
-                            },
-                        }
-                        : quiz,
-                ),
-            )
-        } catch (error) {
-            console.error("Follow toggle failed:", error)
-            alert("Follow qilishda xato yuz berdi. Qaytadan urinib ko‘ring.")
-        }
-    }
+            await accountsAPI.toggleFollow(user_id);
+            setQuizData(prev => prev.map(q => q.user.id === user_id ? { ...q, user: { ...q.user, is_following: !q.user.is_following } } : q));
+        } catch (err) { console.error(err); alert("Follow qilishda xato."); }
+    };
 
     const handleSave = (quizId: number) => {
-        quizAPI
-            .bookmarkQuestion({question: quizId})
-            .then((res) => {
-                setQuizData((prev) =>
-                    prev.map((quiz) => (quiz.id === quizId ? {...quiz, is_bookmarked: !quiz.is_bookmarked} : quiz)),
-                )
-            })
-            .catch((err) => {
-                console.error("Bookmark toggle xatolik:", err)
-                alert("Bookmark qilishda xato yuz berdi. Qaytadan urinib ko‘ring.")
-            })
-    }
+        quizAPI.bookmarkQuestion({ question: quizId })
+            .then(() => setQuizData(prev => prev.map(q => q.id === quizId ? { ...q, is_bookmarked: !q.is_bookmarked } : q)))
+            .catch(err => { console.error(err); alert("Bookmark qilishda xato."); });
+    };
 
-    useEffect(() => {
-        const container = containerRef.current
-        if (container) {
-            let timeoutId: NodeJS.Timeout
-            const throttledScroll = () => {
-                clearTimeout(timeoutId)
-                timeoutId = setTimeout(handleScroll, 50)
-            }
+    const shareQuestion = (quizId: number) => {
+        const shareUrl = `${window.location.origin}/questions/${quizId}`;
+        navigator.share ? navigator.share({ title: "TestAbd savoli", text: "Mana bir qiziqarli savol!", url: shareUrl }).catch(console.error)
+            : navigator.clipboard.writeText(shareUrl).then(() => alert("Havola nusxalandi: " + shareUrl));
+    };
 
-            container.addEventListener("scroll", throttledScroll, {passive: true})
-            return () => {
-                container.removeEventListener("scroll", throttledScroll)
-                clearTimeout(timeoutId)
-            }
-        }
-    }, [handleScroll])
+    const isTrueFalseQuestion = (quiz: Quiz) => quiz.question_type === "true_false" || (quiz.answers.length === 2 && quiz.answers.some(a => ["true", "ha", "yes"].includes(a.answer_text.toLowerCase())) && quiz.answers.some(a => ["false", "yo'q", "no"].includes(a.answer_text.toLowerCase())));
 
-    const isTrueFalseQuestion = (quiz: Quiz) => {
-        return (
-            quiz.question_type === "true_false" ||
-            (quiz.answers.length === 2 &&
-                quiz.answers.some((answer) => ["true", "to'g'ri", "ha", "yes"].includes(answer.answer_text.toLowerCase())) &&
-                quiz.answers.some((answer) => ["false", "noto'g'ri", "yo'q", "no"].includes(answer.answer_text.toLowerCase())))
-        )
-    }
+    console.log("QUIZ DATA LENGTH: ", quizData.length);
 
     const renderQuestionContent = (quiz: Quiz) => {
-        const isSubmitting = submittingQuestions.has(quiz.id)
-        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || []
-        const answerState = userInteractions.answerStates.get(quiz.id)
-        const hasSelected = selectedAnswers.length > 0 || answerState !== undefined
-        const optionsCount = quiz.answers.length
+        const isSubmitting = submittingQuestions.has(quiz.id);
+        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
+        const answerState = userInteractions.answerStates.get(quiz.id);
+        const hasAnswered = selectedAnswers.length > 0 || answerState !== undefined;
+        const optionsCount = quiz.answers.length;
 
+        // -------- TEXT INPUT --------
         if (quiz.question_type === "text_input") {
-            const textAnswer = userInteractions.textAnswers.get(quiz.id) || ""
+            const textAnswer = userInteractions.textAnswers.get(quiz.id) || "";
 
             return (
                 <div className="space-y-4">
-                    <div className="flex flex-col gap-4">
-                        <div className="relative">
-              <textarea
-                  value={textAnswer}
-                  onChange={(e) =>
-                      setUserInteractions((prev) => ({
-                          ...prev,
-                          textAnswers: new Map(prev.textAnswers).set(quiz.id, e.target.value),
-                      }))
-                  }
-                  placeholder="Javobingizni bu yerga yozing..."
-                  disabled={hasSelected}
-                  rows={4}
-                  className={`w-full px-4 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white placeholder-white/60 focus:outline-none focus:border-white/70 focus:ring-2 focus:ring-white/20 transition-all text-base sm:text-lg md:text-xl shadow-lg resize-none ${hasSelected ? "opacity-70 cursor-not-allowed" : ""}`}
-              />
-                            {answerState && (
-                                <div
-                                    className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${answerState === "correct" ? "bg-green-500" : "bg-red-500"}`}
-                                >
-                                    {answerState === "correct" ? (
-                                        <Check size={16} className="text-white"/>
-                                    ) : (
-                                        <X size={16} className="text-white"/>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={() => handleTextAnswer(quiz.id)}
-                            disabled={!textAnswer.trim() || hasSelected || isSubmitting}
-                            className={`self-end px-6 py-3 sm:px-8 sm:py-4 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center gap-2 transition-all text-base sm:text-lg shadow-lg ${isSubmitting
-                                ? "bg-blue-500/40 cursor-not-allowed"
-                                : textAnswer.trim() && !hasSelected
-                                    ? "hover:bg-black/50 hover:border-white/50 hover:shadow-xl"
-                                    : "opacity-50 cursor-not-allowed"
-                            }`}
-                        >
-                            {isSubmitting ? <Loader2 size={20} className="animate-spin"/> : <Send size={20}/>}
-                            <span>{isSubmitting ? "Yuborilmoqda..." : "Javobni yuborish"}</span>
-                        </button>
-
+                    <div className="relative">
+                    <textarea
+                        value={textAnswer}
+                        onChange={(e) =>
+                            setUserInteractions(prev => ({
+                                ...prev,
+                                textAnswers: new Map(prev.textAnswers).set(quiz.id, e.target.value),
+                            }))
+                        }
+                        placeholder="Javobingizni bu yerga yozing..."
+                        disabled={hasAnswered}
+                        rows={4}
+                        className={`w-full px-5 py-4 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white placeholder-white/60 focus:outline-none focus:border-white/70 focus:ring-2 focus:ring-white/20 transition-all shadow-lg resize-none ${hasAnswered ? "opacity-70 cursor-not-allowed" : ""}`}
+                    />
                         {answerState && (
-                            <div
-                                className={`text-center py-2 px-4 rounded-lg ${answerState === "correct"
-                                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                                    : "bg-red-500/20 text-red-400 border border-red-500/30"
-                                }`}
-                            >
-                                {answerState === "correct" ? "✅ To'g'ri javob!" : "❌ Noto'g'ri javob"}
+                            <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${answerState === "correct" ? "bg-green-500" : "bg-red-500"}`}>
+                                {answerState === "correct" ? <Check size={16} className="text-white"/> : <X size={16} className="text-white"/>}
                             </div>
                         )}
                     </div>
+
+                    <button
+                        onClick={() => handleTextAnswer(quiz.id)}
+                        disabled={!textAnswer.trim() || hasAnswered || isSubmitting}
+                        className={`self-end px-6 py-3 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center gap-2 transition-all shadow-lg ${isSubmitting ? "bg-blue-500/40 cursor-not-allowed" : textAnswer.trim() && !hasAnswered ? "hover:bg-black/50 hover:border-white/50 hover:shadow-xl" : "opacity-50 cursor-not-allowed"}`}
+                    >
+                        {isSubmitting ? <Loader2 size={20} className="animate-spin"/> : <Send size={20}/>}
+                        <span>{isSubmitting ? "Yuborilmoqda..." : "Javobni yuborish"}</span>
+                    </button>
+
+                    {answerState && (
+                        <div className={`text-center py-2 px-4 rounded-lg ${answerState === "correct" ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"}`}>
+                            {answerState === "correct" ? "✅ To'g'ri javob!" : "❌ Noto'g'ri javob"}
+                        </div>
+                    )}
                 </div>
-            )
+            );
         }
 
+        // -------- MULTIPLE CHOICE --------
         if (quiz.question_type === "multiple") {
-
             return (
                 <div className="space-y-3 sm:space-y-4">
-                    <div className={`grid gap-3 sm:gap-4`}>
-                        {quiz.answers.map((option) => {
-                            const isSelected = selectedAnswers.includes(option.id)
-                            const showCorrect = answerState && option.is_correct
-                            const showIncorrect = answerState && isSelected && !option.is_correct
+                    <div className="grid gap-3 sm:gap-4">
+                        {quiz.answers.map(option => {
+                            const isSelected = selectedAnswers.includes(option.id);
+                            const showCorrect = answerState && option.is_correct;
+                            const showIncorrect = answerState && isSelected && !option.is_correct;
+
+                            const btnClass = showCorrect ? "border-green-400/60 bg-green-500/30"
+                                : showIncorrect ? "border-red-400/60 bg-red-500/30"
+                                    : isSelected ? "border-blue-400/60 bg-blue-500/30"
+                                        : "border-white/30 hover:bg-black/50 hover:border-white/40";
+
+                            const circleClass = showCorrect ? "bg-green-500 text-white"
+                                : showIncorrect ? "bg-red-500 text-white"
+                                    : isSelected ? "bg-blue-500 text-white"
+                                        : "bg-white/30 text-white";
 
                             return (
                                 <button
                                     key={option.id}
                                     onClick={() => handleMultipleChoice(quiz.id, option.id)}
                                     disabled={answerState !== undefined}
-                                    className={`flex items-center gap-3 sm:gap-4 px-5 py-4 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${showCorrect
-                                        ? "border-green-400/60 bg-green-500/30"
-                                        : showIncorrect
-                                            ? "border-red-400/60 bg-red-500/30"
-                                            : isSelected
-                                                ? "border-blue-400/60 bg-blue-500/30"
-                                                : "border-white/30 hover:bg-black/50 hover:border-white/40"
-                                    } disabled:opacity-70`}
+                                    className={`flex items-center gap-3 sm:gap-4 px-5 py-4 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${btnClass}`}
                                 >
-                                    <div
-                                        className={`${optionsCount <= 3 ? "w-5 h-5 sm:w-6 sm:h-6" : "w-4 h-4 sm:w-5 sm:h-5"} rounded flex items-center justify-center transition-all ${showCorrect
-                                            ? "bg-green-500 text-white"
-                                            : showIncorrect
-                                                ? "bg-red-500 text-white"
-                                                : isSelected
-                                                    ? "bg-blue-500 text-white"
-                                                    : "bg-white/30 text-white"
-                                        }`}
-                                    >
-                                        {(isSelected || showCorrect) && <Check size={optionsCount <= 3 ? 16 : 14}/>}
-                                        {showIncorrect && <X size={optionsCount <= 3 ? 16 : 14}/>}
+                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${circleClass}`}>
+                                        {(isSelected || showCorrect) && <Check size={14}/>}
+                                        {showIncorrect && <X size={14}/>}
                                     </div>
-                                    <span
-                                        className={`flex-1 font-medium text-white ${optionsCount <= 3 ? "text-base sm:text-lg" : "text-sm sm:text-base"}`}
-                                    >
-                    {option.answer_text}
-                  </span>
+                                    <span className="flex-1 font-medium text-white text-sm sm:text-base">{option.answer_text}</span>
                                 </button>
-                            )
+                            );
                         })}
                     </div>
 
@@ -696,105 +308,91 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                         <button
                             onClick={() => submitMultipleChoice(quiz.id)}
                             disabled={isSubmitting}
-                            className={`w-full py-4 sm:py-5 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center justify-center gap-2 transition-all text-base sm:text-lg shadow-lg ${isSubmitting ? "bg-blue-500/40" : "hover:bg-black/50 hover:border-white/40"} disabled:opacity-50`}
+                            className={`w-full py-4 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center justify-center gap-2 transition-all shadow-lg ${isSubmitting ? "bg-blue-500/40" : "hover:bg-black/50 hover:border-white/40"}`}
                         >
                             {isSubmitting ? <Loader2 size={20} className="animate-spin"/> : <Send size={20}/>}
                             <span>Javobni yuborish ({selectedAnswers.length} ta tanlangan)</span>
                         </button>
                     )}
                 </div>
-            )
+            );
         }
 
+        // -------- TRUE/FALSE --------
         if (isTrueFalseQuestion(quiz)) {
             return (
                 <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                    {quiz.answers.map((option) => {
-                        const isSelected = selectedAnswers.includes(option.id)
-                        const isCorrect = option.is_correct
-                        const showCorrect = answerState && isCorrect
-                        const showIncorrect = answerState && isSelected && !isCorrect
-                        const isUserCorrect = isSelected && answerState === "correct"
+                    {quiz.answers.map(option => {
+                        const isSelected = selectedAnswers.includes(option.id);
+                        const isCorrect = option.is_correct;
+                        const showCorrect = answerState && isCorrect;
+                        const showIncorrect = answerState && isSelected && !isCorrect;
+                        const isUserCorrect = isSelected && answerState === "correct";
 
-                        const getButtonClass = () => {
-                            if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30"
-                            if (showIncorrect) return "border-red-400/60 bg-red-500/30"
-                            if (isSelected) return "border-blue-400/60 bg-blue-500/30"
-                            return "border-white/30 hover:bg-black/50 hover:border-white/40"
-                        }
+                        const getBtnClass = () => {
+                            if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30";
+                            if (showIncorrect) return "border-red-400/60 bg-red-500/30";
+                            if (isSelected) return "border-blue-400/60 bg-blue-500/30";
+                            return "border-white/30 hover:bg-black/50 hover:border-white/40";
+                        };
 
-                        const isTrue = ["true", "to'g'ri", "ha", "yes"].includes(option.answer_text.toLowerCase())
+                        const isTrue = ["true", "ha", "yes", "to'g'ri"].includes(option.answer_text.toLowerCase());
 
                         return (
                             <button
                                 key={option.id}
                                 onClick={() => selectAnswer(quiz.id, option.id)}
-                                disabled={hasSelected || isSubmitting}
-                                className={`flex flex-col items-center justify-center gap-3 sm:gap-4 py-6 sm:py-8 px-4 sm:px-6 rounded-xl bg-black/40 backdrop-blur-lg border transition-all shadow-lg ${getButtonClass()} disabled:opacity-70`}
+                                disabled={hasAnswered || isSubmitting}
+                                className={`flex flex-col items-center justify-center gap-3 sm:gap-4 py-6 sm:py-8 px-4 sm:px-6 rounded-xl bg-black/40 backdrop-blur-lg border transition-all shadow-lg ${getBtnClass()}`}
                             >
-                                {isTrue ? (
-                                    <ThumbsUp size={28} className="text-green-400 sm:w-8 sm:h-8"/>
-                                ) : (
-                                    <ThumbsDown size={28} className="text-red-400 sm:w-8 sm:h-8"/>
-                                )}
-                                <span
-                                    className="text-base sm:text-lg font-medium text-white">{option.answer_text}</span>
+                                {isTrue ? <ThumbsUp size={28} className="text-green-400 sm:w-8 sm:h-8"/> : <ThumbsDown size={28} className="text-red-400 sm:w-8 sm:h-8"/>}
+                                <span className="text-base sm:text-lg font-medium text-white">{option.answer_text}</span>
                                 {isSubmitting && isSelected && <Loader2 size={16} className="animate-spin text-white"/>}
                                 {isUserCorrect && <Check size={20} className="text-green-400"/>}
                                 {showIncorrect && <X size={20} className="text-red-400"/>}
                             </button>
-                        )
+                        );
                     })}
                 </div>
-            )
+            );
         }
 
-        const paddingClass =
-            optionsCount <= 3 ? "p-4 sm:p-5 md:p-6" : optionsCount === 4 ? "p-3 sm:p-4 md:p-5" : "p-3 sm:p-3 md:p-4"
-
-        const circleSize =
-            optionsCount <= 3
-                ? "w-8 h-8 sm:w-10 sm:h-10"
-                : optionsCount === 4
-                    ? "w-7 h-7 sm:w-8 sm:h-8"
-                    : "w-6 h-6 sm:w-7 sm:h-7"
-
-        const fontSize = optionsCount <= 3 ? "text-base sm:text-lg" : "text-sm sm:text-base"
-        const gap = optionsCount <= 3 ? "gap-3 sm:gap-4" : "gap-2 sm:gap-3"
+        // -------- SINGLE CHOICE (DEFAULT) --------
+        const paddingClass = optionsCount <= 3 ? "p-4 sm:p-5" : optionsCount === 4 ? "p-3 sm:p-4" : "p-3 sm:p-3";
+        const circleSize = optionsCount <= 3 ? "w-8 h-8 sm:w-10 sm:h-10" : optionsCount === 4 ? "w-7 h-7 sm:w-8 sm:h-8" : "w-6 h-6 sm:w-7 sm:h-7";
+        const fontSize = optionsCount <= 3 ? "text-base sm:text-lg" : "text-sm sm:text-base";
+        const gap = optionsCount <= 3 ? "gap-3 sm:gap-4" : "gap-2 sm:gap-3";
 
         return (
             <div className={`grid ${gap} ${optionsCount >= 5 ? "max-h-[50vh] overflow-y-auto pr-2" : ""}`}>
-                {quiz.answers.map((option) => {
-                    const isSelected = selectedAnswers.includes(option.id)
-                    const isCorrect = option.is_correct
-                    const showCorrect = answerState && isCorrect
-                    const showIncorrect = answerState && isSelected && !isCorrect
-                    const isUserCorrect = isSelected && answerState === "correct"
+                {quiz.answers.map(option => {
+                    const isSelected = selectedAnswers.includes(option.id);
+                    const showCorrect = answerState && option.is_correct;
+                    const showIncorrect = answerState && isSelected && !option.is_correct;
+                    const isUserCorrect = isSelected && answerState === "correct";
 
-                    const getButtonClass = () => {
-                        if (showIncorrect) return "border-red-400/60 bg-red-500/30"
-                        if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30"
-                        if (isSelected) return "border-blue-400/60 bg-blue-500/30"
-                        return "border-white/30 hover:bg-black/50 hover:border-white/40"
-                    }
+                    const getBtnClass = () => {
+                        if (showIncorrect) return "border-red-400/60 bg-red-500/30";
+                        if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30";
+                        if (isSelected) return "border-blue-400/60 bg-blue-500/30";
+                        return "border-white/30 hover:bg-black/50 hover:border-white/40";
+                    };
 
                     const getCircleClass = () => {
-                        if (showIncorrect) return "bg-red-500 text-white"
-                        if (isUserCorrect || showCorrect) return "bg-green-500 text-white"
-                        if (isSelected) return "bg-blue-500 text-white"
-                        return "bg-white/30 text-white"
-                    }
+                        if (showIncorrect) return "bg-red-500 text-white";
+                        if (isUserCorrect || showCorrect) return "bg-green-500 text-white";
+                        if (isSelected) return "bg-blue-500 text-white";
+                        return "bg-white/30 text-white";
+                    };
 
                     return (
                         <button
                             key={option.id}
                             onClick={() => selectAnswer(quiz.id, option.id)}
-                            disabled={hasSelected || isSubmitting}
-                            className={`flex items-center gap-3 sm:gap-4 px-3 py-3 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${getButtonClass()} disabled:opacity-70`}
+                            disabled={hasAnswered || isSubmitting}
+                            className={`flex items-center gap-3 sm:gap-4 px-3 py-3 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${getBtnClass()}`}
                         >
-                            <div
-                                className={`${circleSize} rounded-full flex items-center justify-center font-medium text-sm sm:text-base ${getCircleClass()}`}
-                            >
+                            <div className={`${circleSize} rounded-full flex items-center justify-center font-medium ${getCircleClass()}`}>
                                 {option.letter}
                             </div>
                             <span className={`flex-1 ${fontSize} font-medium text-white`}>{option.answer_text}</span>
@@ -802,10 +400,10 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                             {isUserCorrect && <Check size={18} className="text-green-400"/>}
                             {showIncorrect && <X size={18} className="text-red-400"/>}
                         </button>
-                    )
+                    );
                 })}
             </div>
-        )
+        );
     }
 
     return (
@@ -913,7 +511,7 @@ const QuizPage: React.FC<QuizPageProps> = ({theme = "dark"}) => {
                                         <a href={`/profile/${quiz.user.username}`}
                                            className="flex items-center space-x-3">
                                             <img
-                                                src={quiz.user.profile_image || "https://backend.testabd.uz/media/defaultuseravatar.png"}
+                                                src={quiz.user.profile_image || defaultAvatar}
                                                 alt="Creator"
                                                 className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-white/30 cursor-pointer hover:scale-110 transition-transform object-cover shadow-lg"
                                                 loading="lazy"
