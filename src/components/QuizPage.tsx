@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter } from "lucide-react";
 import { quizAPI, accountsAPI } from "../utils/api";
 import { Link } from "react-router-dom";
-import adsIcon from "./assets/images/ads.svg";
+import Logo from "../components/assets/images/logo.jpg";
 import defaultAvatar from "../components/assets/images/defaultuseravatar.png";
 
 interface QuizPageProps { theme?: string }
@@ -569,9 +569,15 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
                                     <Link
                                         to="https://t.me/testabduz"
-                                        className="flex w-10 h-10 bg-black/40 rounded-full border border-gray-600"
+                                        className="flex w-auto h-14 bg-blue-950 border border-gray-600 p-1"
                                     >
-                                        <img src={adsIcon} alt="ads" className="flex w-full h-full"/>
+                                        <div className="flex flex-row items-center justify-center gap-1">
+                                            <div className={"flex flex-col items-start"}>
+                                                <span className={"text-xs text-gray-300"}>TestAbd.uz</span>
+                                                <span className={"text-xs text-gray-300"}><span className={"text-xs text-blue-5                                                                                                                                                             00"}>TestAbd.uz </span>- Bu nafaqat bilim, balki daromad manbai.</span>
+                                            </div>
+                                            <img src={Logo} alt="logo" className={"flex w-10 h-10"}/>
+                                        </div>
                                     </Link>
                                 </div>
 
