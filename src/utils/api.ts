@@ -397,7 +397,7 @@ export const quizAPI = {
   fetchQuestionById: (id: number) => api.get(`/quiz/questions/${id}/`),
 
     fetchQuestionViewStats: (questionId: number) =>
-        api.get(`/question/views/${questionId}/stats`),
+        api.get(`/quiz/question-views/${questionId}/`),
 
     createQuestion: (data: any) => api.post('/quiz/questions/', data),
 

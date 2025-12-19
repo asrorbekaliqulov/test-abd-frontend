@@ -19,6 +19,7 @@ interface Quiz {
     answers: Array<{ id: number; letter: string; answer_text: string; is_correct: boolean }>;
     correct_count: number;
     wrong_count: number;
+    views?: number;
     test_title: string;
     test_description: string;
     difficulty_percentage: number;
@@ -55,20 +56,36 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
     const { questionId } = useParams<{ questionId: string }>()
     const [views, setViews] = useState<number>(0)
+
     useEffect(() => {
         if (!questionId) return
-
         const id = Number(questionId)
 
-        // view++ qilish
-        quizAPI.recordView({ question: id }).catch(() => {})
+        const fetchData = async () => {
+            try {
+                // 1️⃣ view++ qilish (authApi interceptori tokenni qo‘shadi)
+                await quizAPI.recordView({ question: id })
 
-        // view sonini fetch qilish
-        quizAPI
-            .fetchQuestionViewStats(id)
-            .then((res: { data: QuestionViewStats }) => setViews(res.data.views))
-            .catch(() => setViews(0))
+                // 2️⃣ view sonini olish
+                const viewRes = await quizAPI.fetchQuestionViewStats(id)
+                setViews(viewRes.data.views)
+
+                // 3️⃣ Quiz ma’lumotini olish
+                const quizRes = await quizAPI.fetchTestById(id)
+                const quiz: Quiz = quizRes.data
+                quiz.views = viewRes.data.views
+                setQuizData(quiz)
+            } catch (err) {
+                console.error(err)
+                setViews(0)
+                setQuizData(null)
+            }
+        }
+
+        fetchData()
     }, [questionId])
+
+    if (!quizData) return <div>Loading...</div>
 
     // ------------------- UTILITIES -------------------
     const shuffleArray = <T,>(arr: T[]): T[] =>
