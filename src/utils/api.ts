@@ -194,7 +194,7 @@ export const checkEmail = async (email: string) => {
 }
 
 export const checkReferral = async (referral: string) => {
-  const response = await publicApi.get(`/accounts/check-referral/?referral-code=${referral}`);
+  const response = await publicApi.get(`/accounts/check-username/?referral-code=${referral}`);
   const data = await response.data
   return data.available
 };
@@ -395,7 +395,11 @@ export const quizAPI = {
     api.get(`/quiz/questions/recent/`),
 
   fetchQuestionById: (id: number) => api.get(`/quiz/questions/${id}/`),
-  createQuestion: (data: any) => api.post('/quiz/questions/', data),
+
+    fetchQuestionViewStats: (questionId: number) =>
+        api.get(`/question/views/${questionId}/stats`),
+
+    createQuestion: (data: any) => api.post('/quiz/questions/', data),
 
 
   submitAnswers: (answers: {
@@ -441,7 +445,7 @@ export const quizAPI = {
 
   // fetchRecommendedTests: (pageNum: number) => api.get(`/quiz/recommended/?page=${pageNum}`),
   fetchRecommendedTests: (url?: string) =>
-    url ? api.get(url) : api.get('/quiz/recommended/'),
+    url ? api.get(url) : api.get('/quiz/random/'),
 };
 
 export const getLeaderboard = (page = 1) =>

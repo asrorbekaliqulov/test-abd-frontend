@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown } from "lucide-react";
+import FadeInPage from "./FadeInPage.tsx";
 
 interface Category {
     id: number;
@@ -39,26 +40,25 @@ export default function CategoryDropdown({
 
     return (
         <div className="relative">
-            <label className="block text-sm font-medium text-theme-secondary mb-2">
-                Kategoriya
-            </label>
-
+            <FadeInPage delay={200}>
             {/* BUTTON */}
-            <button
-                type="button"
-                className="w-full px-4 py-3 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary flex justify-between items-center"
-                onClick={() => setOpen((p) => !p)}
-            >
+                <button
+                    type="button"
+                    className="w-full px-4 py-3 rounded-lg text-theme-primary flex justify-between items-center"
+                    style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+                    onClick={() => setOpen((p) => !p)}
+                >
                 <span>
                     {selectedCategory
                         ? `${selectedCategory.emoji}  ${selectedCategory.title}`
                         : "Kategoriya tanlang"}
                 </span>
 
-                <span className={`transition-transform ${open ? "rotate-180" : ""}`}>
+                    <span className={`transition-transform ${open ? "rotate-180" : ""}`}>
                     <ChevronDown />
                 </span>
-            </button>
+                </button>
+            </FadeInPage>
 
             {/* DROPDOWN */}
             <AnimatePresence>
@@ -69,7 +69,7 @@ export default function CategoryDropdown({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute w-full mt-2 bg-white border border-gray-300
+                        className="absolute w-full mt-2 bg-transparent
                                    rounded-lg shadow-lg max-h-60 overflow-auto z-50"
                     >
                         {categories.map((cat) => (
@@ -80,7 +80,8 @@ export default function CategoryDropdown({
                                     setOpen(false);
                                 }}
                                 className="px-4 py-3 cursor-pointer hover:bg-gray-500 hover:text-white
-                                           bg-theme-primary text-theme-secondary transition duration-200"
+                                           text-theme-secondary transition duration-200 backdrop-blur"
+                                style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
                             >
                                 {cat.emoji}  {cat.title}
                             </li>

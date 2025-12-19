@@ -9,6 +9,8 @@ import {useNavigate} from "react-router-dom";
 import {motion, AnimatePresence} from "framer-motion";
 import {spellCheck} from "../AISpellCheck.tsx";
 import CategoryDropdown from "../CategoryDropdown.tsx";
+import {getLoremImage} from "../../utils/getLoremImage.ts";
+import FadeInPage from "../FadeInPage.tsx";
 
 declare global {
     interface Window {
@@ -311,110 +313,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
         }
     }
 
-    // const handleSubmit = async (e: React.FormEvent) => {
-    //     e.preventDefault()
-    //     setLoading(true)
-    //     setError("")
-    //
-    //     if (createdQuestions.includes(formData.question_text.trim())) {
-    //         setError("Bu savol allaqachon yaratilgan!");
-    //         return;
-    //     }
-    //
-    //     // Validation based on question type
-    //     if (formData.question_type === "text_input") {
-    //         if (!formData.correct_answer_text.trim()) {
-    //             setError("Matn kiritish savollari uchun to'g'ri javob matni talab qilinadi")
-    //             setLoading(false)
-    //             return
-    //         }
-    //         if (!formData.answer_language.trim()) {
-    //             setError("Matn kiritish savollari uchun javob tili talab qilinadi")
-    //             setLoading(false)
-    //             return
-    //         }
-    //     } else {
-    //         const correctAnswers = answers.filter((a) => a.is_correct && a.answer_text.trim())
-    //         if (correctAnswers.length === 0) {
-    //             setError("Kamida bitta javob to'g'ri deb belgilanishi kerak")
-    //             setLoading(false)
-    //             return
-    //         }
-    //
-    //         const validAnswers = answers.filter((a) => a.answer_text.trim())
-    //         if (validAnswers.length < 2 && formData.question_type !== "text_input") {
-    //             setError("Kamida ikkita javob talab qilinadi")
-    //             setLoading(false)
-    //             return
-    //         }
-    //
-    //         // For multiple choice, check that user doesn't select all answers as correct
-    //         if (formData.question_type === "multiple" && correctAnswers.length >= validAnswers.length) {
-    //             setError("Ko'p tanlovli savollar uchun kamida bitta noto'g'ri javob bo'lishi kerak")
-    //             setLoading(false)
-    //             return
-    //         }
-    //     }
-    //
-    //     try {
-    //         // Prepare data as JSON
-    //         const questionData: any = {
-    //             test: Number.parseInt(formData.test),
-    //             question_text: formData.question_text,
-    //             question_type: formData.question_type,
-    //             order_index: formData.order_index,
-    //             category_id: formData.category_id,
-    //         }
-    //
-    //         if (formData.description.trim()) {
-    //             questionData.feedback = formData.description
-    //         }
-    //
-    //         // For text input questions
-    //         if (formData.question_type === "text_input") {
-    //             questionData.correct_answer_text = formData.correct_answer_text
-    //             questionData.answer_language = formData.answer_language
-    //         } else {
-    //             // For choice-based questions, include answers
-    //             const validAnswers = answers.filter((a) => a.answer_text.trim())
-    //             questionData.answers = validAnswers.map((answer) => ({
-    //                 letter: answer.letter,
-    //                 answer_text: answer.answer_text,
-    //                 is_correct: answer.is_correct,
-    //             }))
-    //         }
-    //
-    //         // If there's a media file, use FormData, otherwise use JSON
-    //         if (mediaFile) {
-    //             const formDataToSend = new FormData()
-    //
-    //             // Add all question data
-    //             Object.keys(questionData).forEach((key) => {
-    //                 if (key === "answers") {
-    //                     formDataToSend.append("answers", JSON.stringify(questionData.answers))
-    //                 } else {
-    //                     formDataToSend.append(key, questionData[key].toString())
-    //                 }
-    //             });
-    //
-    //             formDataToSend.append("media", mediaFile)
-    //
-    //             const questionResponse = await quizAPI.createQuestion(formDataToSend)
-    //         } else {
-    //             // Send as JSON
-    //             const questionResponse = await quizAPI.createQuestion(questionData)
-    //         }
-    //
-    //         onClose()
-    //     } catch (err: any) {
-    //         console.error("Savol yaratishda xatolik:", err)
-    //         setError(err.response?.data?.detail || err.response?.data?.message || "Savol yaratishda xatolik yuz berdi")
-    //     } finally {
-    //         alert("Savol muvaffaqiyatli yaratildi!")
-    //         setLoading(false)
-    //     }
-    // }
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -581,7 +479,8 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                             value={formData.correct_answer_text}
                             onChange={handleChange}
                             required
-                            className="w-full px-4 py-3 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="w-full px-4 py-3 backdrop-blur rounded-lg text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
                             placeholder="To'g'ri javobni kiriting"
                         />
                     </div>
@@ -597,7 +496,8 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                             onChange={handleChange}
                             placeholder="masalan: uz, en, ru"
                             required
-                            className="w-full px-4 py-3 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="w-full px-4 py-3 rounded-lg backdrop-blur text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
                         />
                     </div>
                 </div>
@@ -606,86 +506,92 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
 
         return (
             <div>
-                <div className="flex justify-between items-center mb-4">
-                    <label className="block text-sm font-medium text-theme-secondary">Javob variantlari *</label>
-                    {(formData.question_type === "single" || formData.question_type === "multiple") && answers.length < 5 && (
-                        <button
-                            type="button"
-                            onClick={addAnswer}
-                            className="flex items-center space-x-2 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all"
-                        >
-                            <Plus size={16}/>
-                            <span>Javob qo'shish</span>
-                        </button>
-                    )}
-                </div>
+                <FadeInPage delay={800}>
+                    <div className="flex justify-between items-center mb-4">
+                        <label className="block text-sm font-medium text-theme-secondary">Javob variantlari *</label>
+                        {(formData.question_type === "single" || formData.question_type === "multiple") && answers.length < 5 && (
+                            <button
+                                type="button"
+                                onClick={addAnswer}
+                                className="flex items-center space-x-2 px-3 py-1 text-white rounded-lg backdrop-blur transition-all"
+                                style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
+                            >
+                                <Plus size={16}/>
+                                <span>Javob qo'shish</span>
+                            </button>
+                        )}
+                    </div>
+                </FadeInPage>
 
                 <div className="space-y-3">
                     {answers.map((answer, index) => (
-                        <div key={index}
-                             className="flex items-center space-x-3 p-4 border border-theme-primary rounded-lg">
-                            <div className="flex items-center min-w-[100px] gap-2">
-                                <span
-                                    className="w-7 h-7 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center font-semibold text-lg">
-                                    {answer.letter}
-                                </span>
-                                <div className="flex items-center">
-                                    <input
-                                        type={formData.question_type === "multiple" ? "checkbox" : "radio"}
-                                        name={formData.question_type === "multiple" ? `correct_${index}` : "correct"}
-                                        checked={answer.is_correct}
-                                        onChange={(e) => handleCorrectAnswerChange(index, e.target.checked)}
-                                        className="w-4 h-4 outline-none text-green-600 focus:ring-green-500"
-                                    />
-                                    <label className="ml-2 text-sm text-theme-secondary">To'g'ri</label>
+                        <FadeInPage delay={900}>
+                            <div key={index}
+                                 className="flex items-center space-x-3 border border-theme-primary rounded-full overflow-x-scroll scrollbar-hide backdrop-blur" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center">
+                                        <label className="ml-2 text-sm text-theme-secondary flex flex-row">
+                                            <input
+                                                type={formData.question_type === "multiple" ? "checkbox" : "radio"}
+                                                name={formData.question_type === "multiple" ? `correct_${index}` : "correct"}
+                                                checked={answer.is_correct}
+                                                onChange={(e) => handleCorrectAnswerChange(index, e.target.checked)}
+                                                className="peer hidden"
+                                            />
+                                            <span
+                                                className="w-10 h-10 cursor-pointer bg-blue-100 text-blue-800 rounded-full flex items-center justify-center font-semibold text-lg peer-checked:bg-blue-400 peer-checked:text-white">
+                                                {answer.letter}
+                                            </span>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                            {/* INPUT SPELLCHECK BILAN */}
-                            <div className="flex flex-row w-full relative">
-                                <input
-                                    type="text"
-                                    value={spellCheckedAnswers[index] ?? ""}
-                                    onChange={(e) => {
-                                        const v = e.target.value;
+                                {/* INPUT SPELLCHECK BILAN */}
+                                <div className="flex flex-row w-full relative">
+                                    <input
+                                        type="text"
+                                        value={spellCheckedAnswers[index] ?? ""}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
 
-                                        // UI matni
-                                        setSpellCheckedAnswers(prev => {
-                                            const copy = [...prev];
-                                            copy[index] = v;
-                                            return copy;
-                                        });
+                                            // UI matni
+                                            setSpellCheckedAnswers(prev => {
+                                                const copy = [...prev];
+                                                copy[index] = v;
+                                                return copy;
+                                            });
 
-                                        // backend matni
-                                        handleAnswerChange(index, "answer_text", v);
-                                    }}
-                                    placeholder={
-                                        formData.question_type === "true_false"
-                                            ? answer.answer_text
-                                            : `Javob varianti ${answer.letter}`
-                                    }
-                                    disabled={formData.question_type === "true_false"}
-                                    className="flex-1 px-3 py-2 outline-none border-2 border-theme-primary rounded-lg bg-theme-tertiary focus:border-green-600 text-theme-secondary"
-                                />
+                                            // backend matni
+                                            handleAnswerChange(index, "answer_text", v);
+                                        }}
+                                        placeholder={
+                                            formData.question_type === "true_false"
+                                                ? answer.answer_text
+                                                : `Javob varianti ${answer.letter}`
+                                        }
+                                        disabled={formData.question_type === "true_false"}
+                                        className="flex-1 px-5 py-4 outline-none rounded-lg focus:border-green-600 text-theme-secondary bg-transparent"
+                                    />
 
-                                {spellLoading[index] && (
-                                    <span
-                                        className="absolute right-5 top-1/2 -translate-y-1/2 text-xs text-blue-500 animate-pulse">
+                                    {spellLoading[index] && (
+                                        <span
+                                            className="absolute right-5 top-1/2 -translate-y-1/2 text-xs text-blue-500 animate-pulse">
                                     AI tekshirmoqda…
                                 </span>
+                                    )}
+                                </div>
+
+
+                                {(formData.question_type === "single" || formData.question_type === "multiple") && answers.length > 3 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removeAnswer(index)}
+                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    >
+                                        <Trash2 size={16}/>
+                                    </button>
                                 )}
                             </div>
-
-
-                            {(formData.question_type === "single" || formData.question_type === "multiple") && answers.length > 3 && (
-                                <button
-                                    type="button"
-                                    onClick={() => removeAnswer(index)}
-                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                >
-                                    <Trash2 size={16}/>
-                                </button>
-                            )}
-                        </div>
+                        </FadeInPage>
                     ))}
                 </div>
 
@@ -693,245 +599,227 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
         )
     }
 
+    const [imageUrl, setImageUrl] = useState<string>("")
+
+    useEffect(() => {
+        setImageUrl(getLoremImage(600, 400))
+    }, [])
+
     return (
-        <div className="bg-theme-primary bg-opacity-50 flex items-center justify-center z-50 pb-20">
-            <div className="bg-theme-primary rounded-2xl shadow-theme-xl max-w-3xl w-full max-h-auto my-20">
-                {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-theme-primary">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                            <HelpCircle size={20} className="text-green-600"/>
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-theme-primary">Yangi savol yaratish</h2>
-                            <p className="text-sm text-theme-secondary">Testingizga savol qo'shing</p>
-                        </div>
-                    </div>
-                </div>
-                {/* Form */}
-                <div className="p-6 max-h-auto">
-                    {error &&
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
+        <div className="bg-theme-primary bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-theme-primary shadow-theme-xl max-w-3xl w-full max-h-auto"
+                 style={{
+                     backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
+                     backgroundRepeat: 'no-repeat',
+                     backgroundSize: 'cover',
+                     backgroundPosition: 'center center',
+                 }}>
+                <div className={"w-full h-full py-5"} style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}>
+                    {/* Form */}
+                    <div className="p-6 max-h-auto">
+                        {error &&
+                            <div
+                                className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Test Selection */}
-                        <div>
-                            <div ref={rootRef} className="relative">
-                                {/* BUTTON */}
-                                <button
-                                    type="button"
-                                    className="w-full px-4 py-3 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary flex justify-between items-center"
-                                    onClick={() => setOpen((prev) => !prev)}
-                                >
-            <span>
-                {selectedTest ? selectedTest.title : "Blok tanlang"}
-            </span>
-
-                                    <span className={`transition-transform ${open ? "rotate-180" : ""}`}>
-                <ChevronDown/>
-            </span>
-                                </button>
-
-                                {/* DROPDOWN */}
-                                <AnimatePresence>
-                                    {open && (
-                                        <motion.ul
-                                            initial={{opacity: 0, y: -8}}
-                                            animate={{opacity: 1, y: 0}}
-                                            exit={{opacity: 0, y: -8}}
-                                            transition={{duration: 0.15}}
-                                            className="absolute mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-h-60 overflow-auto"
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            {/* Test Selection */}
+                            <div>
+                                <div ref={rootRef} className="relative">
+                                    {/* BUTTON */}
+                                    <FadeInPage delay={100}>
+                                        <button
+                                            type="button"
+                                            className="w-full px-4 py-3 rounded-lg text-theme-primary flex justify-between items-center"
+                                            style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
+                                            onClick={() => setOpen((prev) => !prev)}
                                         >
-                                            {/* NEW BLOCK */}
-                                            <li className="flex flex-row items-center justify-between px-4 py-3 bg-theme-primary text-theme-secondary hover:bg-gray-500 hover:text-white transition duration-200 cursor-pointer"
-                                                onClick={() => navigate("/new-block")}>
-                                                <span className={"bg-transparent"}>Yangi blok yaratish</span>
-                                                <Plus/>
-                                            </li>
+                                        <span>
+                                            {selectedTest ? selectedTest.title : "Blok tanlang"}
+                                        </span>
 
-                                            {/* TEST ITEMS */}
-                                            {tests.map((test) => (
-                                                <li
-                                                    key={test.id}
-                                                    onClick={() => handleSelect(test.id)}
-                                                    className="px-4 py-3 bg-theme-primary text-theme-secondary hover:bg-gray-500 hover:text-white transition duration-200 cursor-pointer flex justify-between items-center"
-                                                >
-                                                    <span>{test.title}</span>
-                                                    <span>{getTestTypeIcon(test.visibility)}</span>
+                                            <span className={`transition-transform ${open ? "rotate-180" : ""}`}>
+                                            <ChevronDown/>
+                                        </span>
+                                        </button>
+                                    </FadeInPage>
+
+                                    {/* DROPDOWN */}
+                                    <AnimatePresence>
+                                        {open && (
+                                            <motion.ul
+                                                initial={{opacity: 0, y: -8}}
+                                                animate={{opacity: 1, y: 0}}
+                                                exit={{opacity: 0, y: -8}}
+                                                transition={{duration: 0.15}}
+                                                className="absolute mt-2 w-full bg-transparent rounded-lg shadow-lg z-50 max-h-60 overflow-auto"
+                                            >
+                                                {/* NEW BLOCK */}
+                                                <li className="flex flex-row items-center backdrop-blur justify-between px-4 py-3 text-theme-secondary hover:bg-gray-500 hover:text-white transition duration-200 cursor-pointer"
+                                                    onClick={() => navigate("/create/new-block")}
+                                                    style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}>
+                                                    <span className={"bg-transparent"}>Yangi blok yaratish</span>
+                                                    <Plus/>
                                                 </li>
-                                            ))}
-                                        </motion.ul>
-                                    )}
-                                </AnimatePresence>
 
-                                {/* HIDDEN INPUT (form uchun) */}
-                                <input
-                                    type="hidden"
-                                    name="test"
-                                    value={formData.test}
-                                    required
-                                />
-                            </div>
+                                                {/* TEST ITEMS */}
+                                                {tests.map((test) => (
+                                                    <li
+                                                        key={test.id}
+                                                        onClick={() => handleSelect(test.id)}
+                                                        style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}
+                                                        className="px-4 py-3 text-theme-secondary backdrop-blur hover:bg-gray-500 hover:text-white transition duration-200 cursor-pointer flex justify-between items-center"
+                                                    >
+                                                        <span>{test.title}</span>
+                                                        <span>{getTestTypeIcon(test.visibility)}</span>
+                                                    </li>
+                                                ))}
+                                            </motion.ul>
+                                        )}
+                                    </AnimatePresence>
 
-                            {/* Show selected test type */}
-                            {formData.test && (
-                                <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600">
-                                    {(() => {
-                                        const selectedTest = tests.find((t) => t.id.toString() === formData.test)
-                                        if (selectedTest) {
-                                            return (
-                                                <>
-                                                    {getTestTypeIcon(selectedTest.visibility)}
-                                                    <span>
+                                    {/* HIDDEN INPUT (form uchun) */}
+                                    <input
+                                        type="hidden"
+                                        name="test"
+                                        value={formData.test}
+                                        required
+                                    />
+                                </div>
+
+                                {/* Show selected test type */}
+                                {formData.test && (
+                                    <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600">
+                                        {(() => {
+                                            const selectedTest = tests.find((t) => t.id.toString() === formData.test)
+                                            if (selectedTest) {
+                                                return (
+                                                    <>
+                                                        {getTestTypeIcon(selectedTest.visibility)}
+                                                        <span>
                             {selectedTest.visibility === "public"
                                 ? "Ommaviy test"
                                 : selectedTest.visibility === "private"
                                     ? "Shaxsiy test"
                                     : "Yashirin test"}
                           </span>
-                                                </>
-                                            )
-                                        }
-                                        return null
-                                    })()}
-                                </div>
-                            )}
-                        </div>
+                                                    </>
+                                                )
+                                            }
+                                            return null
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
 
-                        {/* Category */}
-                        <CategoryDropdown
-                            categories={categories}
-                            selectedCategoryId={formData.category_id}
-                            onSelect={(id) => {
-                                console.log("Dropdowndan kelayotgan ID:", id)
-                                setFormData((prev) => {
-                                    const next = { ...prev, category_id: id };
-                                    console.log("SET QILINDI → formData.category_id:", next.category_id);
-                                    return next;
-                                });
-                            }}
-                        />
+                            {/* Category */}
+                            <CategoryDropdown
+                                categories={categories}
+                                selectedCategoryId={formData.category_id}
+                                onSelect={(id) => {
+                                    console.log("Dropdowndan kelayotgan ID:", id)
+                                    setFormData((prev) => {
+                                        const next = {...prev, category_id: id};
+                                        console.log("SET QILINDI → formData.category_id:", next.category_id);
+                                        return next;
+                                    });
+                                }}
+                            />
 
-                        {/* Question Type */}
-                        <div className="relative">
-                            <label className="block text-sm font-medium text-theme-secondary mb-2">
-                                Savol turi
-                            </label>
+                            {/* Question Type */}
+                            <div className="relative">
+                                <FadeInPage delay={300}>
+                                    {/* BUTTON */}
+                                    <button
+                                        type="button"
+                                        className="w-full px-4 py-3 rounded-lg text-theme-primary flex justify-between items-center"
+                                        style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
+                                        onClick={() => setOpenType((p) => !p)}
+                                    >
+                                        <span>{selectedType?.label || "Savol turini tanlang"}</span>
 
-                            {/* BUTTON */}
-                            <button
-                                type="button"
-                                className="w-full px-4 py-3 border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary flex justify-between items-center"
-                                onClick={() => setOpenType((p) => !p)}
-                            >
-                                <span>{selectedType?.label || "Savol turini tanlang"}</span>
-
-                                <span className={`transition-transform ${openType ? "rotate-180" : ""}`}>
+                                        <span className={`transition-transform ${openType ? "rotate-180" : ""}`}>
                         <ChevronDown/>
                     </span>
-                            </button>
+                                    </button>
+                                </FadeInPage>
 
-                            {/* ANIMATED DROPDOWN */}
-                            <AnimatePresence>
-                                {openType && (
-                                    <motion.ul
-                                        ref={dropdownRef}
-                                        initial={{opacity: 0, y: -8}}
-                                        animate={{opacity: 1, y: 0}}
-                                        exit={{opacity: 0, y: -8}}
-                                        transition={{duration: 0.15}}
-                                        className="absolute w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto z-50"
-                                    >
-                                        {questionTypes.map((item) => (
-                                            <li
-                                                key={item.value}
-                                                onClick={() => handleSelectType(item.value)}
-                                                className="px-4 py-3 cursor-pointer hover:bg-gray-500 hover:text-white bg-theme-primary text-theme-secondary transition duration-200"
-                                            >
-                                                {item.label}
-                                            </li>
-                                        ))}
-                                    </motion.ul>
-                                )}
-                            </AnimatePresence>
+                                {/* ANIMATED DROPDOWN */}
+                                <AnimatePresence>
+                                    {openType && (
+                                        <motion.ul
+                                            ref={dropdownRef}
+                                            initial={{opacity: 0, y: -8}}
+                                            animate={{opacity: 1, y: 0}}
+                                            exit={{opacity: 0, y: -8}}
+                                            transition={{duration: 0.15}}
+                                            className="absolute w-full mt-2 bg-transparent rounded-lg shadow-lg max-h-60 overflow-auto z-50"
+                                        >
+                                            {questionTypes.map((item) => (
+                                                <li
+                                                    key={item.value}
+                                                    onClick={() => handleSelectType(item.value)}
+                                                    className="px-4 py-3 cursor-pointer hover:bg-gray-500 hover:text-white backdrop-blur text-theme-secondary transition duration-200"
+                                                    style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
+                                                >
+                                                    {item.label}
+                                                </li>
+                                            ))}
+                                        </motion.ul>
+                                    )}
+                                </AnimatePresence>
 
-                            {/* HIDDEN INPUT — form uchun zarur */}
-                            <input
-                                type="hidden"
-                                name="question_type"
-                                value={formData.question_type}
-                            />
-                        </div>
+                                {/* HIDDEN INPUT — form uchun zarur */}
+                                <input
+                                    type="hidden"
+                                    name="question_type"
+                                    value={formData.question_type}
+                                />
+                            </div>
 
-                        {/* Question Text */}
-                        <div>
-                            <label className="block text-sm font-medium text-theme-secondary mb-2">Savol matni *</label>
-                            <textarea
-                                name="question_text"
-                                value={questionText.value}
-                                onChange={handleChange}
-                                required
-                                rows={4}
-                                className="w-full px-4 py-3 outline-none border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                placeholder="Savolingizni bu yerga yozing..."
-                            />
-                            {questionText.isLoading &&
-                                <span className={`flex flex-row items-center justify-start py-2 gap-1 ${theme === 'dark' ? 'text-black' : 'text-white'}`}> <RefreshCw
-                                    className="animate-spin w-5 h-5 text-gray-600"/> Tekshirilmoqda...</span>}
-                        </div>
+                            {/* Question Text */}
+                            <div className={"relative"}>
+                                <FadeInPage delay={400}>
+                                        <textarea
+                                            name="question_text"
+                                            value={questionText.value}
+                                            onChange={handleChange}
+                                            required
+                                            rows={4}
+                                            className="w-full px-4 py-3 outline-none rounded-lg backdrop-blur text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                            style={{backgroundColor: 'rgba(0, 0, 0, 0.5)'}}
+                                            placeholder="Savolingizni bu yerga yozing..."
+                                        />
+                                </FadeInPage>
 
-                        {/* Description (Optional for all question types) */}
-                        <div>
-                            <label className="block text-sm font-medium text-theme-secondary mb-2">Tavsif
-                                (ixtiyoriy)</label>
-                            <textarea
-                                name="description"
-                                value={descriptionText.value}
-                                onChange={handleChange}
-                                rows={2}
-                                className="w-full px-4 py-3 outline-none border border-theme-primary rounded-lg bg-theme-secondary text-theme-primary focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                placeholder="Qo'shimcha tavsif yoki tushuntirish qo'shing..."
-                            />
-                            {descriptionText.isLoading &&
-                                <span className={`flex flex-row items-center justify-start py-2 gap-1 ${theme === 'dark' ? 'text-black' : 'text-white'}`}> <RefreshCw
-                                    className="animate-spin w-5 h-5 text-gray-600"/> Tekshirilmoqda...</span>}
-                        </div>
+                                {questionText.isLoading &&
+                                    <span
+                                        className={`flex flex-row items-center justify-start py-2 gap-1 text-white absolute right-1.5 bottom-1.5`}> <RefreshCw
+                                        className="animate-spin w-5 h-5 text-white"/> Tekshirilmoqda...</span>}
+                            </div>
 
-                        {/* Dynamic Answer Inputs */}
-                        {renderAnswerInputs()}
+                            {/* Dynamic Answer Inputs */}
+                            {renderAnswerInputs()}
 
-                        {/* Tips */}
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                            <h4 className="font-semibold text-green-900 mb-2">💡 Savol yozish bo'yicha maslahatlar:</h4>
-                            <ul className="text-sm text-green-800 space-y-1">
-                                <li>• Aniq va tushunarli savollar yozing</li>
-                                <li>• Bitta tanlov uchun: faqat bitta to'g'ri javob ruxsat etilgan</li>
-                                <li>• Ko'p tanlov uchun: bir nechta to'g'ri javob bo'lishi mumkin, lekin hammasi emas
-                                </li>
-                                <li>• To'g'ri/Noto'g'ri uchun: to'g'ri yoki noto'g'rini tanlang</li>
-                                <li>• Matn kiritish uchun: aniq to'g'ri javobni bering va tilni qo'lda kiriting,<i> uzun
-                                    matn kiritish tavsiya etilmaydi</i></li>
-                            </ul>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex space-x-4 pt-4">
-                            <button
-                                type="submit"
-                                disabled={loading || createdQuestions.includes(formData.question_text.trim())} // ❗ Duplicate tekshiruv qo'shildi
-                                className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                            >
-                                {loading ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
-                                ) : (
-                                    <>
-                                        <Save size={20}/>
-                                        <span>Savol yaratish</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </form>
+                            {/* Action Buttons */}
+                            <div className="flex space-x-4 pt-4">
+                                <button
+                                    type="submit"
+                                    disabled={loading || createdQuestions.includes(formData.question_text.trim())} // ❗ Duplicate tekshiruv qo'shildi
+                                    className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                >
+                                    {loading ? (
+                                        <div
+                                            className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
+                                    ) : (
+                                        <>
+                                            <Save size={20}/>
+                                            <span>Savol yaratish</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

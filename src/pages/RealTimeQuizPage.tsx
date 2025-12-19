@@ -80,33 +80,25 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
     const [userLoading, setUserLoading] = useState(true)
     const [userError, setUserError] = useState<string | null>(null)
 
-    // quiz id state (initially null)
     const [quizId, setQuizId] = useState<number | null>(null);
     const [session, setSession] = useState<UserData | null>(null)
 
     // --------------------------
-// QUIZ ID — URL orqali fallback
-// --------------------------
+    // QUIZ ID — URL orqali fallback
+    // --------------------------
     useEffect(() => {
         const deriveQuizId = (): number | null => {
-
-            // 1) Props orqali
             if (quiz_id !== undefined && quiz_id !== null) {
                 const id = Number(quiz_id);
                 if (!isNaN(id)) return id;
             }
-
-            // 2) Query params orqali
             const params = new URLSearchParams(window.location.search);
             const qp = params.get("id") || params.get("quiz_id");
             if (qp) {
                 const id = Number(qp);
                 if (!isNaN(id)) return id;
             }
-
-            // 3) Path orqali (universal regex)
             const path = window.location.pathname;
-
             const patterns = [
                 /live-quiz\/(\d+)/i,
                 /quiz(?:zes)?\/(\d+)/i,
@@ -114,7 +106,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
                 /start\/quiz\/(\d+)/i,
                 /\/(\d+)(?:\/)?$/i,
             ];
-
             for (const rx of patterns) {
                 const m = path.match(rx);
                 if (m?.[1]) {
@@ -122,60 +113,53 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
                     if (!isNaN(id)) return id;
                 }
             }
-
             return null;
         };
-
         const derived = deriveQuizId();
-
         if (derived !== null && quizId === null) {
             setQuizId(derived);
         }
-    }, [quiz_id]); // QUIZ ID URL fallback
+    }, [quiz_id, quizId]);
 
-
-// --------------------------
-// TOKEN
-// --------------------------
+    // --------------------------
+    // TOKEN
+    // --------------------------
     const accessToken =
         typeof window !== "undefined"
             ? localStorage.getItem("access_token")
             : null;
 
-// --------------------------
-// UNIVERSAL WS URL
-// --------------------------
-    const WS_BASE_URL = "wss://backend.testabd.uz";
+    // --------------------------
+    // UNIVERSAL WS URL
+    // --------------------------
+    // const WS_BASE_URL = "wss://backend.testabd.uz";
+    const WS_BASE_URL = window.location.hostname === "localhost"
+        ? "ws://localhost:8000" // yoki sizning backend portingiz
+        : "wss://backend.testabd.uz";
+
     const wsUrl = accessToken
         ? `${WS_BASE_URL}/ws/quiz/all/?token=${accessToken}`
         : null;
 
-// debug WS URL
+    // debug WS URL
     useEffect(() => {
         console.log("token exists:", !!accessToken);
         console.log("wsUrl:", wsUrl);
     }, [accessToken, wsUrl]);
 
+    // --------------------------
+    // WEBSOCKET HOOK
+    // --------------------------
+    const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl ?? null);
 
-// --------------------------
-// WEBSOCKET HOOK
-// --------------------------
-    const { isConnected, sendMessage, lastMessage, error } = useWebSocket(wsUrl ?? "", {
-        shouldReconnect: () => true,
-    });
-
-
-// --------------------------
-// WS — QUIZ ID OLIB BERADI
-// --------------------------
+    // --------------------------
+    // WS — QUIZ ID OLIB BERADI
+    // --------------------------
     useEffect(() => {
         if (!lastMessage) return;
 
         let raw = lastMessage;
-
-        if (typeof raw === "object" && "data" in raw) {
-            raw = raw.data;
-        }
+        if (typeof raw === "object" && "data" in raw) raw = raw.data;
 
         let msg: any;
         try {
@@ -187,7 +171,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
 
         console.log("WS MESSAGE:", msg);
 
-        // 👉 PRIORITY: WS orqali kelgan quiz_id
         if (msg.quiz_id !== undefined && msg.quiz_id !== null) {
             const parsed = Number(msg.quiz_id);
             if (!isNaN(parsed)) {
@@ -196,7 +179,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
             }
         }
 
-        // agar WS session yuborsa → update
         if (msg.session) {
             setSession(prev => ({
                 ...(prev ?? {}),
@@ -205,10 +187,9 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
         }
     }, [lastMessage]);
 
-
-// --------------------------
-// DEBUG
-// --------------------------
+    // --------------------------
+    // DEBUG
+    // --------------------------
     useEffect(() => {
         console.log("quizId:", quizId);
         console.log("wsUrl:", wsUrl);
@@ -219,6 +200,9 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
         console.log("FULL URL =", window.location.href);
     }, [quizId, wsUrl, session]);
 
+    // --------------------------
+    // QUIZ STATES
+    // --------------------------
     const [quizSession, setQuizSession] = useState<QuizSession | null>(null)
     const [participants, setParticipants] = useState<Participant[]>([])
     const [selectedAnswer, setSelectedAnswer] = useState<number | string | null>(null)
@@ -229,7 +213,6 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
     const [hasJoined, setHasJoined] = useState(false)
     const [quizStarted, setQuizStarted] = useState(false)
     const [backgroundImage] = useState(() => backgroundImages[Math.floor(Math.random() * backgroundImages.length)])
-
     const [answerResult, setAnswerResult] = useState<{
         isCorrect: boolean
         correctAnswerId: number | string | null
@@ -237,12 +220,10 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
         responseTime?: number
     } | null>(null)
     const [showingResults, setShowingResults] = useState(false)
-
     const [isStartingQuiz, setIsStartingQuiz] = useState(false)
     const [isEndingQuiz, setIsEndingQuiz] = useState(false)
     const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false)
     const [canMoveToNext, setCanMoveToNext] = useState(false)
-
     const questionStartTimeRef = useRef<number>(0)
     const [totalStats, setTotalStats] = useState({
         totalUsers: 0,
@@ -250,34 +231,24 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
         totalCorrect: 0,
         totalWrong: 0,
     })
-
     const [finalResults, setFinalResults] = useState<any[]>([])
     const [userResults, setUserResults] = useState<any>(null)
     const [showResultsModal, setShowResultsModal] = useState(false)
     const [showSidebar, setShowSidebar] = useState(false)
-
     const [canGoBack, setCanGoBack] = useState(false)
     const [canGoNext, setCanGoNext] = useState(false)
     const [autoNextTimer, setAutoNextTimer] = useState<number | null>(null)
-
-    const [userAnswerHistory, setUserAnswerHistory] = useState<{
-        [questionId: string]: { answerId: string; isCorrect: boolean }
-    }>({})
+    const [userAnswerHistory, setUserAnswerHistory] = useState<{[questionId: string]: { answerId: string; isCorrect: boolean }}>({})
     const [questionLoadError, setQuestionLoadError] = useState(false)
-
     const [allQuestions, setAllQuestions] = useState<Question[]>([])
     const [showAdminPanel, setShowAdminPanel] = useState(false)
-    const [userStatsFromParticipants, setUserStatsFromParticipants] = useState({
-        correctAnswers: 0,
-        wrongAnswers: 0,
-        totalAnswered: 0,
-        accuracy: 0,
-    })
-
+    const [userStatsFromParticipants, setUserStatsFromParticipants] = useState({ correctAnswers: 0, wrongAnswers: 0, totalAnswered: 0, accuracy: 0 })
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
     const currentQuestion = allQuestions[currentQuestionIndex] || null
 
-    // load saved localStorage (browser-only)
+    // --------------------------
+    // LOCALSTORAGE LOAD & SAVE
+    // --------------------------
     useEffect(() => {
         if (typeof window === "undefined") return
         try {
@@ -294,439 +265,221 @@ export default function RealTimeQuizPage({ quiz_id }: { quiz_id?: number | strin
         }
     }, [quizId])
 
-    useEffect(() => {
-        if (typeof window === "undefined") return
-        try {
-            localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(allQuestions))
-        } catch {}
-    }, [allQuestions, quizId])
+    useEffect(() => { if (typeof window !== "undefined") try { localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(allQuestions)) } catch {} }, [allQuestions, quizId])
+    useEffect(() => { if (typeof window !== "undefined") try { localStorage.setItem(`quiz_${quizId}_current_index`, currentQuestionIndex.toString()) } catch {} }, [currentQuestionIndex, quizId])
+    useEffect(() => { if (typeof window !== "undefined") try { localStorage.setItem(`quiz_${quizId}_answer_history`, JSON.stringify(userAnswerHistory)) } catch {} }, [userAnswerHistory, quizId])
 
-    useEffect(() => {
-        if (typeof window === "undefined") return
-        try {
-            localStorage.setItem(`quiz_${quizId}_current_index`, currentQuestionIndex.toString())
-        } catch {}
-    }, [currentQuestionIndex, quizId])
-
-    useEffect(() => {
-        if (typeof window === "undefined") return
-        try {
-            localStorage.setItem(`quiz_${quizId}_answer_history`, JSON.stringify(userAnswerHistory))
-        } catch {}
-    }, [userAnswerHistory, quizId])
-
-    // load current user
+    // --------------------------
+    // LOAD CURRENT USER
+    // --------------------------
     useEffect(() => {
         const loadUserData = async () => {
-            try {
-                setUserLoading(true)
-                const userData = await authAPI.getCurrentUser()
-                setUser(userData)
-                setUserError(null)
-            } catch (err) {
-                setUserError(err instanceof Error ? err.message : "Failed to load user data")
-            } finally {
-                setUserLoading(false)
-            }
+            try { setUserLoading(true); const userData = await authAPI.getCurrentUser(); setUser(userData); setUserError(null) }
+            catch (err) { setUserError(err instanceof Error ? err.message : "Failed to load user data") }
+            finally { setUserLoading(false) }
         }
         loadUserData()
     }, [])
 
-    // connection status & auto-join
+    // --------------------------
+    // CONNECTION STATUS & AUTO-JOIN
+    // --------------------------
     useEffect(() => {
-        if (error) {
-            setConnectionStatus("disconnected")
-        } else if (isConnected) {
+        if (error) { setConnectionStatus("disconnected") }
+        else if (isConnected) {
             setConnectionStatus("connected")
             if (!hasJoined && user) {
-                sendMessage({
-                    action: "join_quiz",
-                    user_id: user.id,
-                    username: user.username,
-                })
+                sendMessage({ action: "join_quiz", user_id: user.id, username: user.username })
                 setHasJoined(true)
             }
-        } else {
-            setConnectionStatus("connecting")
-        }
+        } else { setConnectionStatus("connecting") }
     }, [isConnected, error, user, hasJoined, sendMessage])
 
-    // answer submit
+    // --------------------------
+    // ANSWER SUBMIT
+    // --------------------------
     const handleAnswerSubmit = (answerId: number | string) => {
         if (hasAnswered || !currentQuestion || !user || isSubmittingAnswer) return;
-
-        // Darhol tanlangan javobni set qilamiz
         setSelectedAnswer(answerId);
         setHasAnswered(true);
         setIsSubmittingAnswer(true);
-
         const responseTime = (Date.now() - questionStartTimeRef.current) / 1000;
-
-        // Websocket yuborish
-        sendMessage({
-            action: "submit_answer",
-            user_id: user.id,
-            question_id: currentQuestion.id,
-            answer_id: answerId,
-            response_time: responseTime,
-        });
-
-        // UI qotib qolmasligi uchun kichik delay bilan isSubmittingAnswer-ni false qilamiz
-        setTimeout(() => {
-            setIsSubmittingAnswer(false);
-        }, 150); // 150ms yetarli
+        sendMessage({ action: "submit_answer", user_id: user.id, question_id: currentQuestion.id, answer_id: answerId, response_time: responseTime });
+        setTimeout(() => setIsSubmittingAnswer(false), 150);
     };
 
-    // define handleEndQuiz before other callbacks that reference it to avoid TDZ
+    // --------------------------
+    // OTHER HANDLERS
+    // --------------------------
     const handleEndQuiz = useCallback(() => {
         if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isEndingQuiz) return
-
         if (typeof window !== "undefined" && window.confirm("Are you sure you want to end this quiz for all participants?")) {
             setIsEndingQuiz(true)
-            sendMessage({
-                action: "end_quiz",
-                user_id: user.id,
-            })
+            sendMessage({ action: "end_quiz", user_id: user.id })
         }
     }, [isConnected, user, quizSession, isEndingQuiz, sendMessage])
 
     const handleNextQuestion = useCallback(() => {
         if (quizSession?.mode === "timed") return
-
         if (currentQuestionIndex < allQuestions.length - 1) {
             const newIndex = currentQuestionIndex + 1
-            setCurrentQuestionIndex(newIndex)
-            setHasAnswered(false)
-            setSelectedAnswer(null)
-            setAnswerResult(null)
-            setShowingResults(false)
-
-            if (isConnected && user) {
-                sendMessage({
-                    action: "user_navigate",
-                    user_id: user.id,
-                    question_index: newIndex,
-                })
-            }
-        } else {
-            // End quiz if no more questions
-            handleEndQuiz()
-        }
+            setCurrentQuestionIndex(newIndex); setHasAnswered(false); setSelectedAnswer(null); setAnswerResult(null); setShowingResults(false)
+            if (isConnected && user) sendMessage({ action: "user_navigate", user_id: user.id, question_index: newIndex })
+        } else handleEndQuiz()
     }, [currentQuestionIndex, allQuestions.length, quizSession?.mode, isConnected, user, sendMessage, handleEndQuiz])
 
     const handlePreviousQuestion = useCallback(() => {
         if (quizSession?.mode === "timed") return
-
         if (currentQuestionIndex > 0) {
             const newIndex = currentQuestionIndex - 1
-            setCurrentQuestionIndex(newIndex)
-            setHasAnswered(false)
-            setSelectedAnswer(null)
-            setAnswerResult(null)
-            setShowingResults(false)
-
-            if (isConnected && user) {
-                sendMessage({
-                    action: "user_navigate",
-                    user_id: user.id,
-                    question_index: newIndex,
-                })
-            }
+            setCurrentQuestionIndex(newIndex); setHasAnswered(false); setSelectedAnswer(null); setAnswerResult(null); setShowingResults(false)
+            if (isConnected && user) sendMessage({ action: "user_navigate", user_id: user.id, question_index: newIndex })
         }
     }, [currentQuestionIndex, quizSession?.mode, isConnected, user, sendMessage])
 
     const handleLeaveQuiz = useCallback(() => {
-        if (isConnected && user) {
-            sendMessage({
-                action: "leave_quiz",
-                user_id: user.id,
-            })
-        }
+        if (isConnected && user) sendMessage({ action: "leave_quiz", user_id: user.id })
         if (typeof window !== "undefined") window.history.back()
     }, [isConnected, user, sendMessage])
 
     const handleStartQuiz = useCallback(() => {
         if (!isConnected || !user || !quizSession || user.id !== quizSession.creator_id || isStartingQuiz) return
-
         setIsStartingQuiz(true)
-        sendMessage({
-            action: "start_quiz",
-            user_id: user.id,
-        })
+        sendMessage({ action: "start_quiz", user_id: user.id })
     }, [isConnected, user, quizSession, isStartingQuiz, sendMessage])
 
     const handleNextQuestionManual = useCallback(() => {
         if (!isConnected || !user) return
-        sendMessage({
-            action: "next_question",
-            user_id: user.id,
-        })
+        sendMessage({ action: "next_question", user_id: user.id })
     }, [isConnected, user, sendMessage])
 
     const handleRefresh = useCallback(() => {
         setQuestionLoadError(false)
-        if (user && hasJoined) {
-            sendMessage({
-                action: "join_quiz",
-                user_id: user.id,
-                username: user.username,
-            })
-        }
+        if (user && hasJoined) sendMessage({ action: "join_quiz", user_id: user.id, username: user.username })
     }, [user, hasJoined, sendMessage])
 
     const handleKickParticipant = useCallback((participantId: number | string) => {
         if (!user || !quizSession) return
         if (user.id !== quizSession.creator_id) return
         if (!isConnected) return
-
-        sendMessage({
-            action: "kick_participant",
-            admin_id: user.id,
-            user_id: participantId,
-        })
+        sendMessage({ action: "kick_participant", admin_id: user.id, user_id: participantId })
     }, [isConnected, user, quizSession, sendMessage])
 
     const handleRestartQuiz = useCallback(() => {
         if (!user || !quizSession) return
         if (user.id !== quizSession.creator_id) return
         if (!isConnected) return
-
-        sendMessage({
-            action: "restart_quiz",
-            user_id: user.id,
-        })
-
+        sendMessage({ action: "restart_quiz", user_id: user.id })
         if (typeof window !== "undefined") {
             localStorage.removeItem(`quiz_${quizId}_questions`)
             localStorage.removeItem(`quiz_${quizId}_current_index`)
             localStorage.removeItem(`quiz_${quizId}_answer_history`)
         }
-        setCurrentQuestionIndex(0)
-        setAllQuestions([])
-        setUserAnswerHistory({})
+        setCurrentQuestionIndex(0); setAllQuestions([]); setUserAnswerHistory({})
     }, [isConnected, user, quizSession, sendMessage, quizId])
 
-    // incoming websocket messages
+    // --------------------------
+    // WS INCOMING MESSAGES
+    // --------------------------
     useEffect(() => {
-        if (!lastMessage) return;
-
-        let data: any;
-        try {
-            data = JSON.parse(lastMessage); // lastMessage string
-        } catch (err) {
-            console.error("Failed to parse WS message:", lastMessage, err);
-            setQuestionLoadError(true);
-            return;
-        }
+        if (!lastMessage) return
+        let data: any
+        try { data = JSON.parse(lastMessage) } catch (err) { console.error("Failed to parse WS message:", lastMessage, err); setQuestionLoadError(true); return }
 
         switch (data.type) {
             case "all_questions_loaded":
             case "quiz_state":
-                if (Array.isArray(data.questions)) {
-                    setAllQuestions(data.questions);
-                    if (typeof window !== "undefined") {
-                        localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions));
-                    }
-                }
-                if (data.quiz_session) setQuizSession(data.quiz_session);
-                if (data.participants) setParticipants(data.participants);
-                setIsStartingQuiz(false);
-                setIsEndingQuiz(false);
+                if (Array.isArray(data.questions)) { setAllQuestions(data.questions); if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.questions)) }
+                if (data.quiz_session) setQuizSession(data.quiz_session)
+                if (data.participants) setParticipants(data.participants)
+                setIsStartingQuiz(false); setIsEndingQuiz(false)
                 break;
-
             case "quiz_started":
-                setQuizStarted(true);
-                if (data.quiz_session) setQuizSession(data.quiz_session);
-                if (Array.isArray(data.all_questions)) {
-                    setAllQuestions(data.all_questions);
-                    if (typeof window !== "undefined") {
-                        localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions));
-                    }
-                }
+                setQuizStarted(true)
+                if (data.quiz_session) setQuizSession(data.quiz_session)
+                if (Array.isArray(data.all_questions)) { setAllQuestions(data.all_questions); if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions)) }
                 break;
-
             case "timed_question_change":
-                if (typeof data.question_index === "number") {
-                    setCurrentQuestionIndex(data.question_index);
-                    setHasAnswered(false);
-                    setSelectedAnswer(null);
-                    setAnswerResult(null);
-                    setShowingResults(false);
-                    questionStartTimeRef.current = Date.now();
-                }
+                if (typeof data.question_index === "number") { setCurrentQuestionIndex(data.question_index); setHasAnswered(false); setSelectedAnswer(null); setAnswerResult(null); setShowingResults(false); questionStartTimeRef.current = Date.now() }
                 break;
-
             case "new_question":
                 if (data.question) {
                     setQuizSession((prev) => {
-                        const prevIndex = prev?.current_question_index ?? -1;
-                        const computedIndex = typeof data.question_index === "number" ? data.question_index : prevIndex + 1;
-                        return {
-                            ...prev,
-                            current_question: data.question,
-                            current_question_index: computedIndex,
-                            time_per_question: data.time_per_question ?? prev?.time_per_question ?? 15,
-                            is_active: data.is_active ?? prev?.is_active ?? true,
-                            total_questions: data.total_questions ?? prev?.total_questions ?? (Array.isArray(data.all_questions) ? data.all_questions.length : 0),
-                        } as QuizSession;
-                    });
-
-                    setHasAnswered(false);
-                    setSelectedAnswer(null);
-                    setAnswerResult(null);
-                    setShowingResults(false);
-                    setIsSubmittingAnswer(false);
-                    setCanMoveToNext(false);
-                    questionStartTimeRef.current = Date.now();
-
-                    if (typeof data.time_per_question === "number") setTimeLeft(data.time_per_question);
-                    if (Array.isArray(data.all_questions)) {
-                        setAllQuestions(data.all_questions);
-                        if (typeof window !== "undefined") {
-                            localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions));
-                        }
-                    }
+                        const prevIndex = prev?.current_question_index ?? -1
+                        const computedIndex = typeof data.question_index === "number" ? data.question_index : prevIndex + 1
+                        return { ...(prev ?? {}), current_question: data.question, current_question_index: computedIndex, time_per_question: data.time_per_question ?? prev?.time_per_question ?? 15, is_active: data.is_active ?? prev?.is_active ?? true, total_questions: data.total_questions ?? prev?.total_questions ?? (Array.isArray(data.all_questions) ? data.all_questions.length : 0) } as QuizSession
+                    })
+                    setHasAnswered(false); setSelectedAnswer(null); setAnswerResult(null); setShowingResults(false); setIsSubmittingAnswer(false); setCanMoveToNext(false)
+                    if (typeof data.time_per_question === "number") setTimeLeft(data.time_per_question)
+                    if (Array.isArray(data.all_questions)) { setAllQuestions(data.all_questions); if (typeof window !== "undefined") localStorage.setItem(`quiz_${quizId}_questions`, JSON.stringify(data.all_questions)) }
                 }
                 break;
-
             case "answer_result":
                 if (quizSession?.current_question) {
-                    setUserAnswerHistory((prev) => ({
-                        ...prev,
-                        [quizSession.current_question.id]: {
-                            answerId: selectedAnswer ? String(selectedAnswer) : "",
-                            isCorrect: data.is_correct,
-                        },
-                    }));
+                    setUserAnswerHistory(prev => ({ ...prev, [quizSession.current_question.id]: { answerId: selectedAnswer ? String(selectedAnswer) : "", isCorrect: data.is_correct } }))
                 }
-                setAnswerResult({
-                    isCorrect: data.is_correct,
-                    correctAnswerId: data.correct_answer_id ?? null,
-                    explanation: data.explanation,
-                    responseTime: data.response_time,
-                });
-                setShowingResults(true);
-                setIsSubmittingAnswer(false);
-                setCanMoveToNext(Boolean(data.has_next_question));
-
-                if (!data.has_next_question) {
-                    setTimeout(() => {
-                        setIsQuizEnded(true);
-                        setQuizStarted(false);
-                        sendMessage({ action: "get_final_results" });
-                    }, 3000);
-                }
+                setAnswerResult({ isCorrect: data.is_correct, correctAnswerId: data.correct_answer_id ?? null, explanation: data.explanation, responseTime: data.response_time })
+                setShowingResults(true); setIsSubmittingAnswer(false); setCanMoveToNext(Boolean(data.has_next_question))
+                if (!data.has_next_question) setTimeout(() => { setIsQuizEnded(true); setQuizStarted(false); sendMessage({ action: "get_final_results" }) }, 3000)
                 break;
-
             case "stats_update":
-                setTotalStats({
-                    totalUsers: data.stats?.total_participants ?? 0,
-                    totalAnswered: data.stats?.total_attempts ?? 0,
-                    totalCorrect: data.stats?.correct_attempts ?? 0,
-                    totalWrong: data.stats?.wrong_attempts ?? 0,
-                });
+                setTotalStats({ totalUsers: data.stats?.total_participants ?? 0, totalAnswered: data.stats?.total_attempts ?? 0, totalCorrect: data.stats?.correct_attempts ?? 0, totalWrong: data.stats?.wrong_attempts ?? 0 })
                 break;
-
-            case "final_results":
-                setFinalResults(data.results ?? []);
-                setShowResultsModal(true);
-                break;
-
-            case "user_results":
-                setUserResults(data.results);
-                break;
-
+            case "final_results": setFinalResults(data.results ?? []); setShowResultsModal(true); break;
+            case "user_results": setUserResults(data.results); break;
             case "quiz_restarted":
-                setIsQuizEnded(false);
-                setQuizStarted(false);
-                setHasAnswered(false);
-                setSelectedAnswer(null);
-                setAnswerResult(null);
-                setShowingResults(false);
-                setFinalResults([]);
-                setUserResults(null);
-                setShowResultsModal(false);
-                setCurrentQuestionIndex(0);
-                setAllQuestions([]);
-                setUserAnswerHistory({});
-                if (typeof window !== "undefined") {
-                    localStorage.removeItem(`quiz_${quizId}_questions`);
-                    localStorage.removeItem(`quiz_${quizId}_current_index`);
-                    localStorage.removeItem(`quiz_${quizId}_answer_history`);
-                }
+                setIsQuizEnded(false); setQuizStarted(false); setHasAnswered(false); setSelectedAnswer(null); setAnswerResult(null); setShowingResults(false); setFinalResults([]); setUserResults(null); setShowResultsModal(false); setCurrentQuestionIndex(0); setAllQuestions([]); setUserAnswerHistory({})
+                if (typeof window !== "undefined") { localStorage.removeItem(`quiz_${quizId}_questions`); localStorage.removeItem(`quiz_${quizId}_current_index`); localStorage.removeItem(`quiz_${quizId}_answer_history`) }
                 break;
-
-            case "participants_update":
-                setParticipants(data.participants ?? []);
-                break;
-
+            case "participants_update": setParticipants(data.participants ?? []); break;
             case "quiz_ended":
-                setIsQuizEnded(true);
-                setQuizStarted(false);
-                setIsEndingQuiz(false);
-                setCanMoveToNext(false);
-                sendMessage({ action: "get_final_results" });
-                if (user) sendMessage({ action: "get_user_results", user_id: user.id });
+                setIsQuizEnded(true); setQuizStarted(false); setIsEndingQuiz(false); setCanMoveToNext(false)
+                sendMessage({ action: "get_final_results" })
+                if (user) sendMessage({ action: "get_user_results", user_id: user.id })
                 break;
-
             case "time_update":
-                if (typeof data.time_left === "number" && quizSession?.mode === "timed") {
-                    setTimeLeft(data.time_left);
-                }
+                if (typeof data.time_left === "number" && quizSession?.mode === "timed") setTimeLeft(data.time_left)
                 break;
-
-            case "error":
-                setQuestionLoadError(true);
-                break;
-
-            default:
-                break;
+            case "error": setQuestionLoadError(true); break;
+            default: break;
         }
-    }, [lastMessage, quizId, quizSession?.mode, quizSession, selectedAnswer, sendMessage, user]);
+    }, [lastMessage, quizId, quizSession?.mode, quizSession, selectedAnswer, sendMessage, user])
 
-    // keep user stats from participants in sync
+    // --------------------------
+    // USER STATS SYNC
+    // --------------------------
     useEffect(() => {
         if (!user || participants.length === 0) return
-        const userParticipant = participants.find((p) => p.id === user.id)
+        const userParticipant = participants.find(p => p.id === user.id)
         if (!userParticipant) return
         const total = userParticipant.correct_answers + userParticipant.wrong_answers
         const accuracy = total > 0 ? Math.round((userParticipant.correct_answers / total) * 100) : 0
-        setUserStatsFromParticipants({
-            correctAnswers: userParticipant.correct_answers,
-            wrongAnswers: userParticipant.wrong_answers,
-            totalAnswered: total,
-            accuracy,
-        })
+        setUserStatsFromParticipants({ correctAnswers: userParticipant.correct_answers, wrongAnswers: userParticipant.wrong_answers, totalAnswered: total, accuracy })
     }, [user, participants])
 
+    // --------------------------
+    // NAV BUTTONS
+    // --------------------------
     useEffect(() => {
-        if (quizSession?.mode === "free") {
-            setCanGoBack(currentQuestionIndex > 0)
-            setCanGoNext(currentQuestionIndex < allQuestions.length - 1)
-        } else {
-            setCanGoBack(false)
-            setCanGoNext(false)
-        }
+        if (quizSession?.mode === "free") { setCanGoBack(currentQuestionIndex > 0); setCanGoNext(currentQuestionIndex < allQuestions.length - 1) }
+        else { setCanGoBack(false); setCanGoNext(false) }
     }, [currentQuestionIndex, allQuestions.length, quizSession?.mode])
 
+    // --------------------------
+    // TIMED QUIZ AUTO NEXT
+    // --------------------------
     useEffect(() => {
         if (quizSession?.mode === "timed" && timeLeft === 0 && !hasAnswered && quizStarted && !isQuizEnded) {
             setHasAnswered(true)
-            const timerId = window.setTimeout(() => {
-                if (isConnected && user) {
-                    sendMessage({ action: "next_question", user_id: user.id })
-                }
-            }, 2000)
+            const timerId = window.setTimeout(() => { if (isConnected && user) sendMessage({ action: "next_question", user_id: user.id }) }, 2000)
             setAutoNextTimer(timerId)
         }
-        return () => {
-            if (autoNextTimer) window.clearTimeout(autoNextTimer)
-        }
+        return () => { if (autoNextTimer) window.clearTimeout(autoNextTimer) }
     }, [timeLeft, hasAnswered, quizStarted, quizSession?.mode, isQuizEnded, isConnected, user, sendMessage, autoNextTimer])
 
     useEffect(() => {
         if (quizSession?.mode === "timed" && timeLeft > 0 && !hasAnswered && quizStarted && !isQuizEnded) {
-            const t = window.setTimeout(() => setTimeLeft((s) => s - 1), 1000)
+            const t = window.setTimeout(() => setTimeLeft(s => s - 1), 1000)
             return () => clearTimeout(t)
         }
     }, [timeLeft, hasAnswered, quizStarted, quizSession?.mode, isQuizEnded])

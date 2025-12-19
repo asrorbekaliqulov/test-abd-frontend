@@ -29,21 +29,16 @@ import CardsMarket from "./components/CardsMarket.tsx";
 import Leaderboard from "./components/LeaderBoard.tsx";
 
 const AppContent: React.FC = () => {
-    const {loading} = useAuth();
-
-    // ✅ Tema holatini localStorage orqali boshqarish
-    const [theme, setTheme] = useState<'dark'>(() => {
-        const stored = localStorage.getItem('theme');
-        return stored === 'dark' ? 'dark' : 'dark';
-    });
-
-    const [currentPage, setCurrentPage] = useState('home');
+    const [theme, setTheme] = useState<'dark'>(() => localStorage.getItem('theme') === 'dark' ? 'dark' : 'dark');
+    const [currentPage, setCurrentPage] = useState<'home' | 'search' | 'quiz' | 'create' | 'new-block' | 'map' | 'profile'>('home');
     const [showSettings, setShowSettings] = useState(false);
     const [activeTab, setActiveTab] = useState('profile');
     const [showTestCreator, setShowTestCreator] = useState(false);
     const [showQuestionCreator, setShowQuestionCreator] = useState(false);
     const [showStories, setShowStories] = useState(false);
     const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
+    const [showNewBlock, setShowNewBlock] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
@@ -59,44 +54,65 @@ const AppContent: React.FC = () => {
     }
 
     const toggleTheme = () => {
-        setTheme('dark');
+        setTheme(theme === 'dark');
     };
 
     const handlePageChange = (page: string) => {
-        if (currentPage === 'quiz' && page === 'quiz') {
-            setCurrentPage('create');
-        } else if (currentPage === 'create' && page === 'quiz') {
-            setCurrentPage('quiz');
-        } else {
-            setCurrentPage(page);
+        // Quiz <-> Create toggle
+        if (currentPage === "quiz" && page === "quiz") {
+            setCurrentPage("create");
+            setShowNewBlock(false);
+        } else if (currentPage === "create" && page === "quiz") {
+            setCurrentPage("quiz");
+            setShowNewBlock(false);
+        }
+        // Create -> New Block
+        else if (currentPage === "create" && page === "new-block") {
+            setCurrentPage("create"); // currentPage hali create bo‘lib qoladi
+            setShowNewBlock(true);    // new-block sahifa ko‘rsatiladi
+        }
+        // Other pages
+        else {
+            setCurrentPage(page as any);
+            setShowNewBlock(false);
         }
     };
 
-
     return (
-        <div className="min-h-screen bg-theme-secondary transition-theme-normal">
+        <div className="min-h-screen bg-theme-secondary transition-theme-normal pb-20">
             {/* Pages */}
-            {currentPage === 'home' && <HomePage theme={theme} toggleTheme={toggleTheme}/>}
-            {currentPage === 'search' && <SearchPage theme={theme}/>}
-            {currentPage === 'quiz' && <QuizPage theme={theme} quizzes={[]}/>}
-            {currentPage === 'create' && <QuestionCreator onNavigate={handlePageChange} theme={""}
-                                                          onClose={function (): void {
-                                                              throw new Error("Function not implemented.");
-                                                          }}/>}
-            {currentPage === 'map' && <CardsMarket theme={theme}/>}
-            {currentPage === 'profile' && <ProfilePage onShowSettings={() => setShowSettings(true)}/>}
+            {currentPage === 'home' && <HomePage theme={theme} toggleTheme={toggleTheme} />}
+            {currentPage === 'search' && <SearchPage theme={theme} />}
+            {currentPage === 'quiz' && <QuizPage theme={theme} quizzes={[]} />}
+            {currentPage === 'create' && !showNewBlock && (
+                <QuestionCreator
+                    onNavigate={handlePageChange}
+                    theme={theme}
+                    onClose={() => setCurrentPage('home')}
+                />
+            )}
 
-            {/* Bottom Navigation */}
-            <BottomNavigation currentPage={currentPage} onPageChange={handlePageChange}/>
+            {/* NEW-BLOCK PAGE */}
+            {(currentPage === 'new-block' || (currentPage === 'create' && showNewBlock)) && (
+                <CreateNewBlock
+                    theme={theme}
+                    currentPage="new-block" // 🔹 currentPage aniq "new-block" qilib uzatish
+                    onPageChange={handlePageChange} // 🔹 parent handler
+                />
+            )}
+
+
+            {currentPage === 'map' && <CardsMarket theme={theme} />}
+            {currentPage === 'profile' && <ProfilePage onShowSettings={() => setShowSettings(true)} />}
+
+            {/* BottomNavigation – har doim fixed va ishlaydigan */}
+            <div className="fixed bottom-0 left-0 right-0 z-[9999]">
+                <BottomNavigation currentPage={currentPage} onPageChange={handlePageChange} />
+            </div>
 
             {/* Modals */}
-            {showTestCreator && (
-                <TestCreator theme={theme} onClose={() => setShowTestCreator(false)}/>
-            )}
-
-            {showQuestionCreator && (
-                <QuestionCreator theme={theme} onClose={() => setShowQuestionCreator(false)}/>
-            )}
+            {showTestCreator && <TestCreator theme={theme} onClose={() => setShowTestCreator(false)} />}
+            {showQuestionCreator && <QuestionCreator theme={theme} onClose={() => setShowQuestionCreator(false)} />}
         </div>
     );
 };
@@ -152,7 +168,7 @@ const App: React.FC = () => {
             <Route path="/chat/:roomId" element={<ChatApp/>}/>
             <Route path="/*" element={<ProtectedRoute><AppContent/></ProtectedRoute>}/>
             <Route path="*" element={<NotFound/>}/>
-            <Route path="/new-block" element={<CreateNewBlock />} />
+            <Route path="/create/new-block" element={<CreateNewBlock />} />
             <Route path="/leader-board" element={<Leaderboard />} />
         </Routes>
     );

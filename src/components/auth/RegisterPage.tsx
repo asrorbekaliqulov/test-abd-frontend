@@ -590,14 +590,14 @@ const RegisterPage: React.FC = () => {
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                     />
                     <label htmlFor="hasReferral" className="text-sm font-medium text-gray-700">
-                      Menda referral cod bor
+                      Menda referral bor
                     </label>
                   </div>
 
                   {hasReferral && (
                     <div className="animate-slide-down">
                       <label htmlFor="referral" className="block text-sm font-medium text-gray-700 mb-2">
-                        Referral cod
+                        Do'tingizni usernameini kiriting
                       </label>
                       <div className="relative">
                         <input
@@ -611,7 +611,7 @@ const RegisterPage: React.FC = () => {
                                 referralStatus === 'error' ? 'border-orange-300 bg-orange-50' :
                                   'border-gray-300'
                             }`}
-                          placeholder="Referral codni kiriting"
+                          placeholder="Do'tingizni usernameini kiriting"
                         />
                         {referral && (
                           <div className="absolute inset-y-0 right-0 pr-3 flex items-center">

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter } from "lucide-react";
+import {Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter, Eye} from "lucide-react";
 import { quizAPI, accountsAPI } from "../utils/api";
-import { Link } from "react-router-dom";
+import {Link, useParams} from "react-router-dom";
 import Logo from "../components/assets/images/logo.jpg";
 import defaultAvatar from "../components/assets/images/defaultuseravatar.png";
 
@@ -29,6 +29,11 @@ interface Quiz {
     category?: string | Category | Category[] | null;
 }
 
+interface QuestionViewStats {
+    question_id: number
+    views: number
+}
+
 const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
     const [quizData, setQuizData] = useState<Quiz[]>([]);
@@ -42,15 +47,32 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<number | "All" | null>("All");
-    const [batchIndices, setBatchIndices] = useState<number[]>([]);
     const [nextPageUrl, setNextPageUrl] = useState<string | undefined>();
     const [modalOpen, setModalOpen] = useState(false);
     const [showShareMenu, setShowShareMenu] = useState(false);
-
+    const [hasMore, setHasMore] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    const { questionId } = useParams<{ questionId: string }>()
+    const [views, setViews] = useState<number>(0)
+    useEffect(() => {
+        if (!questionId) return
+
+        const id = Number(questionId)
+
+        // view++ qilish
+        quizAPI.recordView({ question: id }).catch(() => {})
+
+        // view sonini fetch qilish
+        quizAPI
+            .fetchQuestionViewStats(id)
+            .then((res: { data: QuestionViewStats }) => setViews(res.data.views))
+            .catch(() => setViews(0))
+    }, [questionId])
+
     // ------------------- UTILITIES -------------------
-    const shuffleArray = <T,>(arr: T[]): T[] => arr.sort(() => Math.random() - 0.5);
+    const shuffleArray = <T,>(arr: T[]): T[] =>
+        [...arr].sort(() => Math.random() - 0.5)
 
     const preloadImages = useCallback((quizzes: Quiz[]) => {
         quizzes.forEach(q => {
@@ -67,23 +89,36 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
     // ------------------- FETCH DATA -------------------
     const fetchQuizzes = useCallback(async () => {
-        if (loading) return;
-        setLoading(true);
+        if (loading || !hasMore) return
+        setLoading(true)
         try {
-            const res = await quizAPI.fetchRecommendedTests(nextPageUrl);
-            let results: Quiz[] = Array.isArray(res.data.results) ? res.data.results : [];
-            results = shuffleArray(results).slice(0, 10);
-            const existingIds = new Set(quizData.map(q => q.id));
-            const newQuizzes = results.filter(q => !existingIds.has(q.id));
-            if (!newQuizzes.length) return;
-            const batchStart = quizData.length;
-            setBatchIndices(prev => [...prev, batchStart]);
-            setQuizData(prev => [...prev, ...newQuizzes]);
-            setNextPageUrl(res.data.next);
-            preloadImages(newQuizzes);
-        } catch (err) { console.error(err); }
-        finally { setLoading(false); }
-    }, [loading, nextPageUrl, quizData, preloadImages]);
+            const res = await quizAPI.fetchRecommendedTests(nextPageUrl)
+            let results: Quiz[] = Array.isArray(res.data.results)
+                ? res.data.results
+                : []
+            results = shuffleArray(results)
+
+            if (results.length === 0) {
+                setHasMore(false)
+                return
+            }
+            setQuizData(prev => {
+                const existingIds = new Set(prev.map(q => q.id))
+                const unique = results.filter(q => !existingIds.has(q.id))
+                return [...prev, ...unique]
+            })
+            setNextPageUrl(res.data.next ?? null)
+            setHasMore(Boolean(res.data.next))
+        } catch (err) {
+            console.error("FETCH ERROR:", err)
+        } finally {
+            setLoading(false)
+        }
+    }, [loading, hasMore, nextPageUrl])
+
+    useEffect(() => {
+        fetchQuizzes()
+    }, [])
 
     const loadCategories = useCallback(async () => {
         try {
@@ -95,6 +130,17 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
     useEffect(() => { fetchQuizzes(); loadCategories(); }, []);
 
+    useEffect(() => {
+        if (!containerRef.current) return
+
+        containerRef.current.scrollTo({
+            top: 0,
+            behavior: "instant" as ScrollBehavior
+        })
+
+        setCurrentQuizIndex(0)
+    }, [selectedCategory])
+
     // ------------------- FILTER -------------------
     const quizHasCategory = (quizCategory: Quiz["category"], selectedCategory: number) => {
         if (!quizCategory) return false;
@@ -104,28 +150,51 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         return false;
     };
     const filteredQuizzes = useMemo(() => {
-        if (selectedCategory === "All") return quizData;
-        return quizData.filter(q => quizHasCategory(q.category, Number(selectedCategory)));
-    }, [quizData, selectedCategory]);
+        if (selectedCategory === "All") return quizData
+        const catId = Number(selectedCategory)
+        return quizData.filter(q => quizHasCategory(q.category, catId))
+    }, [quizData, selectedCategory])
 
     // ------------------- SCROLL -------------------
     const handleScroll = useCallback(() => {
-        if (!containerRef.current) return;
-        const newIndex = Math.floor(containerRef.current.scrollTop / containerRef.current.clientHeight);
-        if (newIndex !== currentQuizIndex && newIndex >= 0 && newIndex < filteredQuizzes.length) setCurrentQuizIndex(newIndex);
+        if (!containerRef.current) return
 
-        const batchStart = batchIndices[batchIndices.length - 1] ?? 0;
-        if (newIndex - batchStart === 7) fetchQuizzes();
-    }, [currentQuizIndex, filteredQuizzes.length, batchIndices, fetchQuizzes]);
+        const { scrollTop, clientHeight } = containerRef.current
+        const index = Math.floor(scrollTop / clientHeight)
+
+        if (index !== currentQuizIndex) {
+            setCurrentQuizIndex(index)
+        }
+
+        // 🔥 HAR 8-SAVOLDA KEYINGI 10 TA
+        if (
+            index > 0 &&
+            index % 8 === 0 &&
+            !loading &&
+            hasMore
+        ) {
+            fetchQuizzes()
+        }
+    }, [currentQuizIndex, loading, hasMore, fetchQuizzes])
 
     useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-        let timeoutId: NodeJS.Timeout;
-        const throttledScroll = () => { clearTimeout(timeoutId); timeoutId = setTimeout(handleScroll, 50); };
-        container.addEventListener("scroll", throttledScroll, { passive: true });
-        return () => { container.removeEventListener("scroll", throttledScroll); clearTimeout(timeoutId); };
-    }, [handleScroll]);
+        const container = containerRef.current
+        if (!container) return
+
+        let timeout: any
+
+        const onScroll = () => {
+            clearTimeout(timeout)
+            timeout = setTimeout(handleScroll, 80)
+        }
+
+        container.addEventListener("scroll", onScroll, { passive: true })
+
+        return () => {
+            container.removeEventListener("scroll", onScroll)
+            clearTimeout(timeout)
+        }
+    }, [handleScroll])
 
     useEffect(() => {
         if (!quizData.length) return;
@@ -213,7 +282,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
     const isTrueFalseQuestion = (quiz: Quiz) => quiz.question_type === "true_false" || (quiz.answers.length === 2 && quiz.answers.some(a => ["true", "ha", "yes"].includes(a.answer_text.toLowerCase())) && quiz.answers.some(a => ["false", "yo'q", "no"].includes(a.answer_text.toLowerCase())));
 
-    console.log("QUIZ DATA LENGTH: ", quizData.length);
+    // console.log("QUIZ DATA LENGTH: ", quizData.length);
 
     const renderQuestionContent = (quiz: Quiz) => {
         const isSubmitting = submittingQuestions.has(quiz.id);
@@ -713,6 +782,18 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                             <Bookmark size={20}
                                                       className={`sm:w-5 sm:h-5 ${quiz.is_bookmarked ? "fill-current" : ""}`}/>
                                         </button>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <button
+                                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full  flex items-center justify-center text-white transition-all">
+                                            <div
+                                                className="w-9 h-9 sm:w-8 sm:h-8 bg-transparent rounded-full flex items-center justify-center">
+                                                                    <span
+                                                                        className="text-white text-xs font-bold"><Eye size={24}/></span>
+                                            </div>
+                                        </button>
+                                        <span
+                                            className="text-xs sm:text-sm font-medium text-white text-center">{views}</span>
                                     </div>
                                 </div>
                             </div>
