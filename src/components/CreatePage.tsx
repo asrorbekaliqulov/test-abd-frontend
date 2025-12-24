@@ -1,7 +1,6 @@
 import React, {useState, useEffect} from 'react';
-import {ArrowLeft, RefreshCw, ChevronDown} from 'lucide-react';
+import {ArrowLeft, ChevronDown} from 'lucide-react';
 import {quizAPI} from '../utils/api';
-import {useSpellCheck} from "./useSpellCheck.tsx";
 import {useNavigate} from "react-router-dom";
 import {getLoremImage} from "../utils/getLoremImage.ts";
 import FadeInPage from "./FadeInPage.tsx";
@@ -29,15 +28,16 @@ interface Test {
 function CreateNewBlock(props: {
     onClick: () => void;
     onSubmit: (e: React.FormEvent) => Promise<void>;
-    title: { value: string; setValue: (v: string) => void; isLoading: boolean };
+    title: string;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    description: { value: string; setValue: (v: string) => void; isLoading: boolean };
+    description: string;
     onChange1: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     selectedCategory: Category | null;
     onClick1: () => void;
     dropdownOpen: boolean;
     categories: Category[];
     callbackfn: (cat: Category) => React.JSX.Element;
+    isSubmitting: boolean;
 }) {
 
     const navigate = useNavigate();
@@ -84,7 +84,7 @@ function CreateNewBlock(props: {
                                             id="title"
                                             name="title"
                                             type="text"
-                                            value={props.title.value}
+                                            value={props.title}
                                             onChange={props.onChange}
                                             required
                                             className="block w-full px-3 py-3 text-white outline-none border bg-theme-primary border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
@@ -93,11 +93,6 @@ function CreateNewBlock(props: {
                                             spellCheck={true}
                                             autoCorrect="on"
                                         />
-                                        {props.title.isLoading && (
-                                            <div className={`flex flex-row items-center justify-start text-white gap-1 pt-2`}>
-                                                <RefreshCw className="animate-spin w-5 h-5 text-white"/> Tuzatyapti...
-                                            </div>
-                                        )}
                                     </FadeInPage>
                                 </div>
 
@@ -109,7 +104,7 @@ function CreateNewBlock(props: {
                                     id="description"
                                     name="description"
                                     rows={4}
-                                    value={props.description.value}
+                                    value={props.description}
                                     onChange={props.onChange1}
                                     required
                                     className="block w-full px-3 py-3 outline-none text-white border bg-theme-primary border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
@@ -118,11 +113,6 @@ function CreateNewBlock(props: {
                                     spellCheck={true}
                                     autoCorrect="on"
                                 />
-                                        {props.description.isLoading && (
-                                            <div className="flex flex-row items-center justify-start gap-1 text-white pt-2">
-                                                <RefreshCw className="animate-spin w-5 h-5 ttext-white"/> Tuzatyapti...
-                                            </div>
-                                        )}
                                     </FadeInPage>
                                 </div>
 
@@ -215,9 +205,16 @@ function CreateNewBlock(props: {
                                 {/* Buttons */}
                                 <FadeInPage delay={700}>
                                     <div className="flex gap-4">
-                                        <button type="submit"
-                                                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-200">
-                                            Blok yaratish
+                                        <button
+                                            type="submit"
+                                            disabled={props.isSubmitting}
+                                            className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {props.isSubmitting ? (
+                                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto"/>
+                                            ) : (
+                                                "Blok yaratish"
+                                            )}
                                         </button>
                                     </div>
                                 </FadeInPage>
@@ -243,14 +240,18 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentPage, onPageChange })  =
     const [categories, setCategories] = useState<Category[]>([]);
     const [tests, setTests] = useState<Test[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // dropdown state + selected category
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
-    // spellcheck hooks for title & description
-    const title = useSpellCheck("");
-    const description = useSpellCheck("");
+    // form state
+    const [formData, setFormData] = useState({
+        title: "",
+        description: "",
+        visibility: "public"
+    });
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -281,26 +282,84 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentPage, onPageChange })  =
         fetchTests();
     }, []);
 
+    // Reset form function
+    const resetForm = () => {
+        setFormData({
+            title: "",
+            description: "",
+            visibility: "public"
+        });
+        setSelectedCategory(null);
+        setDropdownOpen(false);
+
+        // Reset radio button to default
+        const publicRadio = document.querySelector('input[name="visibility"][value="public"]') as HTMLInputElement;
+        if (publicRadio) {
+            publicRadio.checked = true;
+        }
+    };
+
     const SaveTest = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // use controlled values (spellchecked) rather than querying DOM
+        if (!formData.title.trim() || !formData.description.trim()) {
+            alert('Iltimos, barcha maydonlarni toʻldiring!');
+            return;
+        }
+
+        setIsSubmitting(true);
+
         const payload = {
-            title: title.value,
-            description: description.value,
-            visibility: (document.querySelector('input[name="visibility"]:checked') as HTMLInputElement)?.value ?? 'public',
+            title: formData.title,
+            description: formData.description,
+            visibility: formData.visibility,
             category_id: selectedCategory?.id ?? null
         };
 
         try {
             await quizAPI.createTest(payload);
             alert('Test muvaffaqiyatli yaratildi!');
-            // keep original behavior: set active tab to overview after create
+
+            // Reset form after successful creation
+            resetForm();
+
+            // Keep original behavior: set active tab to overview after create
             setActiveTab('overview');
+
+            // Optionally navigate or refresh the test list
+            // You might want to reload the tests list here if needed
+            const response = await quizAPI.fetchMyTest();
+            setTests(response.data ?? response);
+
         } catch (error: any) {
             console.error('Xatolik:', error?.response?.data ?? error?.message ?? error);
             alert('Xatolik yuz berdi!');
+        } finally {
+            setIsSubmitting(false);
         }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    const handleVisibilityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            visibility: e.target.value
+        }));
     };
 
     // callback function used to render each category item in dropdown
@@ -318,24 +377,24 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentPage, onPageChange })  =
         </div>
     );
 
-    // We render only CreateNewBlock as you requested (no overview/questions)
     return (
         <div className="min-h-screen bg-theme-primary">
             <div className="max-w-6xl mx-auto my-auto">
                 <CreateNewBlock
-                    onClick={() => { /* you previously used this to go back; keep as no-op or setActiveTab if desired */
+                    onClick={() => {
                         setActiveTab('overview');
                     }}
                     onSubmit={SaveTest}
-                    title={title}
-                    onChange={(e) => title.setValue(e.target.value)}
-                    description={description}
-                    onChange1={(e) => description.setValue(e.target.value)}
+                    title={formData.title}
+                    onChange={handleInputChange}
+                    description={formData.description}
+                    onChange1={handleTextareaChange}
                     selectedCategory={selectedCategory}
                     onClick1={() => setDropdownOpen(!dropdownOpen)}
                     dropdownOpen={dropdownOpen}
                     categories={categories}
                     callbackfn={renderCategoryItem}
+                    isSubmitting={isSubmitting}
                 />
             </div>
         </div>

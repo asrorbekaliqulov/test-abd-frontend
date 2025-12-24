@@ -1,7 +1,6 @@
 import React, {useState, useEffect} from 'react';
 import {Routes, Route, Navigate} from 'react-router-dom';
 import {useAuth} from './contexts/AuthContext';
-
 import HomePage from './components/HomePage';
 import SearchPage from './components/SearchPage';
 import QuizPage from './components/QuizPage';
@@ -27,6 +26,7 @@ import NotFound from "./pages/not-found";
 import CreateNewBlock from "./components/CreatePage.tsx";
 import CardsMarket from "./components/CardsMarket.tsx";
 import Leaderboard from "./components/LeaderBoard.tsx";
+import CreatePage from "./components/CreatePage.tsx";
 
 const AppContent: React.FC = () => {
     const [theme, setTheme] = useState<'dark'>(() => localStorage.getItem('theme') === 'dark' ? 'dark' : 'dark');

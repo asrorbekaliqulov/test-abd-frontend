@@ -1,7 +1,13 @@
 "use client"
 import { useNavigate } from "react-router-dom"
-import type React from "react"
-import { UserPlus, Share2, Calendar, Award, TrendingUp, ArrowLeft } from "lucide-react"
+import React, { useEffect, useState } from "react"
+import { UserPlus, Share2, Award, ArrowLeft } from "lucide-react"
+import { FollowersModal } from "../FollowerModal.tsx"
+import { accountsAPI } from "../../utils/api.ts"
+import testIcon from "../assets/images/test.png"
+import correctIcon from "../assets/images/correct.png"
+import wrongIcon from "../assets/images/wrong.png"
+import accuracyIcon from "../assets/images/accuracy.png"
 
 export interface User {
     id: number
@@ -24,6 +30,15 @@ export interface UserStats {
     accuracy: number
 }
 
+interface FollowUser {
+    id: number
+    username: string
+    first_name: string
+    last_name: string
+    profile_image: string | null
+    is_following: boolean
+}
+
 interface ProfileHeaderProps {
     user: User
     stats: UserStats
@@ -32,7 +47,89 @@ interface ProfileHeaderProps {
     theme?: string
 }
 
-export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFollow, onShare, theme = "light" }) => {
+export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
+                                                                user: initialUser,
+                                                                stats,
+                                                                onFollow,
+                                                                onShare,
+                                                                theme = "light"
+                                                            }) => {
+    const [user, setUser] = useState<User>(initialUser)
+    const [showFollowersModal, setShowFollowersModal] = useState(false)
+    const [showFollowingModal, setShowFollowingModal] = useState(false)
+    const [followers, setFollowers] = useState<FollowUser[]>([])
+    const [following, setFollowing] = useState<FollowUser[]>([])
+    const [isLoading, setIsLoading] = useState(false)
+
+    useEffect(() => {
+        setUser(initialUser)
+    }, [initialUser])
+
+    useEffect(() => {
+        const fetchFollowers = async () => {
+            if (!user?.id) return
+
+            setIsLoading(true)
+            try {
+                const followersData = await accountsAPI.getUserFollowData(user.id)
+                // API strukturasi bo'yicha to'g'rilang
+                setFollowers(followersData.followers || followersData.data?.followers || [])
+                setFollowing(followersData.following || followersData.data?.following || [])
+            } catch (error) {
+                console.error('Failed to fetch followers:', error)
+            } finally {
+                setIsLoading(false)
+            }
+        }
+
+        fetchFollowers()
+    }, [user?.id])
+
+    const handleFollowToggle = (userId: number, newStatus: boolean) => {
+        // Followers modalidagi holatni yangilash
+        setFollowers(prev => prev.map(follower =>
+            follower.id === userId
+                ? { ...follower, is_following: newStatus }
+                : follower
+        ))
+
+        // Following modalidagi holatni yangilash
+        setFollowing(prev => prev.map(followingUser =>
+            followingUser.id === userId
+                ? { ...followingUser, is_following: newStatus }
+                : followingUser
+        ))
+
+        // Followerlar sonini yangilash
+        const followerChange = newStatus ? 1 : -1
+        setUser(prev => ({
+            ...prev,
+            followers_count: Math.max(0, prev.followers_count + followerChange)
+        }))
+    }
+
+    const handleMainFollow = async () => {
+        // Optimistic update
+        const wasFollowing = user.is_following
+        setUser(prev => ({
+            ...prev,
+            is_following: !prev.is_following
+        }))
+
+        try {
+            await accountsAPI.toggleFollow(user.id)
+            // Agar parent component callback bergan bo'lsa
+            onFollow?.()
+        } catch (error) {
+            console.error('Follow toggle failed:', error)
+            // Xato bo'lsa, oldingi holatga qaytarish
+            setUser(prev => ({
+                ...prev,
+                is_following: wasFollowing
+            }))
+        }
+    }
+
     const getLevelColor = (level: string) => {
         switch (level.toLowerCase()) {
             case "beginner":
@@ -57,46 +154,78 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFol
                     : "bg-gray-100 text-gray-800 border-gray-200"
         }
     }
+
     const navigate = useNavigate()
 
     return (
-        <div
-            className={`${theme === "dark" ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"} rounded-2xl shadow-xl p-6 sm:p-8 mb-6 sm:mb-8 border animate-fade-in`}
-        >
-            <button
-                onClick={() => navigate("/")}
-                className={`p-2 rounded-lg transition-colors ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
-                    }`}
-            >
-                <ArrowLeft size={24} />
-            </button>
-            <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
+        <div className="bg-transparent px-5 py-4 animate-fade-in">
+            <div className="flex flex-row gap-2 items-center justify-start mb-4">
+                <button
+                    onClick={() => navigate("/")}
+                    className="p-2 rounded-lg transition-colors text-white hover:bg-white/10"
+                >
+                    <ArrowLeft size={24} />
+                </button>
+                <p
+                    className="text-lg sm:text-2xl font-semibold text-white animate-fade-in"
+                    style={{ animationDelay: "0.3s" }}
+                >
+                    {user.username}
+                </p>
+            </div>
+
+            <div className="flex flex-col">
                 {/* Left panel - image and name */}
-                <div className="flex flex-col items-center lg:items-start animate-fade-in-up">
-                    <div className="relative group">
-                        <img
-                            src={
-                                user.profile_image ||
-                                "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png"
-                            }
-                            alt={`${user.first_name} ${user.last_name}`}
-                            className="w-24 h-24 sm:w-32 sm:h-32 lg:w-40 lg:h-40 rounded-full object-cover border-4 border-indigo-200 shadow-xl transition-transform duration-300 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="flex flex-col items-start animate-fade-in-up w-full">
+                    <div className="flex flex-row w-full items-center justify-between pr-16 md:pr-52 my-4">
+                        <div className="relative group">
+                            <img
+                                src={
+                                    user.profile_image ||
+                                    "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png"
+                                }
+                                alt={`${user.first_name} ${user.last_name}`}
+                                className="w-24 h-24 sm:w-32 sm:h-32 lg:w-40 lg:h-40 rounded-full object-cover border-4 border-indigo-200 shadow-xl transition-transform duration-300 group-hover:scale-105"
+                            />
+                        </div>
+
+                        <div className="flex w-auto">
+                            <div className="flex items-center justify-between w-full mx-auto">
+                                <div className="text-center animate-fade-in-up" style={{ animationDelay: "1s" }}>
+                                    <div className="bg-transparent py-4">
+                                        <div className="flex gap-4">
+                                            <button
+                                                onClick={() => setShowFollowersModal(true)}
+                                                disabled={isLoading}
+                                                className="flex flex-col items-center px-2 py-3 bg-transparent text-white text-2xl md:text-4xl transition-colors hover:bg-white/5 rounded-lg"
+                                            >
+                                                {user.followers_count}
+                                                <span className="text-xs md:text-lg font-light">Followers</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => setShowFollowingModal(true)}
+                                                disabled={isLoading}
+                                                className="flex flex-col items-center px-2 py-3 bg-transparent text-white text-2xl md:text-4xl transition-colors hover:bg-white/5 rounded-lg"
+                                            >
+                                                {user.following_count}
+                                                <span className="text-xs md:text-lg font-light">Following</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="mt-4 text-center lg:text-left">
+
+                    <div className="my-4 flex flex-row gap-2 items-center justify-between w-full">
                         <h1
-                            className={`text-2xl sm:text-3xl lg:text-4xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"} animate-fade-in`}
+                            className="text-lg md:text-3xl font-bold text-white animate-fade-in"
                             style={{ animationDelay: "0.2s" }}
                         >
                             {user.first_name} {user.last_name}
                         </h1>
-                        <p
-                            className={`text-lg sm:text-xl ${theme === "dark" ? "text-gray-400" : "text-gray-600"} mb-3 animate-fade-in`}
-                            style={{ animationDelay: "0.3s" }}
-                        >
-                            @{user.username}
-                        </p>
+
                         <div
                             className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border ${getLevelColor(user.level)} animate-fade-in`}
                             style={{ animationDelay: "0.4s" }}
@@ -105,19 +234,22 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFol
                             {user.level}
                         </div>
                     </div>
-                </div>
 
-                {/* Right panel - details */}
-                <div className="flex-1">
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6">
+                    {user.bio && (
+                        <p
+                            className="text-white mb-4 leading-relaxed text-sm sm:text-base animate-fade-in"
+                            style={{ animationDelay: "0.7s" }}
+                        >
+                            {user.bio}
+                        </p>
+                    )}
+
+                    <div className="flex flex-row gap-3 sm:gap-4 my-4 w-full items-center justify-evenly">
                         <button
-                            onClick={onFollow}
-                            className={`flex items-center justify-center px-4 sm:px-6 py-3 rounded-xl font-medium transition-all duration-200 hover:scale-105 animate-fade-in-up ${user.is_following
-                                    ? theme === "dark"
-                                        ? "bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600"
-                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
-                                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg hover:shadow-xl"
-                                }`}
+                            onClick={handleMainFollow}
+                            className={`flex items-center justify-center w-[80%] py-3 rounded-xl font-medium transition-all duration-200 hover:scale-105 animate-fade-in-up text-white border border-gray-300 hover:border-gray-100 ${
+                                user.is_following ? "bg-gray-800/50" : "bg-indigo-600/50"
+                            }`}
                             style={{ animationDelay: "0.5s" }}
                         >
                             <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
@@ -126,121 +258,91 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFol
 
                         <button
                             onClick={onShare}
-                            className={`flex items-center justify-center px-4 sm:px-6 py-3 rounded-xl font-medium transition-all duration-200 hover:scale-105 animate-fade-in-up ${theme === "dark"
-                                    ? "bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600"
-                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
-                                }`}
+                            className="flex items-center justify-center py-3 rounded-full w-14 h-14 font-medium transition-all duration-200 hover:scale-105 animate-fade-in-up text-white border border-gray-300 hover:border-gray-100 bg-gray-800/50"
                             style={{ animationDelay: "0.6s" }}
                         >
-                            <Share2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                            Share Profile
+                            <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                     </div>
-
-                    {user.bio && (
-                        <p
-                            className={`${theme === "dark" ? "text-gray-300" : "text-gray-700"} mb-6 leading-relaxed text-sm sm:text-base animate-fade-in`}
-                            style={{ animationDelay: "0.7s" }}
-                        >
-                            {user.bio}
-                        </p>
-                    )}
-
-                    <div
-                        className={`flex items-center ${theme === "dark" ? "text-gray-400" : "text-gray-600"} mb-6 animate-fade-in`}
-                        style={{ animationDelay: "0.8s" }}
-                    >
-                        <Calendar className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                        <span className="text-sm sm:text-base">Joined {user.join_date}</span>
-                    </div>
-
-                    <div className="flex gap-6 sm:gap-8 mb-6">
-                        <div className="text-center animate-fade-in-up" style={{ animationDelay: "0.9s" }}>
-                            <div
-                                className={`text-xl sm:text-2xl lg:text-3xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}
-                            >
-                                {user.followers_count || 0}
-                            </div>
-                            <div className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"} text-sm sm:text-base`}>
-                                Followers
-                            </div>
-                        </div>
-                        <div className="text-center animate-fade-in-up" style={{ animationDelay: "1s" }}>
-                            <div
-                                className={`text-xl sm:text-2xl lg:text-3xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}
-                            >
-                                {user.following_count || 0}
-                            </div>
-                            <div className={`${theme === "dark" ? "text-gray-400" : "text-gray-600"} text-sm sm:text-base`}>
-                                Following
-                            </div>
-                        </div>
-                    </div>
                 </div>
+            </div>
 
-                {/* Statistics */}
-                <div
-                    className={`${theme === "dark" ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700" : "bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200"} rounded-2xl p-4 sm:p-6 min-w-[280px] border animate-fade-in-up`}
-                    style={{ animationDelay: "1.1s" }}
-                >
-                    <h3
-                        className={`text-base sm:text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"} mb-4 flex items-center`}
-                    >
-                        <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-indigo-600" />
-                        Statistics
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between animate-fade-in" style={{ animationDelay: "1.2s" }}>
-                            <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} text-sm sm:text-base`}>
+            {/* Statistics */}
+            <div
+                className="bg-transparent rounded-2xl animate-fade-in-up my-5"
+                style={{ animationDelay: "1.1s" }}
+            >
+                <h3 className="text-base sm:text-lg font-semibold text-white mb-4 flex items-center">
+                    Quiz Performance
+                </h3>
+
+                <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="flex flex-row items-center justify-between w-full gap-3">
+                        <div
+                            className="flex items-center flex-col justify-evenly w-1/2 h-[140px] md:h-[200px] rounded-lg animate-fade-in bg-black/20"
+                            style={{ animationDelay: "1.2s" }}
+                        >
+                            <div className="flex flex-row items-center justify-between w-[80%] md:w-[90%]">
+                                <img src={testIcon} alt="Total Tests" className="flex w-12 h-12 md:w-20 md:h-20" />
+                                <span className="font-semibold text-white text-xl md:text-4xl">
+                                    {stats?.total_tests ?? 0}
+                                </span>
+                            </div>
+                            <span className="text-gray-400 text-sm sm:text-base w-[80%] md:w-[90%] text-start">
                                 Total Tests
                             </span>
-                            <span
-                                className={`font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"} text-sm sm:text-base`}
-                            >
-                                {stats?.total_tests ?? 0}
-                            </span>
                         </div>
-                        <div className="flex items-center justify-between animate-fade-in" style={{ animationDelay: "1.3s" }}>
-                            <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} text-sm sm:text-base`}>
+
+                        <div
+                            className="flex items-center flex-col justify-evenly w-1/2 h-[140px] md:h-[200px] rounded-lg animate-fade-in bg-black/20"
+                            style={{ animationDelay: "1.2s" }}
+                        >
+                            <div className="flex flex-row items-center justify-between w-[80%] md:w-[90%]">
+                                <img src={correctIcon} alt="Correct Answers" className="flex w-12 h-12 md:w-20 md:h-20" />
+                                <span className="font-semibold text-white text-xl md:text-4xl">
+                                    {stats?.correct_answers ?? 0}
+                                </span>
+                            </div>
+                            <span className="text-gray-400 text-sm sm:text-base w-[80%] md:w-[90%] text-start">
                                 Correct Answers
                             </span>
-                            <span
-                                className={`font-semibold ${theme === "dark" ? "text-green-400" : "text-green-600"} text-sm sm:text-base`}
-                            >
-                                {stats?.correct_answers ?? 0}
-                            </span>
                         </div>
-                        <div className="flex items-center justify-between animate-fade-in" style={{ animationDelay: "1.4s" }}>
-                            <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} text-sm sm:text-base`}>
+                    </div>
+
+                    <div className="flex flex-row items-center justify-between w-full gap-3">
+                        <div
+                            className="flex items-center flex-col justify-evenly w-1/2 h-[140px] md:h-[200px] rounded-lg animate-fade-in bg-black/20"
+                            style={{ animationDelay: "1.2s" }}
+                        >
+                            <div className="flex flex-row items-center justify-between w-[80%] md:w-[90%]">
+                                <img src={wrongIcon} alt="Wrong Answers" className="flex w-12 h-12 md:w-20 md:h-20" />
+                                <span className="font-semibold text-white text-xl md:text-4xl">
+                                    {stats?.wrong_answers ?? 0}
+                                </span>
+                            </div>
+                            <span className="text-gray-400 text-sm sm:text-base w-[80%] md:w-[90%] text-start">
                                 Wrong Answers
                             </span>
-                            <span
-                                className={`font-semibold ${theme === "dark" ? "text-red-400" : "text-red-600"} text-sm sm:text-base`}
-                            >
-                                {stats?.wrong_answers ?? 0}
-                            </span>
                         </div>
+
                         <div
-                            className={`border-t pt-4 animate-fade-in ${theme === "dark" ? "border-gray-600" : "border-gray-200"}`}
-                            style={{ animationDelay: "1.5s" }}
+                            className="flex items-center flex-col justify-evenly w-1/2 h-[140px] md:h-[200px] rounded-lg animate-fade-in bg-black/20"
+                            style={{ animationDelay: "1.2s" }}
                         >
-                            <div className="flex items-center justify-between mb-2">
-                                <span className={`${theme === "dark" ? "text-gray-300" : "text-gray-600"} text-sm sm:text-base`}>
-                                    Accuracy
-                                </span>
-                                <span
-                                    className={`font-bold ${theme === "dark" ? "text-indigo-400" : "text-indigo-600"} text-sm sm:text-base`}
-                                >
+                            <div className="flex flex-row items-center justify-between w-[80%] md:w-[90%]">
+                                <img src={accuracyIcon} alt="Accuracy" className="flex w-12 h-12 md:w-20 md:h-20" />
+                                <span className="font-semibold text-white text-xl md:text-4xl">
                                     {(stats?.accuracy ?? 0).toFixed(1)}%
                                 </span>
                             </div>
-                            <div
-                                className={`mt-2 ${theme === "dark" ? "bg-gray-600" : "bg-gray-200"} rounded-full h-2 overflow-hidden`}
-                            >
-                                <div
-                                    className="bg-indigo-600 h-2 rounded-full transition-all duration-1000 animate-progress"
-                                    style={{ width: `${stats?.accuracy ?? 0}%` }}
-                                ></div>
+                            <div className="text-gray-400 text-sm sm:text-base w-[80%] md:w-[90%] text-start">
+                                Accuracy
+                                <div className="h-1 md:h-2 w-full bg-gray-700 rounded-full mt-2 overflow-hidden">
+                                    <div
+                                        className="h-full bg-green-500 rounded-full transition-all duration-1000"
+                                        style={{ width: `${Math.min(stats?.accuracy ?? 0, 100)}%` }}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -264,11 +366,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFol
                     }
                 }
                 
-                @keyframes progress {
-                    from { width: 0%; }
-                    to { width: var(--progress-width); }
-                }
-                
                 .animate-fade-in {
                     animation: fadeIn 0.6s ease-out forwards;
                     opacity: 0;
@@ -278,11 +375,23 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, stats, onFol
                     animation: fadeInUp 0.6s ease-out forwards;
                     opacity: 0;
                 }
-                
-                .animate-progress {
-                    animation: progress 1.5s ease-out forwards;
-                }
             `}</style>
+
+            <FollowersModal
+                isOpen={showFollowersModal}
+                onClose={() => setShowFollowersModal(false)}
+                title="Followers"
+                followers={followers}
+                onFollowToggle={handleFollowToggle}
+            />
+
+            <FollowersModal
+                isOpen={showFollowingModal}
+                onClose={() => setShowFollowingModal(false)}
+                title="Following"
+                followers={following}
+                onFollowToggle={handleFollowToggle}
+            />
         </div>
     )
 }

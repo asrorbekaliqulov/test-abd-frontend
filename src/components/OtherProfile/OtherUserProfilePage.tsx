@@ -67,7 +67,7 @@ interface FollowUser {
 }
 
 
-  
+
 
 export interface TestQuestion {
     id: number;
@@ -125,8 +125,6 @@ export const UserProfilePage: React.FC = () => {
     const [tests, setTests] = useState<Test | null>(null);
     const [questions, setQuestions] = useState<TestQuestion[]>([]);
     const [activeTab, setActiveTab] = useState<'tests' | 'questions'>('tests');
-    const [showFollowersModal, setShowFollowersModal] = useState(false);
-    const [showFollowingModal, setShowFollowingModal] = useState(false);
     const [showTestModal, setShowTestModal] = useState(false);
     const [showQuestionsListModal, setShowQuestionsListModal] = useState(false);
     const [showQuestionDetailModal, setShowQuestionDetailModal] = useState(false);
@@ -154,7 +152,7 @@ export const UserProfilePage: React.FC = () => {
 
         fetchData();
     }, [username]);
-    
+
     useEffect(() => {
         const fetchTests = async () => {
             if (!user) return; // Null check to prevent error
@@ -216,7 +214,7 @@ export const UserProfilePage: React.FC = () => {
             });
         }
     };
-      
+
     useEffect(() => {
         const fetchFollowers = async () => {
             if (!user) return; // Null check to prevent error
@@ -232,7 +230,7 @@ export const UserProfilePage: React.FC = () => {
 
         fetchFollowers();
     }, [user]);
-      
+
 
 
     const handleShare = () => {
@@ -248,18 +246,6 @@ export const UserProfilePage: React.FC = () => {
         }
     };
 
-    // const handleFollowToggle = (userId: string) => {
-    //     setFollowers(prev => prev.map(follower =>
-    //         follower.id === userId
-    //             ? { ...follower, isFollowing: !follower.isFollowing }
-    //             : follower
-    //     ));
-    //     setFollowing(prev => prev.map(user =>
-    //         user.id === userId
-    //             ? { ...user, isFollowing: !user.isFollowing }
-    //             : user
-    //     ));
-    // };
 
     const handleTestClick = (test: Test) => {
         navigate(`/tests/${test.id}`);
@@ -289,8 +275,8 @@ export const UserProfilePage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 ">
-            <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="min-h-screen bg-gray-900">
+            <div className="max-w-2xl mx-auto shadow-xl bg-gray-800">
                 <ProfileHeader
                     user={user}
                     stats={stats}
@@ -298,30 +284,10 @@ export const UserProfilePage: React.FC = () => {
                     onShare={handleShare}
                 />
 
-                {/* Followers/Following Section */}
-                <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-                    <div className="flex gap-4">
-                        <button
-                            onClick={() => setShowFollowersModal(true)}
-                            className="flex items-center px-6 py-3 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
-                        >
-                            <Users className="w-5 h-5 mr-2" />
-                            View Followers ({user?.followers_count})
-                        </button>
-                        <button
-                            onClick={() => setShowFollowingModal(true)}
-                            className="flex items-center px-6 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
-                        >
-                            <UserCheck className="w-5 h-5 mr-2" />
-                            View Following ({user?.following_count})
-                        </button>
-                    </div>
-                </div>
-
                 {/* Tabs */}
-                <div className="bg-white rounded-xl shadow-lg mb-20">
-                    <div className="border-b border-gray-200">
-                        <nav className="flex">
+                <div className="bg-transparent rounded-xl shadow-lg mb-20">
+                    <div>
+                        <nav className="flex border-b border-indigo-600">
                             <button
                                 onClick={() => setActiveTab('tests')}
                                 className={`flex items-center px-6 py-4 font-medium transition-colors ${activeTab === 'tests'
@@ -329,8 +295,7 @@ export const UserProfilePage: React.FC = () => {
                                         : 'text-gray-500 hover:text-gray-700'
                                     }`}
                             >
-                                <BookOpen className="w-5 h-5 mr-2" />
-                                Bloklar ({tests?.length})
+                                Bloklar
                             </button>
                             <button
                                 onClick={() => setActiveTab('questions')}
@@ -339,8 +304,7 @@ export const UserProfilePage: React.FC = () => {
                                         : 'text-gray-500 hover:text-gray-700'
                                     }`}
                             >
-                                <HelpCircle className="w-5 h-5 mr-2" />
-                                Savollar ({questions?.length})
+                                Savollar
                             </button>
                         </nav>
                     </div>
@@ -362,22 +326,6 @@ export const UserProfilePage: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Modals */}
-            <FollowersModal
-                isOpen={showFollowersModal}
-                onClose={() => setShowFollowersModal(false)}
-                title="Followers"
-                followers={followers}
-            />
-
-            <FollowersModal
-                isOpen={showFollowingModal}
-                onClose={() => setShowFollowingModal(false)}
-                title="Following"
-                followers={following}
-            />
-
         </div>
     );
 };

@@ -2,12 +2,11 @@
 
 import type React from "react"
 import {useState, useEffect, useRef} from "react";
-import {Plus, Save, HelpCircle, Trash2, Globe, Lock, EyeOff, RefreshCw, ChevronDown} from "lucide-react"
+import {Plus, Save, Trash2, Globe, Lock, EyeOff, ChevronDown} from "lucide-react"
 import {quizAPI} from "../../utils/api"
 import {useSpellCheck} from "../useSpellCheck.tsx";
 import {useNavigate} from "react-router-dom";
 import {motion, AnimatePresence} from "framer-motion";
-import {spellCheck} from "../AISpellCheck.tsx";
 import CategoryDropdown from "../CategoryDropdown.tsx";
 import {getLoremImage} from "../../utils/getLoremImage.ts";
 import FadeInPage from "../FadeInPage.tsx";
@@ -42,6 +41,7 @@ interface Test {
     id: number
     title: string
     visibility: "public" | "private" | "unlisted"
+    created_at?: string
 }
 
 const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavigate}) => {
@@ -60,18 +60,60 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [mediaFile, setMediaFile] = useState<File | null>(null)
-    const {value, setValue, isLoading} = useSpellCheck("");
 
-    const questionText = useSpellCheck(formData.question_text);
-    const descriptionText = useSpellCheck(formData.description);
+    const questionText = useSpellCheck("");
+    const descriptionText = useSpellCheck("");
 
-    //category
+    // Category
     const [categories, setCategories] = useState<Category[]>([]);
-    const [categoryId, setCategoryId] = useState<number | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const categoryDropdownRef = useRef<HTMLDivElement>(null);
     const [createdQuestions, setCreatedQuestions] = useState<string[]>([]);
 
+    // Available letters for answers
+    const availableLetters = ["A", "B", "D", "E", "F"]
+
+    // Animated Dropdown for tests
+    const [open, setOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const rootRef = useRef(null);
+
+    // Animated Dropdown for question type
+    const [openType, setOpenType] = useState(false);
+    const dropdownRef = useRef(null);
+
+    const navigate = useNavigate();
+
+    const questionTypes = [
+        {value: "single", label: "Bitta tanlov"},
+        {value: "multiple", label: "Ko'p tanlov"},
+        {value: "true_false", label: "To'g'ri/Noto'g'ri"},
+        {value: "text_input", label: "Matn kiritish"}
+    ];
+
+    const selectedType = questionTypes.find(
+        (t) => t.value === formData.question_type
+    );
+
+    // Sort tests by creation date (newest first)
+    const sortTestsByDate = (tests: Test[]) => {
+        return [...tests].sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+        });
+    };
+
+    useEffect(() => {
+        loadTests()
+    }, [])
+
+    useEffect(() => {
+        // Initialize answers based on question type
+        initializeAnswers()
+    }, [formData.question_type])
+
+    // Click outside handlers
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
             if (
@@ -79,6 +121,15 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                 !categoryDropdownRef.current.contains(e.target as Node)
             ) {
                 setDropdownOpen(false);
+            }
+
+            if (rootRef.current && !(rootRef.current as any).contains(e.target)) {
+                setOpen(false);
+                setHighlightedIndex(-1);
+            }
+
+            if (dropdownRef.current && !(dropdownRef.current as any).contains(e.target)) {
+                setOpenType(false);
             }
         }
 
@@ -91,171 +142,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
             .then(res => setCategories(res.data))
             .catch(err => console.log("Category error:", err));
     }, []);
-    ///category
-
-    // Available letters for answers
-    const availableLetters = ["A", "B", "D", "E", "F"]
-
-    //AISpellCheck
-    const [spellCheckedAnswers, setSpellCheckedAnswers] = useState(
-        answers.map(a => a.answer_text)
-    );
-
-    const [spellLoading, setSpellLoading] = useState(
-        answers.map(() => false)
-    );
-
-    useEffect(() => {
-        const timers: NodeJS.Timeout[] = [];
-
-        spellCheckedAnswers.forEach((text, index) => {
-            // ❗ 1. text yo‘q bo‘lsa, bo‘sh bo‘lsa, yoki undefined bo‘lsa → to‘xtatamiz
-            if (!text || typeof text !== "string") {
-                setSpellLoading(prev => {
-                    const c = [...prev];
-                    c[index] = false;
-                    return c;
-                });
-                return;
-            }
-
-            const cleaned = text.trim();
-
-            // ❗ 2. Agar matn bo‘sh bo‘lsa → loading OFF
-            if (cleaned === "") {
-                setSpellLoading(prev => {
-                    const c = [...prev];
-                    c[index] = false;
-                    return c;
-                });
-                return;
-            }
-
-            // ❗ 3. Agar matn 2 harfdan kam bo‘lsa → spellcheck qilma
-            if (cleaned.length < 2) {
-                setSpellLoading(prev => {
-                    const c = [...prev];
-                    c[index] = false;
-                    return c;
-                });
-                return;
-            }
-
-            // ❗ spellcheck boshlanadi
-            setSpellLoading(prev => {
-                const c = [...prev];
-                c[index] = true;
-                return c;
-            });
-
-            const t = setTimeout(async () => {
-                const fixed = await spellCheck(cleaned);
-
-                if (fixed !== text) {
-                    // UI uchun
-                    setSpellCheckedAnswers(prev => {
-                        const copy = [...prev];
-                        copy[index] = fixed;
-                        return copy;
-                    });
-
-                    // backend uchun
-                    handleAnswerChange(index, "answer_text", fixed);
-                }
-
-                // ❗ spellcheck tugadi
-                setSpellLoading(prev => {
-                    const c = [...prev];
-                    c[index] = false;
-                    return c;
-                });
-            }, 600);
-
-            timers.push(t);
-        });
-
-        return () => timers.forEach(t => clearTimeout(t));
-    }, [spellCheckedAnswers]);
-    //
-
-    //Animated Dropdown
-    const [open, setOpen] = useState(false);
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const rootRef = useRef(null);
-
-    const selectedTest = tests.find((t) => String(t.id) === String(formData.test));
-
-    useEffect(() => {
-        function handleClickOutside(e) {
-            if (rootRef.current && !rootRef.current.contains(e.target)) {
-                setOpen(false);
-                setHighlightedIndex(-1);
-            }
-        }
-
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    function handleSelect(val) {
-        handleChange({target: {name: "test", value: val}});
-        setOpen(false);
-    }////////////////////
-
-    // Animated Dropdown 2
-    const [openType, setOpenType] = useState(false);
-    const dropdownRef = useRef(null);
-
-    const questionTypes = [
-        {value: "single", label: "Bitta tanlov"},
-        {value: "multiple", label: "Ko'p tanlov"},
-        {value: "true_false", label: "To'g'ri/Noto'g'ri"}
-    ];
-
-    const selectedType = questionTypes.find(
-        (t) => t.value === formData.question_type
-    );
-
-    const handleSelectType = (value) => {
-        handleChange({
-            target: {
-                name: "question_type",
-                value: value
-            }
-        });
-        setOpenType(false);
-    };
-
-    // CLICK OUTSIDE
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setOpenType(false); // 👈 TO‘G‘RI STATE
-            }
-        }
-
-        if (openType) {
-            document.addEventListener("mousedown", handleClickOutside);
-        } else {
-            document.removeEventListener("mousedown", handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [openType]);
-    //////////////////////////
-
-    const navigate = useNavigate();
-
-    useEffect(() => {
-        loadTests()
-    }, [])
-
-    useEffect(() => {
-        // Initialize answers based on question type
-        initializeAnswers()
-    }, [formData.question_type])
 
     const initializeAnswers = () => {
         switch (formData.question_type) {
@@ -290,11 +176,14 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
             const mappedTests = testsData.map((test: any) => ({
                 id: test.id,
                 title: test.title,
-                // Fix visibility mapping based on actual API response
+                created_at: test.created_at,
                 visibility:
                     test.visibility || (test.is_public === true ? "public" : test.is_public === false ? "private" : "unlisted"),
             }))
-            setTests(mappedTests)
+
+            // Sort tests by creation date (newest first)
+            const sortedTests = sortTestsByDate(mappedTests);
+            setTests(sortedTests)
         } catch (error) {
             console.error("Testlarni yuklashda xatolik:", error)
         }
@@ -312,6 +201,45 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                 return <Lock size={16} className="text-gray-600"/>
         }
     }
+
+    const handleSelect = (val: string) => {
+        handleChange({target: {name: "test", value: val}} as React.ChangeEvent<HTMLInputElement>);
+        setOpen(false);
+    }
+
+    const handleSelectType = (value: string) => {
+        handleChange({
+            target: {
+                name: "question_type",
+                value: value
+            }
+        } as React.ChangeEvent<HTMLInputElement>);
+        setOpenType(false);
+    };
+
+    const resetForm = () => {
+        setFormData({
+            test: "",
+            question_text: "",
+            question_type: "single",
+            order_index: Date.now(),
+            correct_answer_text: "",
+            answer_language: "",
+            description: "",
+            category_id: null,
+        });
+
+        setAnswers([
+            {letter: "A", answer_text: "", is_correct: false},
+            {letter: "B", answer_text: "", is_correct: false},
+            {letter: "D", answer_text: "", is_correct: false},
+        ]);
+
+        questionText.setValue("");
+        descriptionText.setValue("");
+        setMediaFile(null);
+        setError("");
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -399,12 +327,17 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
 
             setCreatedQuestions(prev => [...prev, trimmedQuestion]);
 
-            onClose()
-            alert("Savol muvaffaqiyatli yaratildi!")
+            // Reset form for new question creation
+            resetForm();
+
+            // Reload tests to get the latest order
+            await loadTests();
+
+            alert("Savol muvaffaqiyatli yaratildi! Endi yangi savol yaratishingiz mumkin.")
 
         } catch (err: any) {
             console.error("Savol yaratishda xatolik:", err)
-            // setError(err.response?.data?.detail || err.response?.data?.message || "Savol yaratishda xatolik yuz berdi")
+            setError(err.response?.data?.detail || err.response?.data?.message || "Savol yaratishda xatolik yuz berdi")
         } finally {
             setLoading(false)
         }
@@ -415,7 +348,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
     ) => {
         const {name, value} = e.target;
 
-        // Faqat tegishli inputni yangilaymiz
+        // Update spell check values
         if (name === "question_text") {
             questionText.setValue(value);
         }
@@ -424,13 +357,12 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
             descriptionText.setValue(value);
         }
 
-        // formData-ni yangilaymiz
+        // Update formData
         setFormData((prev) => ({
             ...prev,
             [name]: value,
         }));
     };
-
 
     const handleAnswerChange = (index: number, field: keyof Answer, value: string | boolean) => {
         setAnswers((prev) => prev.map((answer, i) => (i === index ? {...answer, [field]: value} : answer)))
@@ -465,6 +397,8 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
             handleAnswerChange(index, "is_correct", checked)
         }
     }
+
+    const selectedTest = tests.find((t) => String(t.id) === String(formData.test));
 
     const renderAnswerInputs = () => {
         if (formData.question_type === "text_input") {
@@ -525,9 +459,11 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
 
                 <div className="space-y-3">
                     {answers.map((answer, index) => (
-                        <FadeInPage delay={900}>
-                            <div key={index}
-                                 className="flex items-center space-x-3 border border-theme-primary rounded-full overflow-x-scroll scrollbar-hide backdrop-blur" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                        <FadeInPage key={index} delay={900}>
+                            <div
+                                className="flex items-center space-x-3 border border-theme-primary rounded-full overflow-x-scroll scrollbar-hide backdrop-blur"
+                                style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+                            >
                                 <div className="flex items-center gap-2">
                                     <div className="flex items-center">
                                         <label className="ml-2 text-sm text-theme-secondary flex flex-row">
@@ -545,24 +481,12 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                         </label>
                                     </div>
                                 </div>
-                                {/* INPUT SPELLCHECK BILAN */}
-                                <div className="flex flex-row w-full relative">
+
+                                <div className="flex flex-row w-full">
                                     <input
                                         type="text"
-                                        value={spellCheckedAnswers[index] ?? ""}
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-
-                                            // UI matni
-                                            setSpellCheckedAnswers(prev => {
-                                                const copy = [...prev];
-                                                copy[index] = v;
-                                                return copy;
-                                            });
-
-                                            // backend matni
-                                            handleAnswerChange(index, "answer_text", v);
-                                        }}
+                                        value={answer.answer_text}
+                                        onChange={(e) => handleAnswerChange(index, "answer_text", e.target.value)}
                                         placeholder={
                                             formData.question_type === "true_false"
                                                 ? answer.answer_text
@@ -571,15 +495,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                         disabled={formData.question_type === "true_false"}
                                         className="flex-1 px-5 py-4 outline-none rounded-lg focus:border-green-600 text-theme-secondary bg-transparent"
                                     />
-
-                                    {spellLoading[index] && (
-                                        <span
-                                            className="absolute right-5 top-1/2 -translate-y-1/2 text-xs text-blue-500 animate-pulse">
-                                    AI tekshirmoqda…
-                                </span>
-                                    )}
                                 </div>
-
 
                                 {(formData.question_type === "single" || formData.question_type === "multiple") && answers.length > 3 && (
                                     <button
@@ -594,7 +510,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                         </FadeInPage>
                     ))}
                 </div>
-
             </div>
         )
     }
@@ -617,6 +532,10 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                 <div className={"w-full h-full py-5"} style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}>
                     {/* Form */}
                     <div className="p-6 max-h-auto">
+                        <div className="mb-6">
+                            <h2 className="text-xl font-semibold text-white mb-2">Yangi Savol Yaratish</h2>
+                        </div>
+
                         {error &&
                             <div
                                 className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
@@ -665,7 +584,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                                 {tests.map((test) => (
                                                     <li
                                                         key={test.id}
-                                                        onClick={() => handleSelect(test.id)}
+                                                        onClick={() => handleSelect(test.id.toString())}
                                                         style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}
                                                         className="px-4 py-3 text-theme-secondary backdrop-blur hover:bg-gray-500 hover:text-white transition duration-200 cursor-pointer flex justify-between items-center"
                                                     >
@@ -793,18 +712,17 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
 
                                 {questionText.isLoading &&
                                     <span
-                                        className={`flex flex-row items-center justify-start py-2 gap-1 text-white absolute right-1.5 bottom-1.5`}> <RefreshCw
-                                        className="animate-spin w-5 h-5 text-white"/> Tekshirilmoqda...</span>}
+                                        className={`flex flex-row items-center justify-start py-2 gap-1 text-white absolute right-1.5 bottom-1.5`}>Tekshirilmoqda...</span>}
                             </div>
 
                             {/* Dynamic Answer Inputs */}
                             {renderAnswerInputs()}
 
                             {/* Action Buttons */}
-                            <div className="flex space-x-4 pt-4">
+                            <div className="flex md:flex-row flex-col gap-2 mx-auto pt-4">
                                 <button
                                     type="submit"
-                                    disabled={loading || createdQuestions.includes(formData.question_text.trim())} // ❗ Duplicate tekshiruv qo'shildi
+                                    disabled={loading || createdQuestions.includes(formData.question_text.trim())}
                                     className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                                 >
                                     {loading ? (
@@ -816,6 +734,14 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                             <span>Savol yaratish</span>
                                         </>
                                     )}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={resetForm}
+                                    className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg font-semibold hover:bg-gray-700 transition-all"
+                                >
+                                    Formani tozalash
                                 </button>
                             </div>
                         </form>

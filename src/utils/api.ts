@@ -413,6 +413,104 @@ export const quizAPI = {
   fetchQuestionsbyfollower: (url?: string) =>
       url ? api.get(url) : api.get('/quiz/recommended/followed-questions/'),
 
+  // QUIZ REACTIONS
+  getQuizReactions: async (quizId?: number): Promise<ApiResponse<any>> => {
+    try {
+      const url = quizId
+          ? `/quiz/quiz-reactions/${quizId}/`
+          : `/quiz/quiz-reactions/`;
+      const response = await axiosInstance.get(url);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return handleApiError(error);
+    }
+  },
+
+  addOrUpdateReaction: async (quizId: number, reactionType: string): Promise<ApiResponse<any>> => {
+    try {
+      // Avval mavjud reaksiyani tekshiramiz
+      const checkResponse = await axiosInstance.get(`/quiz/quiz-reactions/?quiz=${quizId}`);
+
+      if (checkResponse.data.results && checkResponse.data.results.length > 0) {
+        // Mavjud reaksiya bor, uni yangilaymiz yoki o'chiramiz
+        const existingReaction = checkResponse.data.results[0];
+
+        if (existingReaction.reaction_type === reactionType) {
+          // Bir xil reaksiyani bosgan, o'chiramiz
+          await axiosInstance.delete(`/quiz/quiz-reactions/${existingReaction.id}/`);
+          return {
+            success: true,
+            data: {
+              removed: true,
+              reaction_type: null,
+              message: "Reaction removed"
+            }
+          };
+        } else {
+          // Turli reaksiya, yangilaymiz
+          const response = await axiosInstance.patch(
+              `/quiz/quiz-reactions/${existingReaction.id}/`,
+              { reaction_type: reactionType }
+          );
+          return { success: true, data: response.data };
+        }
+      } else {
+        // Yangi reaksiya qo'shamiz
+        const response = await axiosInstance.post(`/quiz/quiz-reactions/`, {
+          quiz: quizId,
+          reaction_type: reactionType
+        });
+        return { success: true, data: response.data };
+      }
+    } catch (error: any) {
+      return handleApiError(error);
+    }
+  },
+
+  deleteReaction: async (reactionId: number): Promise<ApiResponse<any>> => {
+    try {
+      await axiosInstance.delete(`/quiz/quiz-reactions/${reactionId}/`);
+      return { success: true, data: { message: "Reaction deleted" } };
+    } catch (error: any) {
+      return handleApiError(error);
+    }
+  },
+
+  // Quiz statistikasi
+  getQuizStatistics: async (quizId: number): Promise<ApiResponse<any>> => {
+    try {
+      const response = await axiosInstance.get(`/quiz/quiz-reactions/?quiz=${quizId}`);
+      const reactions = response.data.results || [];
+
+      // Reaksiyalarni guruhlash
+      const stats = {
+        coin: 0,
+        like: 0,
+        love: 0,
+        clap: 0,
+        insightful: 0,
+        total: 0,
+        user_reaction: null as string | null
+      };
+
+      reactions.forEach((reaction: any) => {
+        if (reaction.reaction_type && stats.hasOwnProperty(reaction.reaction_type)) {
+          stats[reaction.reaction_type as keyof typeof stats]++;
+          stats.total++;
+        }
+
+        // Foydalanuvchining reaksiyasini tekshirish (agar authenticated bo'lsa)
+        if (reaction.user === currentUser?.id) {
+          stats.user_reaction = reaction.reaction_type;
+        }
+      });
+
+      return { success: true, data: stats };
+    } catch (error: any) {
+      return handleApiError(error);
+    }
+  },
+
   fetchQuestionsByUser: (user_id: number) =>
       api.get(`/quiz/questions/user_questions/?user_id=${user_id}`),
   fetchQuestions: (url?: string) =>
@@ -450,15 +548,20 @@ export const quizAPI = {
 
   recordView: (data: any) => api.post('/quiz/views/', data),
 
+  // Bookmark functions
   bookmarkQuestion: (data: any) => api.post('/quiz/question-bookmarks/', data),
   getBookmarks: () => api.get('/quiz/question-bookmarks/'),
   getBookmarkByQuestion: (questionId: number) =>
       api.get(`/quiz/question-bookmarks/?question=${questionId}`),
+  deleteBookmarkQuestion: (bookmarkId: number) =>
+      api.delete(`/quiz/question-bookmarks/${bookmarkId}/`),
 
   bookmarkTest: (data: any) => api.post('/quiz/test-bookmarks/', data),
   getBookmarksTest: () => api.get('/quiz/test-bookmarks/'),
   getBookmarkByTest: (testId: number) =>
       api.get(`/quiz/test-bookmarks/?test=${testId}`),
+  deleteBookmarkTest: (bookmarkId: number) =>
+      api.delete(`/quiz/test-bookmarks/${bookmarkId}/`),
 
   unblockBookmark: (id: number) => api.delete(`/quiz/test-bookmarks/${id}/`),
 
@@ -560,145 +663,143 @@ export const systemAPI = {
       api.patch(`/system/roles/${id}/`, data)
 };
 
+// ==================== QUIZ VIEWS API ====================
 export const quizViewsAPI = {
   /**
-   * Quizning ko'rishlar sonini va statistikasini olish
-   * @param {number} quizId - Quiz ID (question ID yoki test ID)
+   * Quiz uchun ko'rishlar statistikasini olish
+   * @param {number} quizId - Quiz ID (question ID)
    * @returns {Promise<Object>} - Ko'rishlar statistikasi
    */
   getQuizViews: async (quizId: number) => {
     try {
+      console.log(`📊 Getting views for quiz ${quizId}...`);
       const response = await api.get(`/quiz/question-views/${quizId}/`);
+
+      console.log('✅ Quiz views API response:', {
+        status: response.status,
+        data: response.data,
+        total_views: response.data.total_views,
+        unique_viewers: response.data.unique_viewers,
+        all_fields: Object.keys(response.data)
+      });
+
       return {
         success: true,
         data: response.data,
-        totalViews: response.data.total_views || response.data.view_count || 0,
+        totalViews: response.data.total_views || 0,
+        uniqueViewers: response.data.unique_viewers || 0,
+        viewStats: response.data.view_stats || {},
       };
     } catch (error) {
-      console.error('Quiz ko\'rishlarini olishda xatolik:', error);
+      console.error(`❌ Error getting quiz views for ${quizId}:`, error);
+      console.error('Error details:', error.response?.data);
       return {
         success: false,
         error: error.response?.data || error.message,
         totalViews: 0,
+        uniqueViewers: 0,
+        viewStats: {},
       };
     }
   },
 
   /**
-   * Yangi ko'rish qo'shish (quiz ochilganda chaqiriladi)
+   * Yangi ko'rish qo'shish (savol ochilganda chaqiriladi)
    * @param {number} quizId - Quiz ID
    * @param {Object} options - Qo'shimcha parametrlar
    * @returns {Promise<Object>} - Natija
    */
   addQuizView: async (quizId: number, options: any = {}) => {
     try {
+      console.log(`👁️ Adding view for quiz ${quizId}...`);
       const response = await api.post(`/quiz/question-views/${quizId}/`, {
         ...options,
         timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        screen_resolution: `${window.screen.width}x${window.screen.height}`,
+        language: navigator.language,
       });
+
+      console.log('✅ Add view response:', response.data);
+
       return {
         success: true,
         data: response.data,
+        totalViews: response.data.total_views || 0,
+        uniqueViewers: response.data.unique_viewers || 0,
         message: 'Ko\'rish muvaffaqiyatli qayd etildi',
       };
     } catch (error) {
-      console.error('Ko\'rish qo\'shishda xatolik:', error);
+      console.error(`❌ Error adding view for quiz ${quizId}:`, error);
       return {
         success: false,
         error: error.response?.data || error.message,
+        totalViews: 0,
+        uniqueViewers: 0,
       };
     }
   },
 
   /**
-   * Barcha quizlar uchun ko'rishlar statistikasini olish
-   * @param {Object} filters - Filtr parametrlari
-   * @returns {Promise<Object>} - Umumiy statistika
+   * Bir nechta quiz uchun ko'rishlar statistikasini olish
+   * @param {number[]} quizIds - Quiz ID lar massivi
+   * @returns {Promise<Object>} - Ko'rishlar
    */
-  getAllQuizViewsStats: async (filters: any = {}) => {
+  getMultipleQuizViews: async (quizIds: number[]) => {
     try {
-      const response = await api.get('/quiz/question-views/stats/overview/', {
-        params: filters,
+      console.log(`📊 Getting views for ${quizIds.length} quizzes...`);
+      const response = await api.post('/quiz/question-views/batch/', {
+        quiz_ids: quizIds
       });
+
       return {
         success: true,
         data: response.data,
-        stats: response.data.results || response.data.stats || [],
-        totalQuizzes: response.data.total || response.data.count || 0,
+        viewsMap: response.data.views || {},
+        totals: response.data.totals || {},
       };
     } catch (error) {
-      console.error('Statistikani olishda xatolik:', error);
+      console.error('❌ Error getting multiple quiz views:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
-        stats: [],
-        totalQuizzes: 0,
+        viewsMap: {},
+        totals: {},
       };
     }
   },
 
   /**
-   * Foydalanuvchi ko'rgan quizlar ro'yxatini olish
-   * @param {number} userId - Foydalanuvchi ID
-   * @param {Object} options - Qo'shimcha parametrlar
-   * @returns {Promise<Object>} - Foydalanuvchi ko'rishlari
-   */
-  getUserQuizViews: async (userId: number, options: any = {}) => {
-    try {
-      const response = await api.get(`/quiz/question-views/user/${userId}/`, {
-        params: options,
-      });
-      return {
-        success: true,
-        data: response.data,
-        viewedQuizzes: response.data.results || response.data.views || [],
-        totalViewed: response.data.total || response.data.count || 0,
-      };
-    } catch (error) {
-      console.error('Foydalanuvchi ko\'rishlarini olishda xatolik:', error);
-      return {
-        success: false,
-        error: error.response?.data || error.message,
-        viewedQuizzes: [],
-        totalViewed: 0,
-      };
-    }
-  },
-
-  /**
-   * Ko'rishlar sonini real-time yangilash uchun polling funksiyasi
+   * Kunlik, haftalik, oylik ko'rishlar statistikasini olish
    * @param {number} quizId - Quiz ID
-   * @param {Function} onUpdate - Yangilangan ma'lumotlar bilan chaqiriladigan callback
-   * @param {number} interval - Yangilash intervali (ms) - default: 30000 (30s)
-   * @returns {Function} - Polling'ni to'xtatish funksiyasi
+   * @param {string} period - davr: 'day', 'week', 'month', 'year'
+   * @returns {Promise<Object>} - Statistika
    */
-  startViewsPolling: (quizId: number, onUpdate: (data: any) => void, interval = 30000) => {
-    let isPolling = true;
+  getViewStats: async (quizId: number, period: string = 'day') => {
+    try {
+      const response = await api.get(`/quiz/question-views/${quizId}/stats/`, {
+        params: { period }
+      });
 
-    const poll = async () => {
-      if (!isPolling) return;
-
-      try {
-        const result = await quizViewsAPI.getQuizViews(quizId);
-        if (result.success) {
-          onUpdate(result.data);
-        }
-      } catch (error) {
-        console.error('Polling da xatolik:', error);
-      }
-
-      if (isPolling) {
-        setTimeout(poll, interval);
-      }
-    };
-
-    // Darhol birinchi marta chaqirish
-    poll();
-
-    // Polling'ni to'xtatish funksiyasi
-    return () => {
-      isPolling = false;
-    };
+      return {
+        success: true,
+        data: response.data,
+        stats: response.data.stats || response.data,
+        period: response.data.period || period,
+        total: response.data.total || 0,
+        average: response.data.average || 0,
+      };
+    } catch (error) {
+      console.error(`❌ Error getting view stats for quiz ${quizId}:`, error);
+      return {
+        success: false,
+        error: error.response?.data || error.message,
+        stats: {},
+        period,
+        total: 0,
+        average: 0,
+      };
+    }
   },
 
   /**
@@ -717,6 +818,7 @@ export const quizViewsAPI = {
           ...options,
         },
       });
+
       return {
         success: true,
         data: response.data,
@@ -730,7 +832,7 @@ export const quizViewsAPI = {
         },
       };
     } catch (error) {
-      console.error('Ko\'rishlar tarixini olishda xatolik:', error);
+      console.error(`❌ Error getting view history for quiz ${quizId}:`, error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -739,18 +841,161 @@ export const quizViewsAPI = {
       };
     }
   },
+
+  /**
+   * Test savolga ko'rishlar (agar alohida test views endpoint bo'lsa)
+   * @param {number} testId - Test ID
+   * @returns {Promise<Object>} - Test ko'rishlari
+   */
+  getTestViews: async (testId: number) => {
+    try {
+      const response = await api.get(`/quiz/test-views/${testId}/`);
+
+      return {
+        success: true,
+        data: response.data,
+        totalViews: response.data.total_views || 0,
+        uniqueViewers: response.data.unique_viewers || 0,
+      };
+    } catch (error) {
+      console.error(`❌ Error getting test views for ${testId}:`, error);
+      return {
+        success: false,
+        error: error.response?.data || error.message,
+        totalViews: 0,
+        uniqueViewers: 0,
+      };
+    }
+  },
+
+  /**
+   * Ko'rishlar sonini real-time yangilash uchun polling
+   * @param {number} quizId - Quiz ID
+   * @param {Function} onUpdate - Yangilangan ma'lumotlar bilan chaqiriladigan callback
+   * @param {number} interval - Yangilash intervali (ms)
+   * @returns {Function} - Polling'ni to'xtatish funksiyasi
+   */
+  startViewsPolling: (quizId: number, onUpdate: (data: any) => void, interval = 30000) => {
+    let isPolling = true;
+    let pollingId: NodeJS.Timeout;
+
+    const poll = async () => {
+      if (!isPolling) return;
+
+      try {
+        const result = await quizViewsAPI.getQuizViews(quizId);
+        if (result.success) {
+          onUpdate(result.data);
+        }
+      } catch (error) {
+        console.error('Polling da xatolik:', error);
+      }
+
+      if (isPolling) {
+        pollingId = setTimeout(poll, interval);
+      }
+    };
+
+    // Darhol birinchi marta chaqirish
+    poll();
+
+    // Polling'ni to'xtatish funksiyasi
+    return () => {
+      isPolling = false;
+      if (pollingId) {
+        clearTimeout(pollingId);
+      }
+    };
+  },
+
+  /**
+   * Local fallback funksiya (agar API ishlamasa)
+   * Bu funksiya localStorage orqali unique viewers ni saqlaydi
+   */
+  getLocalUniqueViewers: (quizId: number) => {
+    try {
+      const key = `quiz_${quizId}_unique_viewers`;
+      const stored = localStorage.getItem(key);
+
+      if (stored) {
+        const viewers = JSON.parse(stored);
+        const uniqueCount = new Set(viewers).size;
+        console.log(`📱 Local unique viewers for quiz ${quizId}: ${uniqueCount}`);
+        return uniqueCount;
+      }
+      return 0;
+    } catch (err) {
+      console.error('Error reading local unique viewers:', err);
+      return 0;
+    }
+  },
+
+  /**
+   * Local storage ga yangi ko'rish qo'shish
+   */
+  addLocalView: (quizId: number) => {
+    try {
+      const userIdentifier = localStorage.getItem('userId') ||
+          'anonymous_' + navigator.userAgent.substring(0, 50) +
+          Math.random().toString(36).substr(2, 9);
+
+      const key = `quiz_${quizId}_unique_viewers`;
+      const stored = localStorage.getItem(key);
+      let viewers: string[] = [];
+
+      if (stored) {
+        viewers = JSON.parse(stored);
+      }
+
+      // Faqat yangi foydalanuvchi qo'shamiz
+      if (!viewers.includes(userIdentifier)) {
+        viewers.push(userIdentifier);
+        localStorage.setItem(key, JSON.stringify(viewers));
+
+        const uniqueCount = new Set(viewers).size;
+        console.log(`📱 Local view added for quiz ${quizId}, unique viewers: ${uniqueCount}`);
+        return uniqueCount;
+      }
+
+      return new Set(viewers).size;
+    } catch (err) {
+      console.error('Error adding local view:', err);
+      return 0;
+    }
+  },
+
+  /**
+   * API testi - endpoint mavjudligini tekshirish
+   */
+  testApiEndpoint: async () => {
+    try {
+      console.log('🧪 Testing quiz views API endpoint...');
+      const response = await api.get('/quiz/question-views/1/');
+      console.log('✅ API endpoint is working:', response.status);
+      return { success: true, status: response.status };
+    } catch (error) {
+      console.error('❌ API endpoint test failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        status: error.response?.status
+      };
+    }
+  }
 };
 
+// Interface for quiz view data
 export interface QuizViewStats {
   total_views: number;
-  today_views: number;
   unique_viewers: number;
+  today_views: number;
+  this_week_views: number;
+  this_month_views: number;
   average_view_time: number;
   last_viewed: string;
-  // ... boshqa maydonlar
 }
 
-export interface QuizView {
+export interface QuizViewRecord {
   id: number;
   quiz_id: number;
   user_id?: number;
@@ -762,6 +1007,8 @@ export interface QuizView {
   timestamp: string;
   source?: string;
   duration?: number;
+  user_agent?: string;
+  ip_address?: string;
 }
 
 export const chatAPI = {
