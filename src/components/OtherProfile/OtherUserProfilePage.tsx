@@ -3,15 +3,15 @@ import { href, Navigate, useNavigate } from 'react-router-dom';
 import { ProfileHeader } from './ProfileHeader';
 import { TestCard } from './TestCard';
 import { QuestionCard } from './QuestionCard';
-import { FollowersModal } from '../FollowerModal';
+import { FollowersModal } from '../components/FollowerModal.tsx';
 import { TestModal } from './TestModal';
 import { QuestionsListModal } from './QuestionsListModal';
 import { QuestionDetailModal } from './QuestionDetailModal';
 import { TikTokStyleTest } from './TikTokStyleTest';
 import { BookOpen, HelpCircle, Users, UserCheck } from 'lucide-react';
 import { useParams } from 'react-router-dom';
-import ProfilePage from '../ProfilePage';
-import BottomNavigation from '../BottomNavigation';
+import ProfilePage from '../my-profile/ProfilePage.tsx';
+import BottomNavigation from '../components/BottomNavigation.tsx';
 import { userProfile, accountsAPI, quizAPI } from '../../utils/api'
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -311,13 +311,13 @@ export const UserProfilePage: React.FC = () => {
 
                     <div className="p-6">
                         {activeTab === 'tests' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-3 pb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 auto-rows-fr">
                                 {(tests || []).map((test) => (
                                     <TestCard key={test.id} test={test} onTestClick={handleTestClick} />
                                 ))}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 auto-rows-fr">
                                 {(questions || []).map((question) => (
                                     <QuestionCard key={question.id} question={question} onQuestionClick={handleViewQuestions} />
                                 ))}

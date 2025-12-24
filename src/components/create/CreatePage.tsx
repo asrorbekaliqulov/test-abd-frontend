@@ -1,9 +1,9 @@
 import React, {useState, useEffect} from 'react';
 import {ArrowLeft, ChevronDown} from 'lucide-react';
-import {quizAPI} from '../utils/api';
+import {quizAPI} from '../../utils/api.ts';
 import {useNavigate} from "react-router-dom";
-import {getLoremImage} from "../utils/getLoremImage.ts";
-import FadeInPage from "./FadeInPage.tsx";
+import {getLoremImage} from "../../utils/getLoremImage.ts";
+import FadeInPage from "../components/FadeInPage.tsx";
 
 export interface Category {
     id: number;

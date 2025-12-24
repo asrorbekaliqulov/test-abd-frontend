@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, UserPlus, UserCheck } from 'lucide-react';
-import { accountsAPI } from '../utils/api';
+import { accountsAPI } from '../../utils/api.ts';
 
 interface FollowUser {
     id: number;

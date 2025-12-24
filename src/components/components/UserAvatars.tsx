@@ -1,5 +1,5 @@
 import React from 'react';
-import { QuizParticipant } from '../types/quiz';
+import { QuizParticipant } from '../../types/quiz.ts';
 
 
 // interface User {

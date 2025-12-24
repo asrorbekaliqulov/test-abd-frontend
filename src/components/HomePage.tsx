@@ -20,17 +20,21 @@ import {
     Heart,
     Megaphone,
     Info,
+    Home,
+    Search,
+    PlusSquare,
+    Video,
 } from "lucide-react"
 import {quizAPI, authAPI, accountsAPI} from "../utils/api"
-import AnimatedLiveProfile from './AnimatedLiveProfile';
+import AnimatedLiveProfile from './live_quiz/AnimatedLiveProfile.tsx';
 import {Link, useNavigate} from 'react-router-dom';
 import {StoriesViewer} from "./stories/StoriesViewer"
-import ExpandableText from "./ExpandableText.tsx";
+import ExpandableText from "./components/ExpandableText.tsx";
 import "../index.css";
 
 interface HomePageProps {
-    theme: string
-    toggleTheme: () => void
+    theme?: string
+    toggleTheme?: () => void
 }
 
 interface Quiz {
@@ -62,6 +66,9 @@ interface Quiz {
         name: string
         emoji: string
     }
+    test_title?: string
+    test_description?: string
+    round_image?: string
 }
 
 interface Story {
@@ -83,6 +90,7 @@ interface Story {
     }
     created_at: string
     type: "test" | "live_quiz"
+    is_active?: boolean
 }
 
 interface GroupedStory {
@@ -126,8 +134,7 @@ interface User {
 const NotificationToast: React.FC<{
     notification: Notification
     onClose: () => void
-    theme: string
-}> = ({notification, onClose, theme}) => {
+}> = ({notification, onClose}) => {
     const [isVisible, setIsVisible] = useState(false)
 
     useEffect(() => {
@@ -187,8 +194,7 @@ const NotificationToast: React.FC<{
             }`}
         >
             <div
-                className={`max-w-sm rounded-2xl shadow-2xl border backdrop-blur-lg ${theme === 'dark' ? 'bg-gray-800/95 border-gray-700 text-white' : 'bg-white/95 border-gray-200 text-gray-900'
-                }`}
+                className="max-w-sm rounded-2xl shadow-2xl border backdrop-blur-lg bg-gray-900/95 border-gray-700 text-white"
             >
                 <div className="p-4">
                     <div className="flex items-start space-x-3">
@@ -210,7 +216,7 @@ const NotificationToast: React.FC<{
                                 setIsVisible(false)
                                 setTimeout(onClose, 300)
                             }}
-                            className="flex-shrink-0 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            className="flex-shrink-0 p-1 rounded-full hover:bg-gray-800 transition-colors"
                         >
                             <X size={16}/>
                         </button>
@@ -224,19 +230,19 @@ const NotificationToast: React.FC<{
 const NotificationModal: React.FC<{
     isOpen: boolean
     onClose: () => void
-    theme: string
     notifications: Notification[]
     unreadCount: number
     onNotificationClick: (notification: Notification) => void
     onMarkAsRead: (notificationId: number) => void
+    onMarkAllAsRead: () => void
 }> = ({
           isOpen,
           onClose,
-          theme,
           notifications,
           unreadCount,
           onNotificationClick,
           onMarkAsRead,
+          onMarkAllAsRead
       }) => {
     const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
 
@@ -287,21 +293,21 @@ const NotificationModal: React.FC<{
     const getNotificationTypeColor = (type: string) => {
         switch (type) {
             case 'new_follower':
-                return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
+                return 'bg-blue-900/30 text-blue-300'
             case 'coin_received':
-                return 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-300'
+                return 'bg-yellow-900/30 text-yellow-300'
             case 'new_like':
-                return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+                return 'bg-red-900/30 text-red-300'
             case 'new_comment':
-                return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300'
+                return 'bg-purple-900/30 text-purple-300'
             case 'admin_announcement':
-                return 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300'
+                return 'bg-orange-900/30 text-orange-300'
             case 'promotion':
-                return 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-300'
+                return 'bg-pink-900/30 text-pink-300'
             case 'system_info':
-                return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300'
+                return 'bg-green-900/30 text-green-300'
             default:
-                return 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-300'
+                return 'bg-gray-900/30 text-gray-300'
         }
     }
 
@@ -311,6 +317,18 @@ const NotificationModal: React.FC<{
         }
         setSelectedNotification(notification)
         onNotificationClick(notification)
+    }
+
+    const handleMarkAllAsRead = () => {
+        onMarkAllAsRead()
+        // Toast notification ko'rsatish
+        const event = new CustomEvent('showToast', {
+            detail: {
+                message: 'Barcha bildirishnomalar o\'qilgan qilindi',
+                type: 'success'
+            }
+        });
+        window.dispatchEvent(event);
     }
 
     const formatTime = (dateString: string) => {
@@ -331,69 +349,69 @@ const NotificationModal: React.FC<{
                 onClick={onClose}
             />
             <div
-                className={`relative w-full max-w-md mx-4 rounded-2xl shadow-2xl border max-h-[80vh] overflow-hidden transform animate-slideInDown ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}
+                className="relative w-full max-w-md mx-4 rounded-2xl shadow-2xl border max-h-[80vh] overflow-hidden transform animate-slideInDown bg-gray-900 border-gray-700"
             >
                 <div
-                    className={`flex items-center justify-between p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                    }`}
+                    className="flex items-center justify-between p-4 border-b border-gray-700"
                 >
                     <div className="flex items-center space-x-2">
                         <Bell size={24} className="text-blue-500"/>
-                        <h2
-                            className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'
-                            }`}
-                        >
+                        <h2 className="text-lg font-semibold text-white">
                             Bildirishnomalar
                         </h2>
                         {unreadCount > 0 && (
                             <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
-                  {unreadCount}
-                </span>
+                                {unreadCount}
+                            </span>
                         )}
                     </div>
-                    <button
-                        onClick={onClose}
-                        className={`p-2 rounded-full transition-all duration-200 hover:scale-110 ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-                        }`}
-                    >
-                        <X size={20}/>
-                    </button>
+                    <div className="flex items-center space-x-2">
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={handleMarkAllAsRead}
+                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1"
+                                title="Barchasini o'qilgan qilish"
+                            >
+                                <Check size={12}/>
+                                <span>Barchasi</span>
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-full transition-all duration-200 hover:scale-110 hover:bg-gray-800 text-gray-400"
+                        >
+                            <X size={20}/>
+                        </button>
+                    </div>
                 </div>
+
                 <div className="overflow-y-auto max-h-96">
                     {notifications.length === 0 ? (
-                        <div
-                            className={`p-8 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                            }`}
-                        >
+                        <div className="p-8 text-center text-gray-400">
                             <Bell size={48} className="mx-auto mb-4 opacity-50"/>
                             <p>Hozircha bildirishnomalar yo'q</p>
+                            <p className="text-sm mt-2 text-gray-500">
+                                Yangi xabarlar kelganda bu yerda ko'rasiz
+                            </p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <div className="divide-y divide-gray-700">
                             {notifications.map((notification) => (
                                 <div
                                     key={notification.id}
                                     onClick={() => handleNotificationClick(notification)}
                                     className={`p-4 cursor-pointer transition-all duration-200 transform ${!notification.is_read
-                                        ? theme === 'dark'
-                                            ? 'bg-blue-900/20 hover:bg-blue-900/30'
-                                            : 'bg-blue-50 hover:bg-blue-100'
-                                        : theme === 'dark'
-                                            ? 'hover:bg-gray-700'
-                                            : 'hover:bg-gray-50'
+                                        ? 'bg-blue-900/20 hover:bg-blue-900/30'
+                                        : 'hover:bg-gray-800'
                                     }`}
                                 >
                                     <div className="flex items-start space-x-3">
-                                        <div className="flex-shrink-0 mt-1 animate-bounce">
+                                        <div className="flex-shrink-0 mt-1">
                                             {getNotificationIcon(notification.type)}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between">
-                                                <p
-                                                    className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                                    }`}
-                                                >
+                                                <p className="text-sm font-medium text-white">
                                                     {getNotificationTypeText(notification.type)}
                                                 </p>
                                                 {!notification.is_read && (
@@ -401,31 +419,24 @@ const NotificationModal: React.FC<{
                                                         className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse"/>
                                                 )}
                                             </div>
-                                            <p
-                                                className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                                                }`}
-                                            >
+                                            <p className="text-sm mt-1 text-gray-300">
                                                 {notification.message}
                                             </p>
                                             {notification.actor && (
-                                                <div className="flex items-center space-x-1 mt-2 animate-fadeIn">
+                                                <div className="flex items-center space-x-1 mt-2">
                                                     <User size={16} className="text-blue-500"/>
-                                                    <span
-                                                        className="text-sm font-medium">{notification.actor.username}</span>
+                                                    <span className="text-sm font-medium">{notification.actor.username}</span>
                                                 </div>
                                             )}
                                             <div className="flex items-center justify-between mt-2">
-                          <span
-                              className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                              }`}
-                          >
-                            {formatTime(notification.created_at)}
-                          </span>
+                                                <span className="text-xs text-gray-400">
+                                                    {formatTime(notification.created_at)}
+                                                </span>
                                                 <span
                                                     className={`text-xs px-2 py-1 rounded-full ${getNotificationTypeColor(notification.type)}`}
                                                 >
-                            {getNotificationTypeText(notification.type)}
-                          </span>
+                                                    {getNotificationTypeText(notification.type)}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -435,33 +446,23 @@ const NotificationModal: React.FC<{
                     )}
                 </div>
                 {selectedNotification && (
-                    <div
-                        className={`border-t p-4 animate-slideInUp ${theme === 'dark' ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'
-                        }`}
-                    >
+                    <div className="border-t p-4 border-gray-700 bg-gray-850">
                         <div className="flex items-center justify-between mb-3">
-                            <h3
-                                className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                }`}
-                            >
+                            <h3 className="font-medium text-white">
                                 To'liq ma'lumot
                             </h3>
                             <button
                                 onClick={() => setSelectedNotification(null)}
-                                className={`text-sm transition-colors ${theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                                }`}
+                                className="text-sm transition-colors text-gray-400 hover:text-gray-300"
                             >
                                 Yopish
                             </button>
                         </div>
-                        <div
-                            className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                            }`}
-                        >
+                        <div className="text-sm text-gray-300">
                             <p className="mb-2">{selectedNotification.message}</p>
                             {selectedNotification.actor && (
                                 <div
-                                    className="flex items-center space-x-2 mt-3 p-2 rounded-lg bg-opacity-50 bg-gray-200 dark:bg-gray-600 animate-fadeIn">
+                                    className="flex items-center space-x-2 mt-3 p-2 rounded-lg bg-gray-800">
                                     <img
                                         src={selectedNotification.actor.profile_image || '/media/defaultuseravatar.png'}
                                         alt={selectedNotification.actor.username}
@@ -479,9 +480,8 @@ const NotificationModal: React.FC<{
 }
 
 const UserProfilesSection: React.FC<{
-    theme: string
     onFollowUser: (userId: number) => void
-}> = ({theme, onFollowUser}) => {
+}> = ({onFollowUser}) => {
     const [users, setUsers] = useState<User[]>([])
     const [loading, setLoading] = useState(false)
     const [followingUsers, setFollowingUsers] = useState<Set<number>>(new Set())
@@ -533,10 +533,7 @@ const UserProfilesSection: React.FC<{
 
     if (loading) {
         return (
-            <div
-                className={`rounded-2xl p-6 shadow-lg border animate-pulse ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}
-            >
+            <div className="rounded-2xl p-6 shadow-lg border animate-pulse bg-gray-900 border-gray-700">
                 <div className="flex items-center justify-center py-8">
                     <Loader2 size={32} className="animate-spin text-blue-500"/>
                 </div>
@@ -545,16 +542,10 @@ const UserProfilesSection: React.FC<{
     }
 
     return (
-        <div
-            className={`rounded-2xl p-6 shadow-lg border animate-slideInUp ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-            }`}
-        >
+        <div className="rounded-2xl p-6 shadow-lg border bg-gray-900 border-gray-700">
             <div className="flex items-center space-x-2 mb-6">
                 <Users size={24} className="text-blue-500"/>
-                <h2
-                    className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    }`}
-                >
+                <h2 className="text-xl font-bold text-white">
                     Tavsiya etilgan foydalanuvchilar
                 </h2>
             </div>
@@ -562,8 +553,7 @@ const UserProfilesSection: React.FC<{
                 {users.map((user, index) => (
                     <div
                         key={user.id}
-                        className={`flex items-center justify-between p-4 rounded-xl border transition-all duration-200 hover:scale-[1.02] transform animate-slideInLeft ${theme === 'dark' ? 'bg-gray-700 border-gray-600 hover:bg-gray-650' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                        }`}
+                        className="flex items-center justify-between p-4 rounded-xl border transition-all duration-200 hover:scale-[1.02] transform bg-gray-800 border-gray-700 hover:bg-gray-750"
                         style={{animationDelay: `${index * 100}ms`}}
                     >
                         <div className="flex items-center space-x-3">
@@ -576,25 +566,16 @@ const UserProfilesSection: React.FC<{
                             </div>
                             <div className="flex-1">
                                 <div className="flex items-center space-x-2">
-                                    <h3
-                                        className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'
-                                        }`}
-                                    >
+                                    <h3 className="font-semibold text-white">
                                         {user.username}
                                     </h3>
                                 </div>
                                 {user.bio && (
-                                    <p
-                                        className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                                        }`}
-                                    >
+                                    <p className="text-sm mt-1 text-gray-300">
                                         {user.bio}
                                     </p>
                                 )}
-                                <div
-                                    className={`flex items-center space-x-4 mt-2 text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                                    }`}
-                                >
+                                <div className="flex items-center space-x-4 mt-2 text-xs text-gray-400">
                                     <span>{user.followers_count.toLocaleString()} obunachi</span>
                                     <span>{user.following_count.toLocaleString()} obuna</span>
                                 </div>
@@ -604,9 +585,7 @@ const UserProfilesSection: React.FC<{
                             onClick={() => handleFollowClick(user)}
                             disabled={followingUsers.has(user.id)}
                             className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 hover:scale-105 transform ${user.is_following
-                                ? theme === 'dark'
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                 : 'bg-blue-500 text-white hover:bg-blue-600 hover:shadow-lg'
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
@@ -624,8 +603,7 @@ const UserProfilesSection: React.FC<{
             </div>
             <button
                 onClick={fetchSuggestedUsers}
-                className={`w-full mt-4 py-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 transform ${theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className="w-full mt-4 py-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 transform bg-gray-800 text-gray-300 hover:bg-gray-700"
             >
                 Yangilash
             </button>
@@ -715,7 +693,7 @@ const useNotifications = () => {
         }
         try {
             const wsUrl = `wss://backend.testabd.uz/ws/notifications/${userId}/`;
-            console.log('WebSocket ulanish urinilmoqda:', wsUrl); // Debug uchun
+            console.log('WebSocket ulanish urinilmoqda:', wsUrl);
             const newSocket = new WebSocket(wsUrl);
 
             newSocket.onopen = () => {
@@ -726,7 +704,7 @@ const useNotifications = () => {
             newSocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    console.log('WebSocket xabari qabul qilindi:', data); // Debug uchun
+                    console.log('WebSocket xabari qabul qilindi:', data);
                     if (data.type === 'notification') {
                         const notification: Notification = {
                             id: data.notification.id,
@@ -752,13 +730,13 @@ const useNotifications = () => {
             };
 
             newSocket.onclose = (event) => {
-                console.log('WebSocket uzildi, kod:', event.code, 'sabab:', event.reason); // Debug uchun
+                console.log('WebSocket uzildi, kod:', event.code, 'sabab:', event.reason);
                 setIsConnected(false);
-                setTimeout(connectWebSocket, 3000); // 3 soniyadan keyin qayta urinish
+                setTimeout(connectWebSocket, 3000);
             };
 
             newSocket.onerror = (error) => {
-                console.error('WebSocket xatosi:', error); // Debug uchun
+                console.error('WebSocket xatosi:', error);
                 setIsConnected(false);
             };
 
@@ -860,7 +838,7 @@ const useNotifications = () => {
     }
 }
 
-const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
+const HomePage: React.FC<HomePageProps> = () => {
     const [selectedAnswers, setSelectedAnswers] = useState<Map<number, number[]>>(new Map())
     const [answerStates, setAnswerStates] = useState<Map<number, "correct" | "incorrect">>(new Map())
     const [quizzes, setQuizzes] = useState<Quiz[]>([])
@@ -873,7 +851,9 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
     const [stories, setStories] = useState<Story[]>([])
     const [groupedStories, setGroupedStories] = useState<GroupedStory[]>([])
     const [selectedUserStories, setSelectedUserStories] = useState<Story[]>([])
-    const {notifications, unreadCount, markAsRead, activeToast, setActiveToast} = useNotifications()
+
+    const {notifications, unreadCount, markAsRead, markAllAsRead, activeToast, setActiveToast} = useNotifications()
+
     const [showNotifications, setShowNotifications] = useState(false)
     const [showUserProfiles, setShowUserProfiles] = useState(false)
 
@@ -895,7 +875,6 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
         }
     }
 
-
     const fetchStories = async () => {
         try {
             const response = await authAPI.fetchStories()
@@ -915,10 +894,8 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                 })
             }
 
-            // Add live quizzes to stories
             if (data.live_quiz && Array.isArray(data.live_quiz)) {
                 data.live_quiz.forEach((liveQuiz: any) => {
-                    console.log("Live quiz data:", liveQuiz) // Debug uchun
                     if (liveQuiz && liveQuiz.user && liveQuiz.user.id && liveQuiz.is_active) {
                         allStories.push({
                             ...liveQuiz,
@@ -970,6 +947,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
         )
         return groupedArray
     }
+
     const navigate = useNavigate();
 
     const handleLiveQuizClick = (liveQuizId: number) => {
@@ -1157,8 +1135,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
     }
 
     const getOptionStyles = (status: string) => {
-        const baseStyles =
-            "w-full flex items-center justify-between space-x-3 p-4 sm:p-5 rounded-lg border-2 text-left transition-all duration-200 hover:scale-[1.02] transform"
+        const baseStyles = "w-full flex items-center justify-between space-x-3 p-4 sm:p-5 rounded-lg border-2 text-left transition-all duration-200 hover:scale-[1.02] transform"
         switch (status) {
             case "correct-selected":
                 return `${baseStyles} bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300 animate-pulse`
@@ -1167,16 +1144,11 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
             case "correct-unselected":
                 return `${baseStyles} bg-green-50 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-400 dark:text-green-300 opacity-80`
             case "selected":
-                return `${baseStyles} ${theme === "dark" ? "bg-blue-900/30 border-blue-400 text-blue-300" : "bg-blue-50 border-blue-400 text-blue-700"
-                } shadow-lg`
+                return `${baseStyles} bg-blue-50 border-blue-400 text-blue-700 dark:bg-blue-900/30 dark:border-blue-400 dark:text-blue-300 shadow-lg`
             case "neutral":
-                return `${baseStyles} ${theme === "dark" ? "bg-gray-800 border-gray-600 text-gray-400 opacity-60" : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
-                }`
+                return `${baseStyles} bg-gray-50 border-gray-200 text-gray-400 opacity-60 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400`
             default:
-                return `${baseStyles} ${theme === "dark"
-                    ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white hover:shadow-lg"
-                    : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900 hover:shadow-lg"
-                }`
+                return `${baseStyles} bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900 hover:shadow-lg dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 dark:hover:border-blue-400 dark:text-white dark:hover:shadow-lg`
         }
     }
 
@@ -1209,9 +1181,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                                 : answerState === "incorrect"
                                     ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                                    : theme === "dark"
-                                        ? "border-gray-600 bg-gray-700 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                                        : "border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                    : "border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-blue-500"
                             } disabled:opacity-60`}
                         />
                         <button
@@ -1234,14 +1204,14 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 <Send size={20}/>
                             )}
                             <span>
-                {isSubmitting
-                    ? "Yuborilmoqda..."
-                    : answerState
-                        ? answerState === "correct"
-                            ? "To'g'ri"
-                            : "Noto'g'ri"
-                        : "Yuborish"}
-              </span>
+                                {isSubmitting
+                                    ? "Yuborilmoqda..."
+                                    : answerState
+                                        ? answerState === "correct"
+                                            ? "To'g'ri"
+                                            : "Noto'g'ri"
+                                        : "Yuborish"}
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -1256,31 +1226,28 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                             const status = getOptionStatus(quiz.id, option.id, option.is_correct, quiz.question_type)
                             const isSelected = selectedForQuestion.includes(option.id)
                             const checkboxClass = `
-                w-6 h-6 rounded border-2 flex items-center justify-center transition-all duration-200 transform hover:scale-110
-                ${status === "correct-selected" || status === "correct-unselected"
+                                w-6 h-6 rounded border-2 flex items-center justify-center transition-all duration-200 transform hover:scale-110
+                                ${status === "correct-selected" || status === "correct-unselected"
                                 ? "bg-green-500 border-green-500 text-white"
                                 : status === "incorrect-selected"
                                     ? "bg-red-500 border-red-500 text-white"
                                     : isSelected
                                         ? "bg-blue-500 border-blue-500 text-white"
-                                        : theme === "dark"
-                                            ? "bg-gray-700 border-gray-500"
-                                            : "bg-white border-gray-300"
+                                        : "bg-white border-gray-300 dark:bg-gray-700 dark:border-gray-500"
                             }
-              `
+                            `
                             return (
                                 <button
                                     key={option.id}
                                     onClick={() => handleMultipleChoice(quiz.id, option.id)}
                                     disabled={isAnswered}
                                     className={getOptionStyles(status)}
-                                    style={{ backgroundColor: "transparent", backdropFilter: "blur(10px)" }}
                                 >
                                     <div className="flex items-center space-x-3">
                                         <div className={checkboxClass}>
                                             {(isSelected || status === "correct-unselected") && <Check size={16}/>}
                                         </div>
-                                        <span className="flex-1 text-base sm:text-lg text-white">{option.answer_text}</span>
+                                        <span className="flex-1 text-base sm:text-lg">{option.answer_text}</span>
                                     </div>
                                     {status === "correct-selected" &&
                                         <Check size={22} className="text-green-500 animate-bounce"/>}
@@ -1329,12 +1296,8 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                             : status === "incorrect-selected"
                                 ? "bg-red-50 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-400 dark:text-red-300 shadow-lg"
                                 : status === "neutral"
-                                    ? theme === "dark"
-                                        ? "bg-gray-800 border-gray-600 text-gray-500 opacity-60"
-                                        : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
-                                    : theme === "dark"
-                                        ? "bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-blue-400 text-white hover:shadow-lg"
-                                        : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900 hover:shadow-lg"
+                                    ? "bg-gray-50 border-gray-200 text-gray-400 opacity-60 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400"
+                                    : "bg-white border-gray-300 hover:bg-gray-50 hover:border-blue-400 text-gray-900 hover:shadow-lg dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 dark:hover:border-blue-400 dark:text-white dark:hover:shadow-lg"
                         } disabled:cursor-not-allowed`
                         return (
                             <button
@@ -1342,14 +1305,13 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 onClick={() => handleSingleChoice(quiz.id, option.id)}
                                 disabled={isAnswered || isSubmitting}
                                 className={buttonClass}
-                                style={{ backgroundColor: "transparent", backdropFilter: "blur(10px)" }}
                             >
                                 {isTrue ? (
                                     <ThumbsUp size={32} className="text-green-500"/>
                                 ) : (
                                     <ThumbsDown size={32} className="text-red-500"/>
                                 )}
-                                <span className="text-lg sm:text-xl font-semibold text-white">{option.answer_text}</span>
+                                <span className="text-lg sm:text-xl font-semibold">{option.answer_text}</span>
                                 {isSubmitting && isSelected &&
                                     <Loader2 size={20} className="animate-spin text-blue-500"/>}
                                 {status === "correct-selected" &&
@@ -1375,12 +1337,8 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                         : status === "incorrect-selected"
                             ? "bg-red-500 text-white"
                             : status === "neutral"
-                                ? theme === "dark"
-                                    ? "bg-gray-600 text-gray-400"
-                                    : "bg-gray-200 text-gray-400"
-                                : theme === "dark"
-                                    ? "bg-gray-600 text-gray-200"
-                                    : "bg-gray-200 text-gray-600"
+                                ? "bg-gray-200 text-gray-400 dark:bg-gray-600 dark:text-gray-400"
+                                : "bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-200"
                     }`
                     return (
                         <button
@@ -1388,7 +1346,6 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                             onClick={() => handleSingleChoice(quiz.id, option.id)}
                             disabled={isAnswered || isSubmitting}
                             className={getOptionStyles(status)}
-                            style={{background: "transparent", color: "white", backdropFilter: "blur(50px)"}}
                         >
                             <div className="flex items-center space-x-3">
                                 <div className={letterClass}>{option.letter}</div>
@@ -1451,53 +1408,13 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
         }
     }
 
-
     const handleCreateLiveQuiz = () => {
         window.location.href = '/create-live-quiz'
     }
 
-    const getRandomLetter = () => {
-        const letters = ['A', 'B', 'C', 'D']
-        return letters[Math.floor(Math.random() * letters.length)]
-    }
-
-    const [floatingLetters, setFloatingLetters] = useState<
-        Array<{ id: number; letter: string; x: number; y: number; opacity: number }>
-    >([])
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setFloatingLetters((prev) => {
-                const newLetters = [...prev]
-                if (Math.random() > 0.7 && newLetters.length < 5) {
-                    newLetters.push({
-                        id: Date.now(),
-                        letter: getRandomLetter(),
-                        x: Math.random() * 60,
-                        y: Math.random() * 60,
-                        opacity: 1,
-                    })
-                }
-                return newLetters.map((letter) => ({
-                    ...letter,
-                    y: letter.y - 0.5,
-                    opacity: letter.opacity - 0.02,
-                })).filter((letter) => letter.opacity > 0 && letter.y > -10)
-            })
-        }, 500)
-        return () => clearInterval(interval)
-    }, [])
-
-
     return (
-        <div
-            className={`min-h-screen transition-all duration-300 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
-            }`}
-        >
-            <header
-                className={`fixed top-0 left-0 right-0 backdrop-blur-lg border-b z-50 transition-all duration-300 ${theme === "dark" ? "bg-gray-800/80 border-gray-700" : "bg-white/80 border-gray-200"
-                }`}
-            >
+        <div className="min-h-screen bg-gray-900 text-white">
+            <header className="fixed top-0 left-0 right-0 backdrop-blur-lg border-b z-50 bg-gray-800/80 border-gray-700">
                 <div className="max-w-2xl mx-auto px-4 sm:px-6">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
@@ -1505,19 +1422,17 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                             <h1 className="text-xl font-bold gradient-text">TestAbd</h1>
                         </div>
                         <div className="flex items-center space-x-2">
-                            <Link to={"/leader-board"} title={"Leaderboard"} className={`px-2 py-1 font-semibold rounded-sm transition-all duration-200 hover:scale-110 transform text-xs border-2 border-blue-400 ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
-                            }`}>Meroschi</Link>
+                            <Link to={"/leader-board"} title={"Leaderboard"} className="px-2 py-1 font-semibold rounded-sm transition-all duration-200 hover:scale-110 transform text-xs border-2 border-blue-400 hover:bg-gray-700 text-gray-300">Meroschi</Link>
                             <button
                                 onClick={() => setShowNotifications(true)}
-                                className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-110 transform ${theme === "dark" ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600"
-                                }`}
+                                className="relative p-2 rounded-lg transition-all duration-200 hover:scale-110 transform hover:bg-gray-700 text-gray-300"
                             >
                                 <Bell size={20}/>
                                 {unreadCount > 0 && (
                                     <span
                                         className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-pulse">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                    </span>
                                 )}
                             </button>
                         </div>
@@ -1528,7 +1443,6 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                 <NotificationToast
                     notification={activeToast}
                     onClose={() => setActiveToast(null)}
-                    theme={theme}
                 />
             )}
             <section className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-4">
@@ -1539,8 +1453,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                             className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
                         >
                             <div
-                                className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center transition-all duration-200 hover:border-blue-500 ${theme === "dark" ? "border-gray-600 bg-gray-800" : "border-gray-300 bg-gray-100"
-                                }`}
+                                className="w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center transition-all duration-200 hover:border-blue-500 border-gray-600 bg-gray-800"
                             >
                                 <img
                                     src="/live-quiz.png"
@@ -1557,9 +1470,8 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 <button
                                     onClick={() => handleLiveQuizClick(groupedStory.latestStory.id)}
                                     className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
-                                    style={{animationDelay: `${index * 100}ms`}}
                                 >
-                                    <div className="relative animate-slideInDown">
+                                    <div className="relative">
                                         <AnimatedLiveProfile
                                             profileImage={`https://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
                                             username={groupedStory.user.username}
@@ -1567,7 +1479,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                         />
                                         {groupedStory.stories.length > 1 && (
                                             <div
-                                                className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-bounce">
+                                                className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                                                 {groupedStory.stories.length}
                                             </div>
                                         )}
@@ -1579,9 +1491,8 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 <button
                                     onClick={() => handleStoryClick(groupedStory)}
                                     className="flex flex-col items-center space-y-2 hover:scale-105 transform transition-all duration-200"
-                                    style={{animationDelay: `${index * 100}ms`}}
                                 >
-                                    <div className="relative animate-slideInDown">
+                                    <div className="relative">
                                         <div
                                             className={`w-16 h-16 rounded-full p-0.5 ${groupedStory.latestStory.type === "test"
                                                 ? "bg-gradient-to-tr from-blue-400 to-purple-600"
@@ -1589,7 +1500,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                             }`}
                                         >
                                             <div
-                                                className={`w-full h-full rounded-full overflow-hidden border-2 ${theme === "dark" ? "border-gray-800" : "border-white"}`}
+                                                className="w-full h-full rounded-full overflow-hidden border-2 border-gray-800"
                                             >
                                                 <img
                                                     src={`https://backend.testabd.uz${groupedStory.user.profile_image || "/media/defaultuseravatar.png"}`}
@@ -1600,7 +1511,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                         </div>
                                         {groupedStory.stories.length > 1 && (
                                             <div
-                                                className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-bounce">
+                                                className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                                                 {groupedStory.stories.length}
                                             </div>
                                         )}
@@ -1626,7 +1537,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                     stories={selectedUserStories}
                     initialIndex={selectedStoryIndex}
                     onClose={() => setShowStoriesViewer(false)}
-                    theme={theme}
+                    theme="dark"
                     onQuestionAnswer={handleStoryQuestionAnswer}
                 />
             )}
@@ -1634,7 +1545,6 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                 {showUserProfiles && (
                     <section className="mb-8">
                         <UserProfilesSection
-                            theme={theme}
                             onFollowUser={handleFollowUser}
                         />
                     </section>
@@ -1643,24 +1553,22 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                     {quizzes.map((quiz, index) => (
                         <article
                             key={`quiz-${quiz.id}-${index}`}
-                            className={`rounded-2xl bg-gradient-to-b from-black/30 via-black/50 to-black/70 shadow-lg border transition-all duration-200 hover:scale-[1.02] transform animate-slideInUp ${theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-                            }`}
+                            className="rounded-2xl bg-gradient-to-b from-black/30 via-black/50 to-black/70 shadow-lg border transition-all duration-200 hover:scale-[1.02] transform bg-gray-800 border-gray-700"
                             style={{
                                 backgroundImage: `url(${quiz.round_image || "/placeholder.svg?height=800&width=400"})`,
                                 backgroundSize: "cover",
                                 backgroundPosition: "center",
                                 backgroundRepeat: "no-repeat",
-                                animationDelay: `${index * 100}ms`,
                             }}
                         >
-                            <div className={"flex flex-col w-full h-full p-4 sm:p-6 rounded-2xl"} style={{backgroundColor: "rgba(0,0,0,0.65)"}}>
+                            <div className="flex flex-col w-full h-full p-4 sm:p-6 rounded-2xl" style={{backgroundColor: "rgba(0,0,0,0.65)"}}>
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-6">
                                     <div className="flex items-center space-x-3">
                                         <a href={`/profile/${quiz.user?.username}`}>
                                             <div
                                                 className="flex items-center space-x-3 hover:scale-105 transform transition-all duration-200">
                                                 <div
-                                                    className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ring-1 ring-white`}
+                                                    className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center ring-1 ring-white"
                                                 >
                                                     {quiz.user.profile_image ? (
                                                         <img
@@ -1677,15 +1585,15 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                                 <div>
                                                     <div className="flex items-center space-x-1">
                           <span
-                              className={`font-semibold text-sm text-white`}
+                              className="font-semibold text-sm text-white"
                           >
                             {quiz.user.username}
                           </span>
                                                         {quiz.user.is_badged && <CheckCircle size={16}
-                                                                                             className="text-blue-500 animate-pulse"/>}
+                                                                                             className="text-blue-500"/>}
                                                     </div>
                                                     <div
-                                                        className={`text-xs text-gray-200`}
+                                                        className="text-xs text-gray-200"
                                                     >
                                                         {new Date(quiz.created_at).toLocaleDateString("uz-UZ")}
                                                     </div>
@@ -1696,27 +1604,26 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                 </div>
                                 <div className="mb-6">
                                     <h2
-                                        className={`text-lg sm:text-xl font-semibold mb-6 leading-relaxed text-white`}
+                                        className="text-lg sm:text-xl font-semibold mb-6 leading-relaxed text-white"
                                     >
                                         {quiz.question_text}
                                     </h2>
                                     {renderQuestionContent(quiz)}
                                 </div>
                                 <div
-                                    className={`flex flex-row justify-between sm:flex-row sm:justify-between sm:items-center gap-4 pt-4 border-t mb-2 ${theme === "dark" ? "border-gray-700" : "border-gray-200"
-                                    }`}
+                                    className="flex flex-row justify-between sm:flex-row sm:justify-between sm:items-center gap-4 pt-4 border-t mb-2 border-gray-700"
                                 >
                                     <div className="flex space-x-6 w-auto">
                                         <div className="flex items-center space-x-2 text-green-600">
                                             <div
-                                                className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
+                                                className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center">
                                                 <span className="text-white text-sm font-bold">✓</span>
                                             </div>
                                             <span className="font-semibold text-base">{quiz.correct_count}</span>
                                         </div>
                                         <div className="flex items-center space-x-2 text-red-600">
                                             <div
-                                                className="w-7 h-7 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                                                className="w-7 h-7 bg-red-500 rounded-full flex items-center justify-center">
                                                 <span className="text-white text-sm font-bold">✗</span>
                                             </div>
                                             <span className="font-semibold text-base">{quiz.wrong_count}</span>
@@ -1724,32 +1631,30 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                                     </div>
                                     <div className="flex items-center justify-end space-x-3 w-auto">
                                         <button
-                                            className={`p-3 rounded-full transition-all bg-transparent backdrop-blur border border-white duration-200 hover:scale-110 transform `}
+                                            className="p-3 rounded-full transition-all bg-transparent backdrop-blur border border-white duration-200 hover:scale-110 transform"
                                             onClick={() => shareQuestion(quiz.id)}
                                         >
-                                            <Share size={20} className={"text-white"}/>
+                                            <Share size={20} className="text-white"/>
                                         </button>
                                         <button
                                             onClick={() => saveQuiz(quiz.id)}
-                                            className={`p-3 rounded-full transition-all border border-white backdrop-blur duration-200 hover:scale-110 transform`}
+                                            className="p-3 rounded-full transition-all border border-white backdrop-blur duration-200 hover:scale-110 transform"
                                         >
                                             <Bookmark
                                                 size={20}
                                                 className={
                                                     quiz.is_bookmarked
-                                                        ? "text-yellow-500 fill-current animate-bounce"
-                                                        : theme === "dark"
-                                                            ? "text-white"
-                                                            : "text-white"
+                                                        ? "text-yellow-500 fill-current"
+                                                        : "text-white"
                                                 }
                                             />
                                         </button>
                                     </div>
                                 </div>
-                                <div className={"flex flex-col items-start justify-center gap-1"}>
-                                    <span className={"text-white"}>{quiz.category?.name}</span>
+                                <div className="flex flex-col items-start justify-center gap-1">
+                                    <span className="text-white">{quiz.category?.name}</span>
                                     <span
-                                        className={`text-sm ${theme === "dark" ? "text-white" : "text-white"}`}>{quiz.test_title}</span>
+                                        className="text-sm text-white">{quiz.test_title}</span>
                                     {quiz.test_description && (
                                         <ExpandableText text={`${quiz.test_description}`}/>
                                     )}
@@ -1763,8 +1668,7 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
                         <button
                             onClick={() => fetchQuizzes(nextPageUrl)}
                             disabled={loading}
-                            className={`px-8 py-4 text-base sm:text-lg font-semibold rounded-full transition-all duration-200 disabled:opacity-50 hover:scale-105 transform hover:shadow-lg ${theme === "dark" ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-blue-500 hover:bg-blue-600 text-white"
-                            }`}
+                            className="px-8 py-4 text-base sm:text-lg font-semibold rounded-full transition-all duration-200 disabled:opacity-50 hover:scale-105 transform hover:shadow-lg bg-blue-600 hover:bg-blue-700 text-white"
                         >
                             {loading ? (
                                 <div className="flex items-center space-x-2">
@@ -1781,11 +1685,11 @@ const HomePage: React.FC<HomePageProps> = ({theme, toggleTheme}) => {
             <NotificationModal
                 isOpen={showNotifications}
                 onClose={() => setShowNotifications(false)}
-                theme={theme}
                 notifications={notifications}
                 unreadCount={unreadCount}
                 onNotificationClick={handleNotificationClick}
                 onMarkAsRead={markAsRead}
+                onMarkAllAsRead={markAllAsRead}
             />
         </div>
     )

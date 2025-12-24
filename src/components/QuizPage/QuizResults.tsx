@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trophy, Medal, Award, Users } from 'lucide-react';
-import { QuizResult, LeaderboardEntry } from '../types/quiz';
+import { QuizResult, LeaderboardEntry } from '../../types/quiz.ts';
 
 interface QuizResultsProps {
   result: QuizResult;

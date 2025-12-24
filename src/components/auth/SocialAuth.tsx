@@ -1,6 +1,6 @@
 import React from 'react';
 import { Chrome } from 'lucide-react';
-import { requestGoogleAccessToken } from '../utils/google';
+import { requestGoogleAccessToken } from '../../utils/google.ts';
 
 interface SocialAuthProps {
     onGoogleLogin: (data: { access_token: string }) => void;

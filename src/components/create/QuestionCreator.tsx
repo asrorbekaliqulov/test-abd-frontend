@@ -2,21 +2,13 @@
 
 import type React from "react"
 import {useState, useEffect, useRef} from "react";
-import {Plus, Save, Trash2, Globe, Lock, EyeOff, ChevronDown} from "lucide-react"
+import {Plus, Save, Trash2, Globe, Lock, EyeOff, ChevronDown, ChevronLeft} from "lucide-react"
 import {quizAPI} from "../../utils/api"
-import {useSpellCheck} from "../useSpellCheck.tsx";
 import {useNavigate} from "react-router-dom";
 import {motion, AnimatePresence} from "framer-motion";
-import CategoryDropdown from "../CategoryDropdown.tsx";
+import CategoryDropdown from "../components/CategoryDropdown.tsx";
 import {getLoremImage} from "../../utils/getLoremImage.ts";
-import FadeInPage from "../FadeInPage.tsx";
-
-declare global {
-    interface Window {
-        spellTimer: Record<number, any>;
-    }
-}
-if (!window.spellTimer) window.spellTimer = {};
+import FadeInPage from "../components/FadeInPage.tsx";
 
 interface QuestionCreatorProps {
     theme: string,
@@ -60,9 +52,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [mediaFile, setMediaFile] = useState<File | null>(null)
-
-    const questionText = useSpellCheck("");
-    const descriptionText = useSpellCheck("");
 
     // Category
     const [categories, setCategories] = useState<Category[]>([]);
@@ -235,8 +224,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
             {letter: "D", answer_text: "", is_correct: false},
         ]);
 
-        questionText.setValue("");
-        descriptionText.setValue("");
         setMediaFile(null);
         setError("");
     };
@@ -347,15 +334,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
     ) => {
         const {name, value} = e.target;
-
-        // Update spell check values
-        if (name === "question_text") {
-            questionText.setValue(value);
-        }
-
-        if (name === "description") {
-            descriptionText.setValue(value);
-        }
 
         // Update formData
         setFormData((prev) => ({
@@ -521,18 +499,20 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
     }, [])
 
     return (
-        <div className="bg-theme-primary bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-theme-primary shadow-theme-xl max-w-3xl w-full max-h-auto"
+        <div className="min-h-screen bg-theme-primary bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-theme-primary shadow-theme-xl max-w-2xl w-full h-full min-h-screen"
                  style={{
                      backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
                      backgroundRepeat: 'no-repeat',
                      backgroundSize: 'cover',
                      backgroundPosition: 'center center',
+                     backgroundAttachment: 'fixed'
                  }}>
-                <div className={"w-full h-full py-5"} style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}>
+                <div className={"w-full h-full min-h-screen py-5"} style={{backgroundColor: 'rgba(0, 0, 0, 0.6)'}}>
                     {/* Form */}
-                    <div className="p-6 max-h-auto">
-                        <div className="mb-6">
+                    <div className="p-6 h-full">
+                        <div className="mb-6 flex flex-row items-center justify-between">
+                            <button className={"flex text-white"} onClick={() => {navigate(`/profile`)}}><ChevronLeft size={30}/></button>
                             <h2 className="text-xl font-semibold text-white mb-2">Yangi Savol Yaratish</h2>
                         </div>
 
@@ -700,7 +680,7 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                 <FadeInPage delay={400}>
                                         <textarea
                                             name="question_text"
-                                            value={questionText.value}
+                                            value={formData.question_text}
                                             onChange={handleChange}
                                             required
                                             rows={4}
@@ -709,10 +689,6 @@ const QuestionCreator: React.FC<QuestionCreatorProps> = ({theme, onClose, onNavi
                                             placeholder="Savolingizni bu yerga yozing..."
                                         />
                                 </FadeInPage>
-
-                                {questionText.isLoading &&
-                                    <span
-                                        className={`flex flex-row items-center justify-start py-2 gap-1 text-white absolute right-1.5 bottom-1.5`}>Tekshirilmoqda...</span>}
                             </div>
 
                             {/* Dynamic Answer Inputs */}

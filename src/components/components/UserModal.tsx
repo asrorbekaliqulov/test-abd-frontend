@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Check, Clock } from 'lucide-react';
-import { QuizParticipant } from '../types/quiz';
+import { QuizParticipant } from '../../types/quiz.ts';
 
 // interface QuizParticipant {
 //   id: number;

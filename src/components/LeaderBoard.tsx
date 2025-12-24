@@ -1,9 +1,9 @@
 "use client";
 
-import React, {useEffect, useMemo, useState, useRef, useCallback} from "react";
-import api, { quizViewsAPI } from "../utils/api"; // quizViewsAPI ni ham import qilamiz
-import {ArrowLeft, Search, RefreshCw, TrendingUp} from "lucide-react";
-import {useNavigate} from "react-router-dom";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import api, { quizViewsAPI } from "../utils/api";
+import { ArrowLeft, Search, RefreshCw, TrendingUp } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import rank1Img from "./assets/images/rank1.png";
 import rank2Img from "./assets/images/rank2.png";
 import rank3Img from "./assets/images/rank3.png";
@@ -16,9 +16,9 @@ interface LeaderboardUser {
     coins: number;
     is_following?: boolean;
     is_self?: boolean;
-    views?: number; // Ko'rishlar soni
-    online?: boolean; // Online holati
-    last_seen?: string; // Oxirgi faollik
+    views?: number;
+    online?: boolean;
+    last_seen?: string;
 }
 
 const useDebounce = (value: string, delay = 250) => {
@@ -49,26 +49,6 @@ const Leaderboard: React.FC = () => {
     const debouncedSearch = useDebounce(search);
     const navigate = useNavigate();
     const refreshIntervalRef = useRef<NodeJS.Timeout>();
-    const onlineUsersRef = useRef<Set<number>>(new Set());
-
-    // Real-time yangilash uchun polling
-    const startPolling = useCallback((interval = 30000) => { // 30 soniyada
-        if (refreshIntervalRef.current) {
-            clearInterval(refreshIntervalRef.current);
-        }
-
-        refreshIntervalRef.current = setInterval(async () => {
-            await refreshLeaderboard();
-        }, interval);
-    }, []);
-
-    // To'xtatish
-    const stopPolling = useCallback(() => {
-        if (refreshIntervalRef.current) {
-            clearInterval(refreshIntervalRef.current);
-            refreshIntervalRef.current = undefined;
-        }
-    }, []);
 
     // Yangilash funksiyasi
     const refreshLeaderboard = async (silent = false) => {
@@ -81,66 +61,16 @@ const Leaderboard: React.FC = () => {
             const res = await api.get(`/accounts/leaderboard/?page=1`);
             const newUsers: LeaderboardUser[] = res.data.results || [];
 
-            // Online userlarni aniqlash (simulatsiya)
-            const onlineUsers = new Set<number>();
-            newUsers.forEach(user => {
-                // Simulatsiya: 50% ehtimollik bilan online
-                const isOnline = Math.random() > 0.5;
-                if (isOnline) {
-                    onlineUsers.add(user.id);
-                    onlineUsersRef.current.add(user.id);
-                }
-
-                // Views sonini olish (agar mavjud bo'lsa)
-                if (!user.views && quizViewsAPI) {
-                    // Har bir userning umumiy views sonini olish
-                    // Bu yerda sizning backend API ga bog'liq
-                }
-            });
-
-            // Faol foydalanuvchilar soni
-            const activeUsers = onlineUsers.size;
-
             // Stats hisoblash
             const totalCoins = newUsers.reduce((sum, user) => sum + user.coins, 0);
             const avgCoins = newUsers.length > 0 ? Math.round(totalCoins / newUsers.length) : 0;
 
-            // Yangilangan userlarni birlashtirish
-            const updatedUsers = users.map(user => {
-                const updatedUser = newUsers.find(u => u.id === user.id);
-                if (updatedUser) {
-                    return {
-                        ...user,
-                        coins: updatedUser.coins,
-                        online: onlineUsers.has(user.id),
-                        views: updatedUser.views || user.views,
-                    };
-                }
-                return {
-                    ...user,
-                    online: onlineUsers.has(user.id),
-                };
-            });
-
-            // Yangi userlarni qo'shish
-            newUsers.forEach(newUser => {
-                if (!updatedUsers.find(u => u.id === newUser.id)) {
-                    updatedUsers.push({
-                        ...newUser,
-                        online: onlineUsers.has(newUser.id),
-                    });
-                }
-            });
-
-            // Sort by coins
-            updatedUsers.sort((a, b) => b.coins - a.coins);
-
-            setUsers(updatedUsers);
+            setUsers(newUsers);
             setStats({
                 totalUsers: newUsers.length,
                 totalCoins,
                 avgCoins,
-                activeUsers,
+                activeUsers: Math.floor(newUsers.length * 0.3),
             });
             setLastUpdated(new Date());
 
@@ -188,7 +118,7 @@ const Leaderboard: React.FC = () => {
                 totalUsers: combined.length,
                 totalCoins,
                 avgCoins,
-                activeUsers: Math.floor(combined.length * 0.3), // 30% aktiv deb taxmin qilamiz
+                activeUsers: Math.floor(combined.length * 0.3),
             });
 
         } catch (err) {
@@ -200,10 +130,13 @@ const Leaderboard: React.FC = () => {
 
     useEffect(() => {
         loadUsers();
-        startPolling();
+        const interval = setInterval(() => refreshLeaderboard(true), 30000);
+        refreshIntervalRef.current = interval;
 
         return () => {
-            stopPolling();
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+            }
         };
     }, []);
 
@@ -213,7 +146,8 @@ const Leaderboard: React.FC = () => {
     };
 
     const filtered = useMemo(() => {
-        return users.filter(u =>
+        const uniqueUsers = Array.from(new Map(users.map(user => [user.id, user])).values());
+        return uniqueUsers.filter(u =>
             u.username.toLowerCase().includes(debouncedSearch.toLowerCase())
         );
     }, [debouncedSearch, users]);
@@ -224,7 +158,7 @@ const Leaderboard: React.FC = () => {
         // Optimistic update
         const originalState = user.is_following;
         setUsers(prev =>
-            prev.map(u => u.id === user.id ? {...u, is_following: !u.is_following} : u)
+            prev.map(u => u.id === user.id ? { ...u, is_following: !u.is_following } : u)
         );
 
         try {
@@ -233,7 +167,7 @@ const Leaderboard: React.FC = () => {
             console.error(err);
             // revert on error
             setUsers(prev =>
-                prev.map(u => u.id === user.id ? {...u, is_following: originalState} : u)
+                prev.map(u => u.id === user.id ? { ...u, is_following: originalState } : u)
             );
         }
     };
@@ -279,19 +213,19 @@ const Leaderboard: React.FC = () => {
             <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6 w-full justify-between py-3">
                 <button
                     onClick={() => navigate("/")}
-                    className="border border-gray-600 p-1 sm:p-2 rounded-lg"
+                    className="border border-gray-600 p-1 sm:p-2 rounded-lg hover:bg-gray-800 transition"
                 >
-                    <ArrowLeft className="text-white"/>
+                    <ArrowLeft className="text-white" />
                 </button>
 
                 {/* Search */}
                 <div className="w-[85%] border bg-[#1f2937] border-gray-700 flex flex-row items-center justify-center px-3 gap-1 rounded-lg">
-                    <Search className="text-gray-400 sm:top-2.5" size={18}/>
+                    <Search className="text-gray-400 sm:top-2.5" size={18} />
                     <input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search users..."
-                        className="w-full p-2 sm:p-2.5 bg-transparent outline-none text-white"
+                        className="w-full p-2 sm:p-2.5 bg-transparent outline-none text-white placeholder-gray-500"
                     />
                 </div>
 
@@ -299,10 +233,10 @@ const Leaderboard: React.FC = () => {
                 <button
                     onClick={handleManualRefresh}
                     disabled={refreshing}
-                    className="border border-gray-600 p-1 sm:p-2 rounded-lg hover:bg-gray-800 transition"
+                    className="border border-gray-600 p-1 sm:p-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
                     title="Yangilash"
                 >
-                    <RefreshCw className={`text-white ${refreshing ? 'animate-spin' : ''}`} size={18}/>
+                    <RefreshCw className={`text-white ${refreshing ? 'animate-spin' : ''}`} size={18} />
                 </button>
             </div>
 
@@ -335,80 +269,74 @@ const Leaderboard: React.FC = () => {
             </div>
 
             {/* Top 3 */}
-            <div className="w-full flex flex-row items-end justify-center gap-4 sm:gap-6 md:gap-10 py-6">
-                {top3Users.map((user, idx) => {
-                    let orderClass = "";
-                    if (idx === 0) orderClass = "order-2";
-                    else if (idx === 1) orderClass = "order-1";
-                    else if (idx === 2) orderClass = "order-3";
+            {top3Users.length > 0 && (
+                <div className="w-full flex flex-row items-end justify-center gap-4 sm:gap-6 md:gap-10 py-6">
+                    {top3Users.map((user, idx) => {
+                        let orderClass = "";
+                        if (idx === 0) orderClass = "order-2";
+                        else if (idx === 1) orderClass = "order-1";
+                        else if (idx === 2) orderClass = "order-3";
 
-                    let rankImg = "";
-                    if (idx === 0) rankImg = rank1Img;
-                    else if (idx === 1) rankImg = rank2Img;
-                    else if (idx === 2) rankImg = rank3Img;
+                        let rankImg = "";
+                        if (idx === 0) rankImg = rank1Img;
+                        else if (idx === 1) rankImg = rank2Img;
+                        else if (idx === 2) rankImg = rank3Img;
 
-                    const sizeClass = idx === 0
-                        ? "w-24 h-24 sm:w-40 sm:h-40 md:w-32 md:h-32"
-                        : "w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28";
-                    const textSizeClass = idx === 0
-                        ? "text-lg sm:text-xl md:text-2xl"
-                        : "text-md sm:text-lg md:text-xl";
+                        const sizeClass = idx === 0
+                            ? "w-24 h-24 sm:w-40 sm:h-40 md:w-32 md:h-32"
+                            : "w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28";
+                        const textSizeClass = idx === 0
+                            ? "text-lg sm:text-xl md:text-2xl"
+                            : "text-md sm:text-lg md:text-xl";
 
-                    return (
-                        <div
-                            key={user.id}
-                            className={`flex flex-col items-center cursor-pointer py-6 relative ${idx === 0 ? "scale-110 md:scale-125" : ""} ${orderClass}`}
-                            title={user.username}
-                        >
-                            {/* Online Indicator */}
-                            {user.online && (
-                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900 z-10">
-                                    <div className="w-full h-full bg-green-400 rounded-full animate-pulse"></div>
+                        return (
+                            <div
+                                key={user.id}
+                                className={`flex flex-col items-center cursor-pointer py-6 relative ${idx === 0 ? "scale-110 md:scale-125" : ""} ${orderClass}`}
+                                title={user.username}
+                            >
+                                {/* Avatar / Rank Image */}
+                                <div className={`
+                                    rounded-full shadow-xl
+                                    flex items-center justify-center overflow-hidden
+                                    ${sizeClass}
+                                `}>
+                                    <img
+                                        src={rankImg}
+                                        alt={`Rank ${idx + 1}`}
+                                        loading="lazy"
+                                        decoding="async"
+                                        draggable={false}
+                                        className="w-full h-full object-cover"
+                                    />
                                 </div>
-                            )}
 
-                            {/* Avatar / Rank Image */}
-                            <div className={`
-                                rounded-full shadow-xl
-                                flex items-center justify-center overflow-hidden
-                                ${sizeClass}
-                                ${user.online ? 'ring-2 ring-green-500' : ''}
-                            `}>
-                                <img
-                                    src={rankImg}
-                                    alt={`Rank ${idx + 1}`}
-                                    loading="lazy"
-                                    decoding="async"
-                                    draggable={false}
-                                    className="w-full h-full object-cover"
-                                />
-                            </div>
+                                {/* Username */}
+                                <div className={`
+                                    w-20 sm:w-24 md:w-32 text-center mt-1 sm:mt-2 md:mt-3
+                                    py-1 rounded-xl font-semibold shadow-md
+                                    ${textSizeClass} text-white
+                                `}
+                                     style={{ fontFamily: "Z003, sans-serif" }}>
+                                    {user.username}
+                                </div>
 
-                            {/* Username */}
-                            <div className={`
-                                w-20 sm:w-24 md:w-32 text-center mt-1 sm:mt-2 md:mt-3
-                                py-1 rounded-xl font-semibold shadow-md
-                                ${textSizeClass} text-white
-                            `}
-                                 style={{ fontFamily: "Z003, sans-serif" }}>
-                                {user.username}
-                            </div>
-
-                            {/* Coins & Stats */}
-                            <div className="flex flex-col items-center mt-1">
-                                <span className="text-yellow-400 font-bold text-xs">
-                                    🪙{user.coins}
-                                </span>
-                                {user.views !== undefined && (
-                                    <span className="text-blue-400 text-xs">
-                                        👁 {user.views}
+                                {/* Coins & Stats */}
+                                <div className="flex flex-col items-center mt-1">
+                                    <span className="text-yellow-400 font-bold text-xs">
+                                        🪙{user.coins}
                                     </span>
-                                )}
+                                    {user.views !== undefined && (
+                                        <span className="text-blue-400 text-xs">
+                                            👁 {user.views}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Other Users */}
             {filtered.slice(3).map((u, index) => {
@@ -433,11 +361,6 @@ const Leaderboard: React.FC = () => {
                         {/* Left: Rank + Avatar + Username */}
                         <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto mb-2 sm:mb-0">
                             <div className="flex items-center gap-2">
-                                {/* Online Indicator */}
-                                {u.online && (
-                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                )}
-
                                 {/* Rank Number */}
                                 <span className={`text-base sm:text-2xl font-bold w-7 sm:w-8 flex justify-center ${getRankColor(rank)}`}>
                                     {rank}
@@ -450,14 +373,9 @@ const Leaderboard: React.FC = () => {
                                         onError={(e) => {
                                             (e.target as HTMLImageElement).src = defaultUserAvatar;
                                         }}
-                                        className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border-2 object-cover ${
-                                            u.online ? 'border-green-500' : 'border-gray-600'
-                                        }`}
+                                        className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border-2 object-cover border-gray-600`}
                                         alt={u.username}
                                     />
-                                    {u.online && (
-                                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>
-                                    )}
                                 </div>
 
                                 {/* Username & Info */}
@@ -474,9 +392,6 @@ const Leaderboard: React.FC = () => {
                                         <span className="text-yellow-400 font-semibold">🪙 {u.coins}</span>
                                         {u.views !== undefined && (
                                             <span className="text-blue-400">👁 {u.views}</span>
-                                        )}
-                                        {u.last_seen && !u.online && (
-                                            <span className="text-gray-500">⌛ {formatLastSeen(u.last_seen)}</span>
                                         )}
                                     </div>
                                 </div>

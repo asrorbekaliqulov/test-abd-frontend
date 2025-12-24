@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom"
 import React, { useEffect, useState } from "react"
 import { UserPlus, Share2, Award, ArrowLeft } from "lucide-react"
-import { FollowersModal } from "../FollowerModal.tsx"
+import { FollowersModal } from "../components/FollowerModal.tsx"
 import { accountsAPI } from "../../utils/api.ts"
 import testIcon from "../assets/images/test.png"
 import correctIcon from "../assets/images/correct.png"

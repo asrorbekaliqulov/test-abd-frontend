@@ -22,8 +22,8 @@ import {
     AlertCircle,
     RefreshCw,
 } from "lucide-react"
-import VerticalWheelTimePicker from "./VerticalWheelTimePicker"
-import {quizAPI, liveQuizAPI, handleApiError, initializeCSRF} from "../utils/api"
+import VerticalWheelTimePicker from "../components/VerticalWheelTimePicker.tsx"
+import {quizAPI, liveQuizAPI, handleApiError, initializeCSRF} from "../../utils/api.ts"
 
 interface CreateLiveQuizProps {
     theme: string
