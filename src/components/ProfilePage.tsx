@@ -1640,64 +1640,151 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                                     </CustomButton>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {myTests.map((test) => (
-                                        <div key={test.id} className="bg-gray-700/50 rounded-xl p-4 border border-gray-600 hover:border-blue-500 transition-colors">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div className="flex-1">
-                                                    <h4 className="text-lg font-semibold text-white mb-1 line-clamp-1">
-                                                        {test.title}
-                                                    </h4>
-                                                    <p className="text-gray-300 text-sm line-clamp-2 mb-3">
-                                                        {test.description}
-                                                    </p>
+                                        <div key={test.id} className="group relative h-full rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-900/50 to-gray-900/30 p-5 cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 backdrop-blur-sm overflow-hidden flex flex-col">
+                                            {/* Gradient background effect */}
+                                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                                            {/* Top section */}
+                                            <div className="relative flex flex-col gap-3 mb-4 flex-1 min-h-0">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border ${
+                                                                test.visibility === "public"
+                                                                    ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                                                    : test.visibility === "unlisted"
+                                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                                                        : "bg-gray-500/20 text-gray-300 border-gray-500/30"
+                                                            } text-xs font-semibold whitespace-nowrap`}>
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                                                {test.visibility === "public" ? "Ommaviy" :
+                                                                    test.visibility === "unlisted" ? "Maxfiy" : "Qoralama"}
+                                                            </div>
+
+                                                            {test.status === "published" && (
+                                                                <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-300 text-xs font-semibold border border-green-500/30 whitespace-nowrap">
+                                                                    <Eye size={12} />
+                                                                    Faol
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-blue-200 transition-colors line-clamp-2 leading-tight">
+                                                            {test.title}
+                                                        </h3>
+
+                                                        <p className="text-gray-400 text-sm line-clamp-2 leading-relaxed break-words min-h-[40px]">
+                                                            {test.description}
+                                                        </p>
+                                                    </div>
+
+                                                    <Edit className="w-5 h-5 text-gray-600 group-hover:text-blue-400 group-hover:rotate-12 transition-all flex-shrink-0 mt-2" />
                                                 </div>
-                                                <button
-                                                    onClick={() => handleStartTestEdit(test)}
-                                                    className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
-                                                >
-                                                    <Edit size={16}/>
-                                                </button>
+
+                                                {/* Category badge */}
+                                                <div className="flex items-center gap-3 mt-auto">
+                                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/20 flex-shrink-0">
+                                                        <FileText className="w-4 h-4 text-blue-400" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-300 truncate">
+                                    {test.category?.title || (
+                                        <span className="text-gray-400/80 italic">Kategoriya yo'q</span>
+                                    )}
+                                </span>
+                                                </div>
                                             </div>
 
-                                            <div className="flex flex-wrap gap-2 mb-4">
-                                                <CustomBadge variant="secondary">
-                                                    {test.category?.title || "Kategoriya yo'q"}
-                                                </CustomBadge>
-                                                <CustomBadge
-                                                    variant={test.visibility === "public" ? "default" : test.visibility === "unlisted" ? "warning" : "danger"}
-                                                >
-                                                    {test.visibility === "public" ? "Ommaviy" : test.visibility === "unlisted" ? "Maxfiy" : "Qoralama"}
-                                                </CustomBadge>
+                                            {/* Stats section */}
+                                            <div className="relative grid grid-cols-3 gap-3 pt-4 border-t border-gray-800/50 mt-4">
+                                                <div className="flex flex-col items-center p-2 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <HelpCircle className="w-4 h-4 text-blue-400" />
+                                                        <span className="text-lg font-bold text-white">{test.total_questions || 0}</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-400 whitespace-nowrap">Savol</span>
+                                                </div>
+
+                                                <div className="flex flex-col items-center p-2 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <Users className="w-4 h-4 text-green-400" />
+                                                        <span className="text-lg font-bold text-white">{test.completions || 0}</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-400 whitespace-nowrap">Yechgan</span>
+                                                </div>
+
+                                                <div className="flex flex-col items-center p-2 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <Star className="w-4 h-4 text-yellow-400" />
+                                                        <span className="text-lg font-bold text-white">{test.rating || 0}</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-400 whitespace-nowrap">Reyting</span>
+                                                </div>
                                             </div>
 
-                                            <div className="flex justify-between text-sm text-gray-400 mb-4">
-                                                <span className="flex items-center gap-1">
-                                                    <HelpCircle size={12}/>
-                                                    {test.total_questions} savol
-                                                </span>
-                                                {test.rating > 0 && (
-                                                    <span className="flex items-center gap-1">
-                                                        <Star size={12} className="text-yellow-500"/>
-                                                        {test.rating}
-                                                    </span>
-                                                )}
+                                            {/* Progress bars */}
+                                            <div className="relative mt-4 space-y-3">
+                                                <div>
+                                                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                                        <span className="truncate">To'liqlik</span>
+                                                        <span className="font-medium text-white whitespace-nowrap">
+                                        {test.total_questions > 0 ? '100%' : '0%'}
+                                    </span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full rounded-full bg-green-500 transition-all duration-700"
+                                                            style={{ width: `${test.total_questions > 0 ? 100 : 0}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                                        <span className="truncate">Muvaffaqiyat</span>
+                                                        <span className="font-medium text-white whitespace-nowrap">
+                                        {test.rating ? `${(test.rating / 5 * 100).toFixed(0)}%` : '0%'}
+                                    </span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full rounded-full bg-yellow-500 transition-all duration-700"
+                                                            style={{ width: `${(test.rating || 0) / 5 * 100}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
 
-                                            <div className="flex gap-2">
-                                                <CustomButton
-                                                    onClick={() => {
-                                                        setSelectedTest(test);
-                                                        setShowTestAnalytics(true);
-                                                    }}
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1"
-                                                >
-                                                    <BarChart3 size={16} className="mr-1"/>
-                                                    Analitika
-                                                </CustomButton>
+                                            {/* Action buttons */}
+                                            <div className="relative mt-4 pt-4 border-t border-gray-800/50">
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleStartTestEdit(test);
+                                                        }}
+                                                        className="flex-1 px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                                                    >
+                                                        <Edit size={14} />
+                                                        Tahrirlash
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedTest(test);
+                                                            setShowTestAnalytics(true);
+                                                        }}
+                                                        className="flex-1 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                                                    >
+                                                        <BarChart3 size={14} />
+                                                        Analitika
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {/* Hover effect */}
+                                            <div className="absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-blue-500/30 transition-colors pointer-events-none" />
                                         </div>
                                     ))}
                                 </div>
@@ -1705,7 +1792,6 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                         </div>
                     )}
 
-                    {/* Question Tab */}
                     {activeTabs === "question" && (
                         <div>
                             <div className="flex flex-col sm:flex-row justify-start items-start sm:items-center gap-4 mb-6">
@@ -1719,58 +1805,132 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                                     <p className="text-gray-400 mb-6">Siz hali hech qanday savol yaratmagansiz</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> {/* 3 emas 2 column */}
                                     {recentQuestions.map((question, index) => (
                                         <div key={`q-${question.id}-${index}`}
-                                             className="bg-gray-700/50 rounded-xl p-4 border border-gray-600 hover:border-purple-500 transition-colors flex flex-col justify-between">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div className="flex-1">
-                                                    <h4 className="text-lg font-semibold text-white mb-2 line-clamp-2">
-                                                        {question.question}
-                                                    </h4>
-                                                    <p className="text-gray-300 text-sm mb-3">{question.test_title}</p>
+                                             className="group relative h-full rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-900/50 to-gray-900/30 p-5 cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:border-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/10 backdrop-blur-sm overflow-hidden flex flex-col">
+                                            {/* Gradient background effect */}
+                                            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                                            {/* Top section */}
+                                            <div className="relative flex flex-col gap-3 mb-4 flex-1 min-h-0">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border ${
+                                                                question.difficulty === "Oson"
+                                                                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                                                    : question.difficulty === "O'rtacha"
+                                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                                                        : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                                                            } text-xs font-semibold whitespace-nowrap`}>
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                                                {question.difficulty}
+                                                            </div>
+
+                                                            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold border border-purple-500/30 whitespace-nowrap">
+                                                                {question.type}
+                                                            </div>
+                                                        </div>
+
+                                                        <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-purple-200 transition-colors line-clamp-2 leading-tight">
+                                                            {question.question}
+                                                        </h3>
+
+                                                        <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
+                                                            <FileText className="w-3.5 h-3.5 text-blue-400" />
+                                                            <span className="truncate">{question.test_title}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <Edit className="w-5 h-5 text-gray-600 group-hover:text-purple-400 group-hover:rotate-12 transition-all flex-shrink-0 mt-2" />
                                                 </div>
-                                                <div className="flex">
+
+                                                {/* Category badge */}
+                                                {question.category && (
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/20 flex-shrink-0">
+                                                            <span className="text-sm">{question.category.emoji}</span>
+                                                        </div>
+                                                        <span className="text-sm font-medium text-gray-300 truncate">
+                                        {question.category.title}
+                                    </span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Stats section */}
+                                            <div className="relative grid grid-cols-2 gap-3 pt-4 border-t border-gray-800/50 mt-4">
+                                                <div className="flex flex-col items-center p-2 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <HelpCircle className="w-4 h-4 text-blue-400" />
+                                                        <span className="text-lg font-bold text-white">{question.answers || 0}</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-400 whitespace-nowrap">Variant</span>
+                                                </div>
+
+                                                <div className="flex flex-col items-center p-2 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <TrendingUp className="w-4 h-4 text-green-400" />
+                                                        <span className="text-lg font-bold text-white">{question.correctRate || 0}%</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-400 whitespace-nowrap">To'g'ri</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Progress bar for correct rate */}
+                                            <div className="relative mt-4">
+                                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                                    <span>To'g'rilik darajasi</span>
+                                                    <span className="font-medium text-white">{question.correctRate}%</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-700 ${
+                                                            question.correctRate >= 70 ? 'bg-emerald-500' :
+                                                                question.correctRate >= 40 ? 'bg-amber-500' : 'bg-rose-500'
+                                                        }`}
+                                                        style={{ width: `${question.correctRate}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Action buttons */}
+                                            <div className="relative mt-4 pt-4 border-t border-gray-800/50">
+                                                <div className="flex gap-2">
                                                     <button
-                                                        onClick={() => handleStartQuestionEdit(question)}
-                                                        className="p-2 text-gray-400 hover:text-purple-500 transition-colors"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleStartQuestionEdit(question);
+                                                        }}
+                                                        className="flex-1 px-3 py-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-600/30 transition-colors text-sm font-medium flex items-center justify-center gap-2"
                                                     >
-                                                        <Edit size={16}/>
+                                                        <Edit size={14} />
+                                                        Tahrirlash
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedQuestion(question);
+                                                            setShowQuestionAnalytics(true);
+                                                        }}
+                                                        className="flex-1 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                                                    >
+                                                        <BarChart3 size={14} />
+                                                        Analitika
                                                     </button>
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap gap-2 mb-4">
-                                                <CustomBadge variant="secondary">{question.type}</CustomBadge>
-                                                <CustomBadge
-                                                    variant={
-                                                        question.difficulty === "Oson" ? "success" :
-                                                            question.difficulty === "O'rtacha" ? "warning" : "danger"
-                                                    }
-                                                >
-                                                    {question.difficulty}
-                                                </CustomBadge>
-                                                {question.category && (
-                                                    <CustomBadge variant="secondary">
-                                                        {question.category.title}
-                                                    </CustomBadge>
-                                                )}
-                                            </div>
+                                            {/* Status badge */}
+                                            {question.is_active === false && (
+                                                <div className="absolute top-3 right-3 bg-gray-800/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-gray-400 border border-gray-700">
+                                                    Faol emas
+                                                </div>
+                                            )}
 
-                                            <div className="flex justify-between text-sm text-gray-400 mb-4">
-                                                <span>{question.answers} variant</span>
-                                                <span>{question.correctRate}% to'g'ri</span>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedQuestion(question);
-                                                    setShowQuestionAnalytics(true);
-                                                }}
-                                                className="p-2 text-gray-400 hover:text-purple-500 transition-colors flex flex-row items-center justify-center w-full gap-2 border border-gray-500 rounded-lg"
-                                            >
-                                                <BarChart3 size={16}/>
-                                                <span>Analitika</span>
-                                            </button>
+                                            {/* Hover effect */}
+                                            <div className="absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-purple-500/30 transition-colors pointer-events-none" />
                                         </div>
                                     ))}
                                 </div>

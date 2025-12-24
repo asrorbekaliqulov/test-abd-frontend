@@ -311,13 +311,13 @@ export const UserProfilePage: React.FC = () => {
 
                     <div className="p-6">
                         {activeTab === 'tests' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-3 pb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 auto-rows-fr">
                                 {(tests || []).map((test) => (
                                     <TestCard key={test.id} test={test} onTestClick={handleTestClick} />
                                 ))}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 auto-rows-fr">
                                 {(questions || []).map((question) => (
                                     <QuestionCard key={question.id} question={question} onQuestionClick={handleViewQuestions} />
                                 ))}
