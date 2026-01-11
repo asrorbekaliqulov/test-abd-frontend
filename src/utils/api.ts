@@ -1,4 +1,3 @@
-// src/utils/api.ts - To'liq tuzatilgan API fayli
 import axios, { AxiosError, AxiosResponse } from 'axios';
 
 // ==================== KONSTANTALAR ====================
@@ -12,6 +11,9 @@ export interface APIResponse<T = any> {
   status?: number;
   message?: string;
   results?: any[];
+  fromCache?: boolean;
+  isThrottled?: boolean;
+  hasMore?: boolean;
 }
 
 export interface Quiz {
@@ -211,6 +213,316 @@ export interface SearchParams {
   sort_by?: string;
 }
 
+// ==================== INFINITE SCROLL KONSTANTALARI ====================
+const INFINITE_SCROLL_PAGE_SIZE = 10;
+const INFINITE_SCROLL_THRESHOLD = 2;
+const INFINITE_SCROLL_DEBOUNCE = 500;
+const INFINITE_SCROLL_MIN_INTERVAL = 1000;
+
+// ==================== INFINITE SCROLL MANAGER ====================
+class InfiniteScrollManager {
+  private state: {
+    isLoading: boolean;
+    hasMore: boolean;
+    currentPage: number;
+    loadedItems: any[];
+    filters: any;
+  };
+  private lastLoadTime: number = 0;
+  private loadTimeout: NodeJS.Timeout | null = null;
+  private isInitialized: boolean = false;
+  private abortController: AbortController | null = null;
+  private lastFilters: string = '';
+
+  constructor() {
+    this.state = {
+      isLoading: false,
+      hasMore: true,
+      currentPage: 1,
+      loadedItems: [],
+      filters: {}
+    };
+  }
+
+  init(filters: any = {}): any {
+    const filtersStr = JSON.stringify(filters);
+
+    if (this.isInitialized && filtersStr === this.lastFilters) {
+      console.log('🔄 Infinite scroll already initialized with same filters');
+      return this.getState();
+    }
+
+    this.reset();
+    this.state.filters = { ...filters };
+    this.lastFilters = filtersStr;
+    this.isInitialized = true;
+
+    console.log('🔄 Infinite scroll initialized with filters:', filters);
+    return this.getState();
+  }
+
+  getState(): any {
+    return { ...this.state };
+  }
+
+  reset(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+
+    this.state = {
+      isLoading: false,
+      hasMore: true,
+      currentPage: 1,
+      loadedItems: [],
+      filters: {}
+    };
+    this.lastLoadTime = 0;
+    this.isInitialized = false;
+    this.lastFilters = '';
+
+    if (this.loadTimeout) {
+      clearTimeout(this.loadTimeout);
+      this.loadTimeout = null;
+    }
+
+    console.log('🔄 Infinite scroll reset');
+  }
+
+  updateFilters(newFilters: any): boolean {
+    const oldFilters = JSON.stringify(this.state.filters);
+    const newFiltersStr = JSON.stringify(newFilters);
+
+    if (oldFilters !== newFiltersStr) {
+      console.log('🔄 Filters changed, resetting infinite scroll');
+      this.state.filters = { ...newFilters };
+      this.lastFilters = newFiltersStr;
+      this.reset();
+      return true;
+    }
+
+    console.log('🔄 Filters unchanged, skipping reset');
+    return false;
+  }
+
+  shouldLoadMore(currentIndex: number): boolean {
+    if (!this.isInitialized) {
+      console.log('🚫 Infinite scroll not initialized');
+      return false;
+    }
+
+    if (this.state.isLoading) {
+      console.log('🚫 Already loading, skipping');
+      return false;
+    }
+
+    if (!this.state.hasMore) {
+      console.log('🚫 No more items to load');
+      return false;
+    }
+
+    const totalLoaded = this.state.loadedItems.length;
+
+    if (totalLoaded === 0) {
+      console.log('🔍 No items loaded yet, should load');
+      return true;
+    }
+
+    const remainingItems = totalLoaded - currentIndex;
+    const shouldLoad = remainingItems <= INFINITE_SCROLL_THRESHOLD;
+
+    console.log(`🔍 Infinite scroll check: currentIndex=${currentIndex}, totalLoaded=${totalLoaded}, remaining=${remainingItems}, threshold=${INFINITE_SCROLL_THRESHOLD}, shouldLoad=${shouldLoad}`);
+
+    return shouldLoad;
+  }
+
+  async loadMore(): Promise<APIResponse> {
+    const now = Date.now();
+    const timeSinceLastLoad = now - this.lastLoadTime;
+
+    if (timeSinceLastLoad < INFINITE_SCROLL_MIN_INTERVAL) {
+      console.log(`⏱️ Too soon to load more: ${timeSinceLastLoad}ms since last load`);
+      return {
+        success: false,
+        error: 'Please wait before loading more',
+        isThrottled: true
+      };
+    }
+
+    if (this.state.isLoading) {
+      console.log('🚫 Already loading more items...');
+      return {
+        success: false,
+        error: 'Already loading more items...',
+        data: this.state.loadedItems
+      };
+    }
+
+    if (!this.state.hasMore) {
+      console.log('🎉 No more items to load');
+      return {
+        success: true,
+        data: { results: this.state.loadedItems, count: this.state.loadedItems.length },
+        results: this.state.loadedItems,
+        message: 'No more items to load',
+        hasMore: false
+      };
+    }
+
+    if (this.loadTimeout) {
+      clearTimeout(this.loadTimeout);
+      this.loadTimeout = null;
+    }
+
+    return new Promise((resolve) => {
+      this.loadTimeout = setTimeout(async () => {
+        await this.performLoadMore(resolve);
+      }, INFINITE_SCROLL_DEBOUNCE);
+    });
+  }
+
+  private async performLoadMore(resolve: Function): Promise<void> {
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+
+    this.abortController = new AbortController();
+    this.state.isLoading = true;
+    this.lastLoadTime = Date.now();
+
+    try {
+      console.log(`📄 Infinite scroll loading page ${this.state.currentPage}...`);
+
+      const result = await fetchQuizzesInfinite(
+          this.state.currentPage,
+          INFINITE_SCROLL_PAGE_SIZE,
+          this.state.filters,
+          this.abortController.signal
+      );
+
+      console.log(`📥 Infinite scroll result for page ${this.state.currentPage}:`, {
+        success: result.success,
+        dataCount: result.data?.results?.length || result.data?.length || 0,
+        hasMore: result.hasMore
+      });
+
+      if (result.success && result.data) {
+        let newItems = [];
+
+        if (result.data?.results && Array.isArray(result.data.results)) {
+          newItems = result.data.results;
+        } else if (Array.isArray(result.data)) {
+          newItems = result.data;
+        }
+
+        console.log(`✅ Infinite scroll loaded ${newItems.length} items for page ${this.state.currentPage}`);
+
+        const existingIds = new Set(this.state.loadedItems.map(item => item.id));
+        const uniqueNewItems = newItems.filter(item => item && item.id && !existingIds.has(item.id));
+
+        if (newItems.length !== uniqueNewItems.length) {
+          console.log(`⚠️ Filtered ${newItems.length - uniqueNewItems.length} duplicate items`);
+        }
+
+        this.state.loadedItems = [...this.state.loadedItems, ...uniqueNewItems];
+
+        const loadedEnough = newItems.length >= INFINITE_SCROLL_PAGE_SIZE;
+        const hasNextPage = !!result.data?.next;
+
+        this.state.hasMore = loadedEnough || hasNextPage;
+
+        console.log(`📊 Page analysis: loadedEnough=${loadedEnough}, hasNextPage=${hasNextPage}, hasMore=${this.state.hasMore}`);
+
+        if (this.state.hasMore) {
+          this.state.currentPage++;
+          console.log(`⬆️ Incremented page to ${this.state.currentPage}`);
+        } else {
+          console.log(`🏁 Reached end of content at page ${this.state.currentPage}`);
+        }
+
+        resolve({
+          success: true,
+          data: result.data,
+          results: this.state.loadedItems,
+          page: this.state.currentPage - 1,
+          hasMore: this.state.hasMore,
+          totalLoaded: this.state.loadedItems.length
+        });
+      } else {
+        console.error('❌ Infinite scroll load failed:', result.error);
+        this.state.hasMore = false;
+
+        resolve({
+          success: false,
+          error: result.error || 'Failed to load items',
+          data: this.state.loadedItems,
+          hasMore: false
+        });
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('🛑 Infinite scroll load aborted');
+        resolve({
+          success: false,
+          error: 'Request aborted',
+          data: this.state.loadedItems
+        });
+      } else {
+        console.error('❌ Infinite scroll load error:', error);
+        this.state.hasMore = false;
+        resolve(handleApiError(error));
+      }
+    } finally {
+      this.state.isLoading = false;
+      this.abortController = null;
+
+      if (this.loadTimeout) {
+        clearTimeout(this.loadTimeout);
+        this.loadTimeout = null;
+      }
+    }
+  }
+
+  addItem(item: any): void {
+    if (item && item.id && !this.state.loadedItems.find(q => q.id === item.id)) {
+      this.state.loadedItems = [item, ...this.state.loadedItems];
+      console.log(`➕ Added item ${item.id} to infinite scroll`);
+    }
+  }
+
+  updateItem(itemId: number, updates: any): void {
+    const index = this.state.loadedItems.findIndex(item => item.id === itemId);
+    if (index !== -1) {
+      this.state.loadedItems[index] = { ...this.state.loadedItems[index], ...updates };
+      console.log(`✏️ Updated item ${itemId} in infinite scroll`);
+    }
+  }
+
+  removeItem(itemId: number): void {
+    const initialLength = this.state.loadedItems.length;
+    this.state.loadedItems = this.state.loadedItems.filter(item => item.id !== itemId);
+
+    if (this.state.loadedItems.length !== initialLength) {
+      console.log(`🗑️ Removed item ${itemId} from infinite scroll`);
+    }
+  }
+
+  syncWithExternalData(externalData: any[]): void {
+    if (!Array.isArray(externalData) || externalData.length === 0) return;
+
+    const existingIds = new Set(this.state.loadedItems.map(item => item.id));
+    const newItems = externalData.filter(item => item && item.id && !existingIds.has(item.id));
+
+    if (newItems.length > 0) {
+      this.state.loadedItems = [...this.state.loadedItems, ...newItems];
+      console.log(`🔄 Synced ${newItems.length} new items from external source`);
+    }
+  }
+}
+
+export const infiniteScrollManager = new InfiniteScrollManager();
+
 // ==================== TOKEN MANAGER ====================
 export const tokenManager = {
   getToken: (): string | null => {
@@ -230,15 +542,25 @@ export const tokenManager = {
 
   setTokens: (access: string, refresh: string): void => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('access_token', access);
-    localStorage.setItem('refresh_token', refresh);
+    try {
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
+      console.log('✅ Tokens set successfully');
+    } catch (error) {
+      console.error('❌ Error setting tokens:', error);
+    }
   },
 
   clearTokens: (): void => {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    try {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+      console.log('✅ Tokens cleared');
+    } catch (error) {
+      console.error('❌ Error clearing tokens:', error);
+    }
   },
 
   refreshToken: async (): Promise<string> => {
@@ -252,7 +574,8 @@ export const tokenManager = {
       }
 
       console.log('🔄 Attempting token refresh...');
-      const response = await axios.post(
+
+      const response = await axios.post<TokenRefreshResponse>(
           `${API_BASE_URL}/accounts/token/refresh/`,
           { refresh },
           {
@@ -284,6 +607,7 @@ export const tokenManager = {
       if (typeof window !== 'undefined' &&
           !window.location.pathname.includes('/login') &&
           !window.location.pathname.includes('/register')) {
+        console.log('🔒 Redirecting to login due to token refresh failure');
         window.location.href = '/login';
       }
 
@@ -293,18 +617,30 @@ export const tokenManager = {
 
   isTokenValid: (): boolean => {
     const accessToken = tokenManager.getAccessToken();
-    if (!accessToken) return false;
+    if (!accessToken) {
+      console.log('🔍 No access token found');
+      return false;
+    }
 
     try {
       const tokenParts = accessToken.split('.');
-      if (tokenParts.length !== 3) return false;
+      if (tokenParts.length !== 3) {
+        console.log('🔍 Invalid token format');
+        return false;
+      }
 
       const payload = JSON.parse(atob(tokenParts[1]));
       const expiryTime = payload.exp * 1000;
       const currentTime = Date.now();
       const bufferTime = 60000;
 
-      return currentTime < (expiryTime - bufferTime);
+      const isValid = currentTime < (expiryTime - bufferTime);
+
+      if (!isValid) {
+        console.log('🔍 Token expired or about to expire');
+      }
+
+      return isValid;
     } catch (error) {
       console.error('❌ Token validation error:', error);
       return false;
@@ -312,7 +648,7 @@ export const tokenManager = {
   },
 
   validateAndRefreshToken: async (): Promise<boolean> => {
-    console.log('🔐 Starting STRICT token validation...');
+    console.log('🔐 Starting token validation...');
 
     const hasAccessToken = !!tokenManager.getAccessToken();
     const hasRefreshToken = !!tokenManager.getRefreshToken();
@@ -330,7 +666,7 @@ export const tokenManager = {
       return true;
     }
 
-    console.log('🔄 Token expired, attempting refresh...');
+    console.log('🔄 Token expired or invalid, attempting refresh...');
 
     if (!hasRefreshToken) {
       console.error('❌ No refresh token available');
@@ -339,6 +675,7 @@ export const tokenManager = {
       if (typeof window !== 'undefined' &&
           !window.location.pathname.includes('/login') &&
           !window.location.pathname.includes('/register')) {
+        console.log('🔒 Redirecting to login due to missing refresh token');
         window.location.href = '/login';
       }
 
@@ -357,6 +694,7 @@ export const tokenManager = {
       if (typeof window !== 'undefined' &&
           !window.location.pathname.includes('/login') &&
           !window.location.pathname.includes('/register')) {
+        console.log('🔒 Redirecting to login due to token refresh failure');
         window.location.href = '/login';
       }
 
@@ -393,14 +731,50 @@ export const tokenManager = {
   },
 
   requireAuth: async (): Promise<boolean> => {
-    const isAuthenticated = await tokenManager.validateAndRefreshToken();
+    console.log('🔒 Checking authentication...');
 
-    if (!isAuthenticated) {
-      throw new Error('AUTHENTICATION_REQUIRED');
+    try {
+      const isAuthenticated = await tokenManager.validateAndRefreshToken();
+
+      if (!isAuthenticated) {
+        console.error('❌ Authentication failed');
+        throw new Error('AUTHENTICATION_REQUIRED');
+      }
+
+      console.log('✅ Authentication successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Authentication error:', error);
+      throw error;
     }
-
-    return true;
   }
+};
+
+// ==================== HELPER FUNCTIONS ====================
+const getDefaultHeaders = () => {
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+};
+
+const getAuthHeaders = () => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  const token = tokenManager.getAccessToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const csrfToken = csrfManager.getToken();
+  if (csrfToken) {
+    headers['X-CSRFToken'] = csrfToken;
+  }
+
+  return headers;
 };
 
 // ==================== ERROR HANDLER ====================
@@ -416,6 +790,14 @@ export const handleApiError = (error: any): APIResponse => {
     }
   });
 
+  if (error.message.includes('CORS') || error.code === 'ERR_NETWORK') {
+    return {
+      success: false,
+      error: "CORS xatoligi: Server sozlamalarini tekshiring.",
+      isCorsError: true
+    };
+  }
+
   if (error.message === 'AUTHENTICATION_REQUIRED' ||
       error.response?.status === 401 ||
       error.message === 'REFRESH_TOKEN_NOT_FOUND') {
@@ -425,7 +807,10 @@ export const handleApiError = (error: any): APIResponse => {
     if (typeof window !== "undefined" &&
         !window.location.pathname.includes('/login') &&
         !window.location.pathname.includes('/register')) {
-      window.location.href = "/login";
+      console.log('🔒 Redirecting to login due to authentication error');
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 100);
     }
 
     return {
@@ -489,7 +874,7 @@ export const handleApiError = (error: any): APIResponse => {
 };
 
 // ==================== CSRF MANAGER ====================
-const csrfManager = {
+export const csrfManager = {
   getToken: (): string | null => {
     if (typeof document === 'undefined') return null;
     const match = document.cookie
@@ -498,50 +883,152 @@ const csrfManager = {
     return match ? decodeURIComponent(match.split("=")[1]) : null;
   },
 
-  setToken: (): void => {
-    // Implement if needed
+  setToken: (token: string): void => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `csrftoken=${token}; path=/; SameSite=Lax; Secure`;
   },
 
   fetchToken: async (): Promise<string | null> => {
     try {
-      await axios.get(`${API_BASE_URL}/system/csrf/`, {});
-      return csrfManager.getToken();
+      const response = await axios.get(`${API_BASE_URL}/system/csrf/`, {
+        headers: getDefaultHeaders(),
+        timeout: 10000
+      });
+
+      const csrfToken = csrfManager.getToken();
+      console.log('✅ CSRF token fetched:', csrfToken ? 'Token received' : 'No token');
+      return csrfToken;
     } catch (error) {
-      console.warn("Failed to fetch CSRF token:", error);
+      console.warn("⚠️ Failed to fetch CSRF token:", error);
       return null;
     }
   },
+
+  ensureToken: async (): Promise<string | null> => {
+    const existingToken = csrfManager.getToken();
+    if (existingToken) {
+      return existingToken;
+    }
+    return await csrfManager.fetchToken();
+  }
 };
+
+// ==================== UTILITY FUNCTIONS ====================
+let fetchTimeout: NodeJS.Timeout | null = null;
+let lastFetchTime = 0;
+const FETCH_THROTTLE_DELAY = 300;
+const MIN_FETCH_INTERVAL = 1000;
+
+const debouncedFetch = <T extends (...args: any[]) => Promise<any>>(
+    func: T,
+    delay: number
+): ((...args: Parameters<T>) => Promise<ReturnType<T>>) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+
+  return (...args: Parameters<T>): Promise<ReturnType<T>> => {
+    return new Promise((resolve, reject) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      timeoutId = setTimeout(async () => {
+        try {
+          const result = await func(...args);
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        } finally {
+          timeoutId = null;
+        }
+      }, delay);
+    });
+  };
+};
+
+const throttleFetch = <T extends (...args: any[]) => Promise<any>>(
+    func: T,
+    limit: number
+): ((...args: Parameters<T>) => Promise<ReturnType<T>>) => {
+  let inThrottle: boolean = false;
+  let lastResult: any = null;
+  let lastError: any = null;
+
+  return async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+    if (!inThrottle) {
+      inThrottle = true;
+
+      try {
+        const result = await func(...args);
+        lastResult = result;
+        lastError = null;
+
+        setTimeout(() => {
+          inThrottle = false;
+        }, limit);
+
+        return result;
+      } catch (error) {
+        lastError = error;
+        inThrottle = false;
+        throw error;
+      }
+    } else {
+      console.log('⏱️ Fetch throttled - waiting for next interval');
+
+      if (lastResult && !lastError) {
+        console.log('📦 Returning cached result from throttled fetch');
+        return Promise.resolve(lastResult);
+      }
+
+      return Promise.reject(new Error('Fetch throttled'));
+    }
+  };
+};
+
+const quizCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000;
+
+const cleanupCache = () => {
+  const now = Date.now();
+  let cleanedCount = 0;
+
+  for (const [key, value] of quizCache.entries()) {
+    if (now - value.timestamp > CACHE_DURATION * 2) {
+      quizCache.delete(key);
+      cleanedCount++;
+    }
+  }
+
+  if (cleanedCount > 0) {
+    console.log(`🧹 Cleaned ${cleanedCount} expired cache entries`);
+  }
+};
+
+setInterval(cleanupCache, 10 * 60 * 1000);
 
 // ==================== API INSTANCES ====================
 export const publicApi = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  },
-  timeout: 15000
+  headers: getDefaultHeaders(),
+  timeout: 15000,
 });
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  },
-  timeout: 15000
+  headers: getDefaultHeaders(),
+  timeout: 15000,
 });
 
 const formAPI = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    Accept: 'application/json',
+    'Accept': 'application/json',
   },
-  timeout: 30000
+  timeout: 30000,
 });
 
 // ==================== HELPER FUNCTIONS ====================
-function getCookie(name: string): string | null {
+export function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
@@ -574,7 +1061,7 @@ api.interceptors.request.use(
         }
       }
 
-      const csrfToken = getCookie("csrftoken");
+      const csrfToken = csrfManager.getToken();
       if (csrfToken && config.headers) {
         config.headers["X-CSRFToken"] = csrfToken;
       }
@@ -602,6 +1089,12 @@ formAPI.interceptors.request.use(
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+
+      const csrfToken = csrfManager.getToken();
+      if (csrfToken && config.headers) {
+        config.headers["X-CSRFToken"] = csrfToken;
+      }
+
       return config;
     },
     (error) => Promise.reject(error)
@@ -641,14 +1134,20 @@ api.interceptors.response.use(
     }
 );
 
-// ==================== QUIZ API FUNCTIONS ====================
-const requireAuthForQuiz = async (): Promise<void> => {
-  await tokenManager.requireAuth();
-};
-
-// Fetch quizzes with filters
-export const fetchQuizzes = async (params: any = {}): Promise<APIResponse<any>> => {
+// ==================== OPTIMIZED QUIZ FETCH FUNCTIONS ====================
+const _fetchQuizzes = async (params: any = {}, signal?: AbortSignal): Promise<APIResponse<any>> => {
   try {
+    const now = Date.now();
+
+    if (now - lastFetchTime < MIN_FETCH_INTERVAL) {
+      console.log('⏱️ Throttling fetch - too frequent requests');
+      return {
+        success: false,
+        error: 'Too many requests. Please wait.',
+        isThrottled: true
+      };
+    }
+
     await requireAuthForQuiz();
 
     console.log("🔍 Starting fetchQuizzes with params:", params);
@@ -657,32 +1156,26 @@ export const fetchQuizzes = async (params: any = {}): Promise<APIResponse<any>> 
 
     if (params.category !== undefined && params.category !== null && params.category !== "All" && params.category !== "all") {
       queryParams.category = params.category;
-      console.log("✅ Adding category filter:", params.category);
     }
 
     if (params.search && params.search.trim() !== '') {
       queryParams.search = params.search.trim();
-      console.log("✅ Adding search filter:", params.search);
     }
 
     if (params.ordering) {
       queryParams.ordering = params.ordering;
-      console.log("✅ Adding ordering filter:", params.ordering);
     }
 
     queryParams.page_size = params.page_size || 10;
-    console.log("✅ Setting page_size:", queryParams.page_size);
 
     if (params.page) {
       queryParams.page = params.page;
-      console.log("✅ Setting page:", params.page);
     }
 
     if (params.difficulty_min !== undefined && params.difficulty_min !== null && params.difficulty_min !== '') {
       const minVal = Number(params.difficulty_min);
       if (!isNaN(minVal) && minVal >= 0 && minVal <= 100) {
         queryParams.difficulty_min = minVal;
-        console.log("✅ Adding difficulty_min filter:", minVal);
       }
     }
 
@@ -690,54 +1183,191 @@ export const fetchQuizzes = async (params: any = {}): Promise<APIResponse<any>> 
       const maxVal = Number(params.difficulty_max);
       if (!isNaN(maxVal) && maxVal >= 0 && maxVal <= 100) {
         queryParams.difficulty_max = maxVal;
-        console.log("✅ Adding difficulty_max filter:", maxVal);
       }
     }
 
     if (params.worked !== undefined && params.worked !== null && params.worked !== '') {
       if (params.worked === true || params.worked === 'true') {
         queryParams.worked = true;
-        console.log("✅ Adding worked filter: true");
       }
     }
 
     if (params.unworked !== undefined && params.unworked !== null && params.unworked !== '') {
       if (params.unworked === true || params.unworked === 'true') {
         queryParams.unworked = true;
-        console.log("✅ Adding unworked filter: true");
       }
     }
 
     if (params.is_random !== undefined && params.is_random !== null && params.is_random !== '') {
       if (params.is_random === true || params.is_random === 'true') {
         queryParams.is_random = true;
-        console.log("✅ Adding is_random filter: true");
       }
     }
 
     console.log("📤 Final backend query params:", queryParams);
 
-    const response = await api.get('/quiz/qs/', {
+    lastFetchTime = Date.now();
+
+    const response = await axios.get(`${API_BASE_URL}/quiz/qs/`, {
       params: queryParams,
       paramsSerializer: {
         indexes: null
-      }
+      },
+      headers: getAuthHeaders(),
+      timeout: 15000,
+      signal
     });
 
     console.log("📥 Backend response status:", response.status);
-    console.log("📥 Backend response data count:", response.data?.results?.length || response.data?.length || 0);
 
     return {
       success: true,
       data: response.data
     };
   } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.log('🛑 Fetch quizzes aborted');
+      return {
+        success: false,
+        error: 'Request aborted'
+      };
+    }
     console.error("❌ Fetch quizzes API error:", error);
     return handleApiError(error);
   }
 };
 
-// Fetch quizzes with filters (alias)
+export const fetchQuizzes = debouncedFetch(_fetchQuizzes, FETCH_THROTTLE_DELAY);
+export const fetchQuizzesThrottled = throttleFetch(_fetchQuizzes, MIN_FETCH_INTERVAL);
+
+export const fetchQuizzesWithCache = async (
+    params: any,
+    useCache: boolean = true,
+    signal?: AbortSignal
+): Promise<APIResponse<any>> => {
+  const cacheKey = JSON.stringify(params);
+
+  if (useCache) {
+    const cached = quizCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log('📦 Returning cached quizzes from fetchQuizzesWithCache');
+      return {
+        success: true,
+        data: cached.data,
+        fromCache: true
+      };
+    }
+  }
+
+  try {
+    const result = await fetchQuizzes(params, signal);
+
+    if (result.success && result.data) {
+      quizCache.set(cacheKey, {
+        data: result.data,
+        timestamp: Date.now()
+      });
+
+      if (quizCache.size > 100) {
+        const firstKey = quizCache.keys().next().value;
+        if (firstKey) {
+          quizCache.delete(firstKey);
+        }
+      }
+    }
+
+    return result;
+  } catch (error: any) {
+    return handleApiError(error);
+  }
+};
+
+export const fetchQuizzesInfinite = async (
+    page: number,
+    pageSize: number = INFINITE_SCROLL_PAGE_SIZE,
+    filters: any = {},
+    signal?: AbortSignal
+): Promise<APIResponse<any>> => {
+  try {
+    const params = {
+      page,
+      page_size: pageSize,
+      ...filters
+    };
+
+    console.log(`📄 Infinite scroll: page=${page}, pageSize=${pageSize}`);
+
+    const cacheKey = JSON.stringify(params);
+    const cached = quizCache.get(cacheKey);
+
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log(`📦 Returning cached infinite scroll page ${page}`);
+      return {
+        success: true,
+        data: cached.data,
+        fromCache: true,
+        page,
+        hasMore: (cached.data?.results?.length || 0) >= pageSize || !!cached.data?.next
+      };
+    }
+
+    const result = await _fetchQuizzes(params, signal);
+
+    if (result.success && result.data) {
+      quizCache.set(cacheKey, {
+        data: result.data,
+        timestamp: Date.now()
+      });
+
+      const hasMore = (result.data?.results?.length || 0) >= pageSize || !!result.data?.next;
+
+      console.log(`📊 Infinite scroll result: loaded=${result.data?.results?.length || 0}, hasMore=${hasMore}`);
+
+      return {
+        ...result,
+        page,
+        hasMore
+      };
+    }
+
+    return {
+      ...result,
+      page,
+      hasMore: false
+    };
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.log('🛑 Fetch quizzes infinite aborted');
+      return {
+        success: false,
+        error: 'Request aborted',
+        hasMore: false
+      };
+    }
+    console.error("❌ Fetch quizzes infinite error:", error);
+    return {
+      ...handleApiError(error),
+      hasMore: false
+    };
+  }
+};
+
+export const clearQuizCache = (): void => {
+  const cacheSize = quizCache.size;
+  quizCache.clear();
+  console.log(`🧹 Cleared ${cacheSize} items from quiz cache`);
+};
+
+// ==================== QUIZ API FUNCTIONS ====================
+const requireAuthForQuiz = async (): Promise<void> => {
+  try {
+    await tokenManager.requireAuth();
+  } catch (error) {
+    console.error('❌ Authentication required for quiz operations');
+    throw error;
+  }
+};
+
 export const fetchQuizzesWithFilters = async (filters: any = {}): Promise<APIResponse<any>> => {
   try {
     await requireAuthForQuiz();
@@ -748,32 +1378,26 @@ export const fetchQuizzesWithFilters = async (filters: any = {}): Promise<APIRes
 
     if (filters.category !== undefined && filters.category !== null && filters.category !== "All" && filters.category !== "all") {
       cleanFilters.category = filters.category;
-      console.log("✅ Setting category to backend filter:", filters.category);
     }
 
     if (filters.search && filters.search.trim() !== '') {
       cleanFilters.search = filters.search.trim();
-      console.log("✅ Setting search to backend filter:", filters.search);
     }
 
     if (filters.ordering) {
       cleanFilters.ordering = filters.ordering;
-      console.log("✅ Setting ordering to backend filter:", filters.ordering);
     }
 
     cleanFilters.page_size = filters.page_size || 10;
-    console.log("✅ Setting page_size to backend filter:", cleanFilters.page_size);
 
     if (filters.page) {
       cleanFilters.page = filters.page;
-      console.log("✅ Setting page to backend filter:", filters.page);
     }
 
     if (filters.difficulty_min !== undefined && filters.difficulty_min !== null && filters.difficulty_min !== '') {
       const minVal = Number(filters.difficulty_min);
       if (!isNaN(minVal) && minVal >= 0 && minVal <= 100) {
         cleanFilters.difficulty_min = minVal;
-        console.log("✅ Setting difficulty_min to backend filter:", minVal);
       }
     }
 
@@ -781,54 +1405,51 @@ export const fetchQuizzesWithFilters = async (filters: any = {}): Promise<APIRes
       const maxVal = Number(filters.difficulty_max);
       if (!isNaN(maxVal) && maxVal >= 0 && maxVal <= 100) {
         cleanFilters.difficulty_max = maxVal;
-        console.log("✅ Setting difficulty_max to backend filter:", maxVal);
       }
     }
 
     if (filters.worked !== undefined && filters.worked !== null && filters.worked !== '') {
       if (filters.worked === true || filters.worked === 'true') {
         cleanFilters.worked = true;
-        console.log("✅ Setting worked to backend filter: true");
       }
     }
 
     if (filters.unworked !== undefined && filters.unworked !== null && filters.unworked !== '') {
       if (filters.unworked === true || filters.unworked === 'true') {
         cleanFilters.unworked = true;
-        console.log("✅ Setting unworked to backend filter: true");
       }
     }
 
     if (filters.is_random !== undefined && filters.is_random !== null && filters.is_random !== '') {
       if (filters.is_random === true || filters.is_random === 'true') {
         cleanFilters.is_random = true;
-        console.log("✅ Setting is_random to backend filter: true");
       }
     }
 
     console.log("🔍 Final cleaned filters for backend:", cleanFilters);
 
-    return await fetchQuizzes(cleanFilters);
+    return await fetchQuizzesWithCache(cleanFilters);
   } catch (error: any) {
     console.error("❌ Fetch quizzes with filters API error:", error);
     return handleApiError(error);
   }
 };
 
-// Fetch random quizzes - TUZATILGAN VERSIYA
 export const fetchRandomQuizzes = async (count: number = 10, page: number = 1): Promise<APIResponse<any>> => {
   try {
     await requireAuthForQuiz();
 
     console.log(`🎲 Fetching random quizzes: count=${count}, page=${page}`);
 
-    const response = await api.get('/quiz/qs/', {
+    const response = await axios.get(`${API_BASE_URL}/quiz/qs/`, {
       params: {
         is_random: true,
         page: page,
         page_size: count,
         ordering: '?'
-      }
+      },
+      headers: getAuthHeaders(),
+      timeout: 15000,
     });
 
     console.log(`🎲 Random quizzes response status: ${response.status}`);
@@ -873,13 +1494,15 @@ export const fetchRandomQuizzes = async (count: number = 10, page: number = 1): 
   }
 };
 
-// Fetch quizzes by URL
 export const fetchQuizzesByUrl = async (url: string): Promise<APIResponse<any>> => {
   try {
     await requireAuthForQuiz();
     const apiUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     console.log(`🔗 Fetching quizzes by URL: ${apiUrl}`);
-    const response = await api.get(apiUrl);
+    const response = await axios.get(apiUrl, {
+      headers: getAuthHeaders(),
+      timeout: 15000,
+    });
     return {
       success: true,
       data: response.data
@@ -890,12 +1513,14 @@ export const fetchQuizzesByUrl = async (url: string): Promise<APIResponse<any>> 
   }
 };
 
-// Fetch quiz by ID
 export const fetchQuizById = async (id: number): Promise<APIResponse<any>> => {
   try {
     await requireAuthForQuiz();
     console.log(`📋 Fetching quiz by ID: ${id}`);
-    const response = await api.get(`/quiz/qs/${id}/`);
+    const response = await axios.get(`${API_BASE_URL}/quiz/qs/${id}/`, {
+      headers: getAuthHeaders(),
+      timeout: 15000,
+    });
     return {
       success: true,
       data: response.data,
@@ -907,18 +1532,19 @@ export const fetchQuizById = async (id: number): Promise<APIResponse<any>> => {
   }
 };
 
-// Fetch quizzes by category
 export const fetchQuizzesByCategory = async (categoryId: number, page: number = 1, page_size: number = 30): Promise<APIResponse<any>> => {
   try {
     await requireAuthForQuiz();
     console.log(`🏷️ Fetching quizzes by category: ${categoryId}, page: ${page}`);
-    const response = await api.get('/quiz/qs/', {
+    const response = await axios.get(`${API_BASE_URL}/quiz/qs/`, {
       params: {
         category: categoryId,
         page: page,
         page_size: page_size,
         ordering: '-created_at'
-      }
+      },
+      headers: getAuthHeaders(),
+      timeout: 15000,
     });
     return { success: true, data: response.data };
   } catch (error: any) {
@@ -927,13 +1553,14 @@ export const fetchQuizzesByCategory = async (categoryId: number, page: number = 
   }
 };
 
-// Fetch recommended tests
 export const fetchRecommendedTests = async (count: number = 10): Promise<APIResponse<any>> => {
   try {
     await requireAuthForQuiz();
     console.log(`⭐ Fetching recommended tests: count=${count}`);
-    const response = await api.get('/quiz/recommended/', {
-      params: { count }
+    const response = await axios.get(`${API_BASE_URL}/quiz/recommended/`, {
+      params: { count },
+      headers: getAuthHeaders(),
+      timeout: 15000,
     });
     return { success: true, data: response.data };
   } catch (error: any) {
@@ -942,9 +1569,36 @@ export const fetchRecommendedTests = async (count: number = 10): Promise<APIResp
   }
 };
 
+export const searchAPI = {
+  searchAll: async (query: string): Promise<APIResponse<any>> => {
+    try {
+      const [usersResult, quizzesResult] = await Promise.all([
+        accountsAPI.searchUsers(query),
+        fetchQuizzesWithFilters({ search: query })
+      ]);
+
+      return {
+        success: usersResult.success && quizzesResult.success,
+        data: {
+          users: usersResult.data?.results || usersResult.data || [],
+          quizzes: quizzesResult.data?.results || quizzesResult.data || [],
+          usersCount: usersResult.data?.count || 0,
+          quizzesCount: quizzesResult.data?.count || 0
+        }
+      };
+    } catch (error: any) {
+      console.error("❌ Search all error:", error);
+      return handleApiError(error);
+    }
+  }
+};
+
 // ==================== COMPREHENSIVE QUIZ API ====================
 export const quizAPI = {
   fetchQuizzes,
+  fetchQuizzesThrottled,
+  fetchQuizzesInfinite,
+  fetchQuizzesWithCache,
   fetchRandomQuizzes,
   fetchQuizzesByUrl,
   fetchQuizzesWithFilters,
@@ -952,12 +1606,29 @@ export const quizAPI = {
   fetchQuizzesByCategory,
   fetchRecommendedTests,
 
-  // Categories
+  infiniteScroll: {
+    init: (filters: any = {}) => infiniteScrollManager.init(filters),
+    getState: () => infiniteScrollManager.getState(),
+    loadMore: () => infiniteScrollManager.loadMore(),
+    shouldLoadMore: (currentIndex: number) => infiniteScrollManager.shouldLoadMore(currentIndex),
+    updateFilters: (filters: any) => infiniteScrollManager.updateFilters(filters),
+    reset: () => infiniteScrollManager.reset(),
+    addItem: (item: any) => infiniteScrollManager.addItem(item),
+    updateItem: (itemId: number, updates: any) => infiniteScrollManager.updateItem(itemId, updates),
+    removeItem: (itemId: number) => infiniteScrollManager.removeItem(itemId),
+    syncWithExternalData: (externalData: any[]) => infiniteScrollManager.syncWithExternalData(externalData)
+  },
+
+  clearQuizCache,
+
   fetchCategories: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       console.log("🏷️ Fetching categories...");
-      const response = await api.get('/quiz/categories/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/categories/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch categories error:", error);
@@ -968,7 +1639,10 @@ export const quizAPI = {
   getCategoryById: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/categories/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/categories/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get category by ID ${id} error:`, error);
@@ -976,14 +1650,16 @@ export const quizAPI = {
     }
   },
 
-  // Questions
   fetchQuestions: async (url?: string): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       if (url) {
         return fetchQuizzesByUrl(url);
       }
-      const response = await api.get('/quiz/qs/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/qs/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch questions error:", error);
@@ -994,8 +1670,10 @@ export const quizAPI = {
   fetchRecentQuestions: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/qs/', {
-        params: { ordering: '-created_at', page_size: 20 }
+      const response = await axios.get(`${API_BASE_URL}/quiz/qs/`, {
+        params: { ordering: '-created_at', page_size: 20 },
+        headers: getAuthHeaders(),
+        timeout: 15000,
       });
       return { success: true, data: response.data };
     } catch (error: any) {
@@ -1007,7 +1685,10 @@ export const quizAPI = {
   fetchQuestionById: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/qs/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/qs/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Fetch question by ID ${id} error:`, error);
@@ -1018,7 +1699,10 @@ export const quizAPI = {
   createQuestion: async (data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.post('/quiz/questions/', data);
+      const response = await axios.post(`${API_BASE_URL}/quiz/questions/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create question error:", error);
@@ -1029,7 +1713,10 @@ export const quizAPI = {
   updateQuestion: async (id: number, data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.patch(`/quiz/questions/${id}/`, data);
+      const response = await axios.patch(`${API_BASE_URL}/quiz/questions/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update question ${id} error:`, error);
@@ -1040,7 +1727,10 @@ export const quizAPI = {
   deleteQuestion: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.delete(`/quiz/questions/${id}/`);
+      const response = await axios.delete(`${API_BASE_URL}/quiz/questions/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete question ${id} error:`, error);
@@ -1048,7 +1738,6 @@ export const quizAPI = {
     }
   },
 
-  // Submit answers
   submitAnswers: async (answers: {
     question: number;
     selected_answer_ids: number[];
@@ -1057,7 +1746,10 @@ export const quizAPI = {
     try {
       await requireAuthForQuiz();
       console.log(`📤 Submitting answers for question ${answers.question}`);
-      const response = await api.post('/quiz/submit-answer/', answers);
+      const response = await axios.post(`${API_BASE_URL}/quiz/submit-answer/`, answers, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Submit answers error:", error);
@@ -1072,7 +1764,10 @@ export const quizAPI = {
   }): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.post('/quiz/submit-answer/', answers);
+      const response = await axios.post(`${API_BASE_URL}/quiz/submit-answer/`, answers, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Submit text answers error:", error);
@@ -1080,11 +1775,13 @@ export const quizAPI = {
     }
   },
 
-  // Attempts
   getQuestionAttempts: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/attempts/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/attempts/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get question attempts error:", error);
@@ -1095,7 +1792,10 @@ export const quizAPI = {
   getAttemptById: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/attempts/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/attempts/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get attempt by ID ${id} error:`, error);
@@ -1103,12 +1803,14 @@ export const quizAPI = {
     }
   },
 
-  // Question views
   getQuestionViewStats: async (questionId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       console.log(`👁️ Getting view stats for question ${questionId}`);
-      const response = await api.get(`/quiz/question-views/${questionId}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/question-views/${questionId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get question view stats ${questionId} error:`, error);
@@ -1120,7 +1822,13 @@ export const quizAPI = {
     try {
       await requireAuthForQuiz();
       console.log(`➕ Adding view for question ${quizId}`);
-      const response = await api.post(`/quiz/question-views/${quizId}/`, data);
+
+      await csrfManager.ensureToken();
+
+      const response = await axios.post(`${API_BASE_URL}/quiz/question-views/${quizId}/`, data || {}, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Add question view ${quizId} error:`, error);
@@ -1128,12 +1836,14 @@ export const quizAPI = {
     }
   },
 
-  // Question bookmarks
   bookmarkQuestion: async (data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       console.log(`🔖 Bookmarking question:`, data);
-      const response = await api.post('/quiz/question-bookmarks/', data);
+      const response = await axios.post(`${API_BASE_URL}/quiz/question-bookmarks/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Bookmark question error:", error);
@@ -1144,7 +1854,10 @@ export const quizAPI = {
   getBookmarks: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/question-bookmarks/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/question-bookmarks/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get bookmarks error:", error);
@@ -1155,7 +1868,10 @@ export const quizAPI = {
   getBookmarkByQuestion: async (questionId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/question-bookmarks/?question=${questionId}`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/question-bookmarks/?question=${questionId}`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get bookmark by question ${questionId} error:`, error);
@@ -1166,7 +1882,10 @@ export const quizAPI = {
   deleteBookmarkQuestion: async (bookmarkId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.delete(`/quiz/question-bookmarks/${bookmarkId}/`);
+      const response = await axios.delete(`${API_BASE_URL}/quiz/question-bookmarks/${bookmarkId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete bookmark question ${bookmarkId} error:`, error);
@@ -1174,11 +1893,13 @@ export const quizAPI = {
     }
   },
 
-  // Test bookmarks
   bookmarkTest: async (data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.post('/quiz/test-bookmarks/', data);
+      const response = await axios.post(`${API_BASE_URL}/quiz/test-bookmarks/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Bookmark test error:", error);
@@ -1189,7 +1910,10 @@ export const quizAPI = {
   getBookmarksTest: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/test-bookmarks/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/test-bookmarks/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get bookmarks test error:", error);
@@ -1200,7 +1924,10 @@ export const quizAPI = {
   getBookmarkByTest: async (testId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/test-bookmarks/?test=${testId}`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/test-bookmarks/?test=${testId}`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get bookmark by test ${testId} error:`, error);
@@ -1211,7 +1938,10 @@ export const quizAPI = {
   deleteBookmarkTest: async (bookmarkId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.delete(`/quiz/test-bookmarks/${bookmarkId}/`);
+      const response = await axios.delete(`${API_BASE_URL}/quiz/test-bookmarks/${bookmarkId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete bookmark test ${bookmarkId} error:`, error);
@@ -1219,11 +1949,13 @@ export const quizAPI = {
     }
   },
 
-  // Tests
   fetchPublicTests: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/tests/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/tests/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch public tests error:", error);
@@ -1234,7 +1966,10 @@ export const quizAPI = {
   fetchTestById: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/tests/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/tests/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Fetch test by ID ${id} error:`, error);
@@ -1245,7 +1980,10 @@ export const quizAPI = {
   createTest: async (data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.post('/quiz/tests/', data);
+      const response = await axios.post(`${API_BASE_URL}/quiz/tests/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create test error:", error);
@@ -1256,7 +1994,10 @@ export const quizAPI = {
   fetchMyTest: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/tests/my_tests/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/tests/my_tests/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch my test error:", error);
@@ -1267,7 +2008,10 @@ export const quizAPI = {
   fetchTestByUser: async (user_id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/tests/by_user/${user_id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/tests/by_user/${user_id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Fetch test by user ${user_id} error:`, error);
@@ -1275,15 +2019,17 @@ export const quizAPI = {
     }
   },
 
-  // Quiz reactions
   getQuizReactions: async (quizId?: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       const url = quizId
-          ? `/quiz/quiz-reactions/${quizId}/`
-          : `/quiz/quiz-reactions/`;
+          ? `${API_BASE_URL}/quiz/quiz-reactions/${quizId}/`
+          : `${API_BASE_URL}/quiz/quiz-reactions/`;
       console.log(`❤️ Getting reactions for quiz ${quizId || 'all'}`);
-      const response = await api.get(url);
+      const response = await axios.get(url, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get quiz reactions error for quiz ${quizId}:`, error);
@@ -1296,13 +2042,21 @@ export const quizAPI = {
       await requireAuthForQuiz();
       console.log(`❤️ Adding/updating reaction for quiz ${quizId}: ${reactionType}`);
 
-      const checkResponse = await api.get(`/quiz/quiz-reactions/?quiz=${quizId}`);
+      await csrfManager.ensureToken();
+
+      const checkResponse = await axios.get(`${API_BASE_URL}/quiz/quiz-reactions/?quiz=${quizId}`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
 
       if (checkResponse.data.results && checkResponse.data.results.length > 0) {
         const existingReaction = checkResponse.data.results[0];
 
         if (existingReaction.reaction_type === reactionType) {
-          await api.delete(`/quiz/quiz-reactions/${existingReaction.id}/`);
+          await axios.delete(`${API_BASE_URL}/quiz/quiz-reactions/${existingReaction.id}/`, {
+            headers: getAuthHeaders(),
+            timeout: 15000,
+          });
           return {
             success: true,
             data: {
@@ -1312,16 +2066,23 @@ export const quizAPI = {
             }
           };
         } else {
-          const response = await api.patch(
-              `/quiz/quiz-reactions/${existingReaction.id}/`,
-              { reaction_type: reactionType }
+          const response = await axios.patch(
+              `${API_BASE_URL}/quiz/quiz-reactions/${existingReaction.id}/`,
+              { reaction_type: reactionType },
+              {
+                headers: getAuthHeaders(),
+                timeout: 15000,
+              }
           );
           return { success: true, data: response.data };
         }
       } else {
-        const response = await api.post(`/quiz/quiz-reactions/`, {
+        const response = await axios.post(`${API_BASE_URL}/quiz/quiz-reactions/`, {
           quiz: quizId,
           reaction_type: reactionType
+        }, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
         });
         return { success: true, data: response.data };
       }
@@ -1335,7 +2096,10 @@ export const quizAPI = {
     try {
       await requireAuthForQuiz();
       console.log(`🗑️ Deleting reaction ${reactionId}`);
-      const response = await api.delete(`/quiz/quiz-reactions/${reactionId}/`);
+      const response = await axios.delete(`${API_BASE_URL}/quiz/quiz-reactions/${reactionId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete reaction ${reactionId} error:`, error);
@@ -1343,15 +2107,20 @@ export const quizAPI = {
     }
   },
 
-  // Follower questions
   fetchQuestionsbyfollower: async (url?: string): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       if (url) {
-        const response = await api.get(url);
+        const response = await axios.get(url, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
         return { success: true, data: response.data };
       }
-      const response = await api.get('/quiz/recommended/followed-questions/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/recommended/followed-questions/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch questions by follower error:", error);
@@ -1359,11 +2128,13 @@ export const quizAPI = {
     }
   },
 
-  // Leaderboard
   fetchLeaderboard: async (scope: 'global' | 'country' | 'region' | 'district' | 'settlement'): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/leaderboard/?scope=${scope}`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/leaderboard/?scope=${scope}`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Fetch leaderboard ${scope} error:`, error);
@@ -1371,11 +2142,13 @@ export const quizAPI = {
     }
   },
 
-  // User stats
   fetchUserStats: async (userId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/user-stats/${userId}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/user-stats/${userId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Fetch user stats ${userId} error:`, error);
@@ -1383,11 +2156,13 @@ export const quizAPI = {
     }
   },
 
-  // My bookmarks
   fetchMyBookmarks: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/tests/my_bookmarks/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/tests/my_bookmarks/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch my bookmarks error:", error);
@@ -1398,7 +2173,10 @@ export const quizAPI = {
   unblockBookmark: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.delete(`/quiz/test-bookmarks/${id}/`);
+      const response = await axios.delete(`${API_BASE_URL}/quiz/test-bookmarks/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Unblock bookmark ${id} error:`, error);
@@ -1406,11 +2184,13 @@ export const quizAPI = {
     }
   },
 
-  // Live quiz
   fetchMyLiveQuizzes: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get("/quiz/live-quiz/my/");
+      const response = await axios.get(`${API_BASE_URL}/quiz/live-quiz/my/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch my live quizzes error:", error);
@@ -1421,7 +2201,10 @@ export const quizAPI = {
   createLiveQuiz: async (data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.post("/quiz/live-quiz/save/", data);
+      const response = await axios.post(`${API_BASE_URL}/quiz/live-quiz/save/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create live quiz error:", error);
@@ -1432,7 +2215,10 @@ export const quizAPI = {
   getLiveQuiz: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/live-quiz/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/live-quiz/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get live quiz ${id} error:`, error);
@@ -1440,11 +2226,13 @@ export const quizAPI = {
     }
   },
 
-  // Achievements
   getAchievements: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/achievements/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/achievements/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get achievements error:", error);
@@ -1455,7 +2243,10 @@ export const quizAPI = {
   getAchievementById: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/achievements/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/achievements/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get achievement by ID ${id} error:`, error);
@@ -1463,14 +2254,15 @@ export const quizAPI = {
     }
   },
 
-  // Question stats - TO'LIQ TUZATILGAN VERSIYA
   getQuestionStats: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       console.log(`📊 Fetching stats for quiz ${id}`);
 
-      // 1. Avval quiz ma'lumotlarini to'g'ridan-to'g'ri API orqali olish
-      const quizResponse = await api.get(`/quiz/qs/${id}/`);
+      const quizResponse = await axios.get(`${API_BASE_URL}/quiz/qs/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
 
       if (!quizResponse.data) {
         return {
@@ -1487,39 +2279,50 @@ export const quizAPI = {
         view_count: quiz.view_count
       });
 
-      // 2. Stats endpointini sinab ko'rish
       let statsFromEndpoint = null;
       try {
-        const statsResponse = await api.get(`/quiz/qs/${id}/stats/`);
-        console.log(`📊 Stats from endpoint for quiz ${id}:`, statsResponse.data);
+        const statsResponse = await axios.get(`${API_BASE_URL}/quiz/questions/${id}/stats/`, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+        console.log(`📊 Stats from /quiz/questions/${id}/stats/:`, statsResponse.data);
         statsFromEndpoint = statsResponse.data;
-      } catch (statsError) {
-        console.log(`📊 Stats endpoint not available for quiz ${id}, using quiz data`);
+      } catch (statsError: any) {
+        console.log(`📊 Stats endpoint /quiz/questions/${id}/stats/ not available:`, statsError.message);
+
+        try {
+          const alternativeResponse = await axios.get(`${API_BASE_URL}/quiz/qs/${id}/stats/`, {
+            headers: getAuthHeaders(),
+            timeout: 15000,
+          });
+          console.log(`📊 Stats from alternative endpoint for quiz ${id}:`, alternativeResponse.data);
+          statsFromEndpoint = alternativeResponse.data;
+        } catch (altError) {
+          console.log(`📊 Both stats endpoints failed for quiz ${id}, using quiz data`);
+        }
       }
 
-      // 3. Stats ma'lumotlarini biriktrish
       const correctCount = quiz.correct_count || 0;
       const wrongCount = quiz.wrong_count || 0;
       const totalAttempts = correctCount + wrongCount;
       const accuracy = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
 
       const stats = {
-        // Asosiy quiz ma'lumotlari
         correct_count: correctCount,
         wrong_count: wrongCount,
         view_count: quiz.view_count || quiz.total_views || 0,
         unique_viewers: quiz.unique_viewers || 0,
-
-        // Stats endpointidan olingan ma'lumotlar yoki hisoblanganlar
-        correct_attempts: statsFromEndpoint?.correct_attempts || correctCount,
-        wrong_attempts: statsFromEndpoint?.wrong_attempts || wrongCount,
+        correct_attempts: statsFromEndpoint?.correct_attempts || statsFromEndpoint?.correct_count || correctCount,
+        wrong_attempts: statsFromEndpoint?.wrong_attempts || statsFromEndpoint?.wrong_count || wrongCount,
         total_attempts: statsFromEndpoint?.total_attempts || totalAttempts,
-        total_views: statsFromEndpoint?.total_views || quiz.view_count || quiz.total_views || 0,
-
-        // Accuracy
+        total_views: statsFromEndpoint?.total_views || statsFromEndpoint?.view_count || quiz.view_count || quiz.total_views || 0,
         accuracy: statsFromEndpoint?.accuracy || accuracy,
-
-        average_time: statsFromEndpoint?.average_time || 0
+        average_time: statsFromEndpoint?.average_time || 0,
+        difficulty_percentage: quiz.difficulty_percentage || 0,
+        has_worked: quiz.has_worked || false,
+        is_bookmarked: quiz.is_bookmarked || false,
+        user_reaction: quiz.user_reaction || null,
+        reactions_summary: quiz.reactions_summary || null
       };
 
       console.log(`📊 Final compiled stats for quiz ${id}:`, stats);
@@ -1530,15 +2333,40 @@ export const quizAPI = {
       };
     } catch (error: any) {
       console.error(`❌ Error fetching stats for quiz ${id}:`, error);
-      return handleApiError(error);
+
+      const fallbackStats = {
+        correct_count: 0,
+        wrong_count: 0,
+        view_count: 0,
+        unique_viewers: 0,
+        correct_attempts: 0,
+        wrong_attempts: 0,
+        total_attempts: 0,
+        total_views: 0,
+        accuracy: 0,
+        average_time: 0,
+        difficulty_percentage: 0,
+        has_worked: false,
+        is_bookmarked: false,
+        user_reaction: null,
+        reactions_summary: null
+      };
+
+      return {
+        success: false,
+        error: error.message,
+        data: fallbackStats
+      };
     }
   },
 
-  // Questions by user
   fetchQuestionsByUser: async (user_id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get(`/quiz/qs/user_questions/?user_id=${user_id}`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/qs/user_questions/?user_id=${user_id}`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Fetch questions by user ${user_id} error:`, error);
@@ -1546,12 +2374,17 @@ export const quizAPI = {
     }
   },
 
-  // View tracking
   recordView: async (data: any): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
       console.log(`👁️ Recording view:`, data);
-      const response = await api.post('/quiz/views/', data);
+
+      await csrfManager.ensureToken();
+
+      const response = await axios.post(`${API_BASE_URL}/quiz/views/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Record view error:", error);
@@ -1562,7 +2395,10 @@ export const quizAPI = {
   getViews: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await api.get('/quiz/views/');
+      const response = await axios.get(`${API_BASE_URL}/quiz/views/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get views error:", error);
@@ -1573,7 +2409,54 @@ export const quizAPI = {
 
 // ==================== QUIZ VIEWS API ====================
 export const quizViewsAPI = {
-  // GET all views
+  createQuizView: async (questionId: number, data?: any): Promise<APIResponse<any>> => {
+    try {
+      await requireAuthForQuiz();
+
+      console.log(`➕ POST to /quiz/question-views/ for question ${questionId}`);
+
+      await csrfManager.ensureToken();
+
+      const requestData = {
+        question: questionId,
+        user: {
+          username: data?.username || ''
+        },
+        ...data
+      };
+
+      console.log('📤 POST data to /quiz/question-views/:', requestData);
+
+      const response = await axios.post(`${API_BASE_URL}/quiz/question-views/`, requestData, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+
+      console.log('✅ Backend POST response:', {
+        status: response.status,
+        data: response.data,
+        success: true
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        status: response.status
+      };
+    } catch (error: any) {
+      console.error('❌ Create quiz view error:', {
+        status: error.response?.status,
+        message: error.message,
+        data: error.response?.data
+      });
+
+      return {
+        success: false,
+        error: error.response?.data || error.message
+      };
+    }
+  },
+
   getQuizViews: async (questionId?: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
@@ -1585,11 +2468,10 @@ export const quizViewsAPI = {
 
       console.log(`📊 GET /quiz/question-views/ for questionId: ${questionId || 'all'}`);
 
-      const response = await api.get('/quiz/question-views/', {
+      const response = await axios.get(`${API_BASE_URL}/quiz/question-views/`, {
         params,
-        paramsSerializer: {
-          indexes: null
-        }
+        headers: getAuthHeaders(),
+        timeout: 15000,
       });
 
       console.log('✅ GET /quiz/question-views/ response:', {
@@ -1627,56 +2509,22 @@ export const quizViewsAPI = {
     }
   },
 
-  // POST /quiz/question-views/ - yangi view yaratish
-  createQuizView: async (questionId: number): Promise<APIResponse<any>> => {
+  getQuizViewById: async (viewId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
 
-      console.log(`➕ POST to /quiz/question-views/ for question ${questionId}`);
-
-      const requestData = {
-        question: questionId
-      };
-
-      console.log('📤 POST data:', requestData);
-
-      const response = await api.post('/quiz/question-views/', requestData);
-
-      console.log('✅ Backend POST response:', {
-        status: response.status,
-        data: response.data,
-        success: true
+      console.log(`📋 Getting view by ID: ${viewId}`);
+      const response = await axios.get(`${API_BASE_URL}/quiz/question-views/${viewId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
       });
-
       return {
         success: true,
         data: response.data,
         status: response.status
       };
     } catch (error: any) {
-      console.error('❌ Create quiz view error:', {
-        status: error.response?.status,
-        message: error.message,
-        data: error.response?.data
-      });
-
-      if (error.response?.status === 400) {
-        console.log('🔄 Trying alternative data format...');
-        try {
-          const alternativeData = { question_id: questionId };
-          const retryResponse = await api.post('/quiz/question-views/', alternativeData);
-
-          return {
-            success: true,
-            data: retryResponse.data,
-            status: retryResponse.status,
-            retried: true
-          };
-        } catch (retryError: any) {
-          console.error('❌ Retry failed:', retryError);
-        }
-      }
-
+      console.error(`❌ Get quiz view ${viewId} error:`, error);
       return {
         success: false,
         error: error.response?.data || error.message
@@ -1684,7 +2532,75 @@ export const quizViewsAPI = {
     }
   },
 
-  // Get views statistics for a question
+  updateQuizView: async (viewId: number, data: any): Promise<APIResponse<any>> => {
+    try {
+      await requireAuthForQuiz();
+
+      console.log(`✏️ Updating view ${viewId}:`, data);
+      const response = await axios.put(`${API_BASE_URL}/quiz/question-views/${viewId}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+      return {
+        success: true,
+        data: response.data,
+        status: response.status
+      };
+    } catch (error: any) {
+      console.error(`❌ Update quiz view ${viewId} error:`, error);
+      return {
+        success: false,
+        error: error.response?.data || error.message
+      };
+    }
+  },
+
+  patchQuizView: async (viewId: number, data: any): Promise<APIResponse<any>> => {
+    try {
+      await requireAuthForQuiz();
+
+      console.log(`🔧 Patching view ${viewId}:`, data);
+      const response = await axios.patch(`${API_BASE_URL}/quiz/question-views/${viewId}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+      return {
+        success: true,
+        data: response.data,
+        status: response.status
+      };
+    } catch (error: any) {
+      console.error(`❌ Patch quiz view ${viewId} error:`, error);
+      return {
+        success: false,
+        error: error.response?.data || error.message
+      };
+    }
+  },
+
+  deleteQuizView: async (viewId: number): Promise<APIResponse<any>> => {
+    try {
+      await requireAuthForQuiz();
+
+      console.log(`🗑️ Deleting view ${viewId}`);
+      const response = await axios.delete(`${API_BASE_URL}/quiz/question-views/${viewId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+      return {
+        success: true,
+        data: response.data,
+        status: response.status
+      };
+    } catch (error: any) {
+      console.error(`❌ Delete quiz view ${viewId} error:`, error);
+      return {
+        success: false,
+        error: error.response?.data || error.message
+      };
+    }
+  },
+
   getQuestionViewStats: async (questionId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
@@ -1781,86 +2697,26 @@ export const quizViewsAPI = {
     }
   },
 
-  // Get single view
-  getQuizView: async (viewId: number): Promise<APIResponse<any>> => {
+  recordView: async (questionId: number, duration?: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
 
-      console.log(`📋 Getting single view ${viewId}`);
-      const response = await api.get(`/quiz/question-views/${viewId}/`);
-      return {
-        success: true,
-        data: response.data,
-        status: response.status
+      console.log(`👁️ Recording view for question ${questionId}`, duration ? `with duration ${duration}s` : '');
+
+      const requestData: any = {
+        question: questionId
       };
+
+      if (duration !== undefined) {
+        requestData.duration = duration;
+      }
+
+      return await quizViewsAPI.createQuizView(questionId, requestData);
     } catch (error: any) {
-      console.error(`❌ Get quiz view ${viewId} error:`, error);
+      console.error(`❌ Record view error for question ${questionId}:`, error);
       return {
         success: false,
-        error: error.response?.data || error.message
-      };
-    }
-  },
-
-  // PUT update view
-  updateQuizView: async (viewId: number, data: any): Promise<APIResponse<any>> => {
-    try {
-      await requireAuthForQuiz();
-
-      console.log(`✏️ Updating view ${viewId}:`, data);
-      const response = await api.put(`/quiz/question-views/${viewId}/`, data);
-      return {
-        success: true,
-        data: response.data,
-        status: response.status
-      };
-    } catch (error: any) {
-      console.error(`❌ Update quiz view ${viewId} error:`, error);
-      return {
-        success: false,
-        error: error.response?.data || error.message
-      };
-    }
-  },
-
-  // PATCH partial update
-  patchQuizView: async (viewId: number, data: any): Promise<APIResponse<any>> => {
-    try {
-      await requireAuthForQuiz();
-
-      console.log(`🔧 Patching view ${viewId}:`, data);
-      const response = await api.patch(`/quiz/question-views/${viewId}/`, data);
-      return {
-        success: true,
-        data: response.data,
-        status: response.status
-      };
-    } catch (error: any) {
-      console.error(`❌ Patch quiz view ${viewId} error:`, error);
-      return {
-        success: false,
-        error: error.response?.data || error.message
-      };
-    }
-  },
-
-  // DELETE view
-  deleteQuizView: async (viewId: number): Promise<APIResponse<any>> => {
-    try {
-      await requireAuthForQuiz();
-
-      console.log(`🗑️ Deleting view ${viewId}`);
-      const response = await api.delete(`/quiz/question-views/${viewId}/`);
-      return {
-        success: true,
-        data: response.data,
-        status: response.status
-      };
-    } catch (error: any) {
-      console.error(`❌ Delete quiz view ${viewId} error:`, error);
-      return {
-        success: false,
-        error: error.response?.data || error.message
+        error: error.message
       };
     }
   }
@@ -1870,19 +2726,33 @@ export const quizViewsAPI = {
 export const authAPI = {
   async getCurrentUser(): Promise<UserData> {
     await tokenManager.requireAuth();
-    const response = await api.get<UserData>("/accounts/me/");
+    const response = await axios.get<UserData>(`${API_BASE_URL}/accounts/me/`, {
+      headers: getAuthHeaders(),
+      timeout: 15000,
+    });
     return response.data;
   },
 
   login: async (username: string, password: string): Promise<APIResponse<LoginResponse>> => {
     try {
-      const response = await publicApi.post('/accounts/login/', { username, password });
+      console.log('🔐 Attempting login for user:', username);
+
+      const response = await axios.post(`${API_BASE_URL}/accounts/login/`,
+          { username, password },
+          {
+            headers: getDefaultHeaders(),
+            timeout: 15000,
+          }
+      );
+
+      console.log('✅ Login response status:', response.status);
 
       if (response.data.access && response.data.refresh) {
         tokenManager.setTokens(response.data.access, response.data.refresh);
         if (typeof window !== 'undefined') {
           localStorage.setItem('user', JSON.stringify(response.data.user));
         }
+        console.log('✅ Tokens set successfully');
       }
 
       return {
@@ -1891,14 +2761,21 @@ export const authAPI = {
         status: response.status
       };
     } catch (error: any) {
-      console.error("❌ Login error:", error);
+      console.error("❌ Login error:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
       return handleApiError(error);
     }
   },
 
   register: async (data: any): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.post('/accounts/register/', data);
+      const response = await axios.post(`${API_BASE_URL}/accounts/register/`, data, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
+      });
       return {
         success: true,
         data: response.data,
@@ -1912,7 +2789,10 @@ export const authAPI = {
 
   logout: async (): Promise<APIResponse<void>> => {
     try {
-      await api.post('/accounts/logout/');
+      await axios.post(`${API_BASE_URL}/accounts/logout/`, {}, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       tokenManager.clearTokens();
       return { success: true, status: 200 };
     } catch (error: any) {
@@ -1924,8 +2804,19 @@ export const authAPI = {
   getMe: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/me/');
-      return { success: true, data: response.data };
+      console.log('👤 Getting current user info...');
+
+      const response = await axios.get(`${API_BASE_URL}/accounts/me/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+
+      console.log('✅ Get me response:', response.status);
+      return {
+        success: true,
+        data: response.data,
+        status: response.status
+      };
     } catch (error: any) {
       console.error("❌ Get me error:", error);
       return handleApiError(error);
@@ -1935,7 +2826,10 @@ export const authAPI = {
   updateProfile: async (data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch('/accounts/me/update/', data);
+      const response = await axios.patch(`${API_BASE_URL}/accounts/me/update/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Update profile error:", error);
@@ -1946,7 +2840,10 @@ export const authAPI = {
   changePassword: async (data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/accounts/me/change-password/', data);
+      const response = await axios.post(`${API_BASE_URL}/accounts/me/change-password/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Change password error:", error);
@@ -1957,7 +2854,10 @@ export const authAPI = {
   getStats: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/me/stats/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/me/stats/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get stats error:", error);
@@ -1967,7 +2867,10 @@ export const authAPI = {
 
   getCountry: async (): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.get('/accounts/countries/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/countries/`, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get country error:", error);
@@ -1977,7 +2880,10 @@ export const authAPI = {
 
   getRegion: async (country_id: number): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.get(`/accounts/regions/${country_id}/`);
+      const response = await axios.get(`${API_BASE_URL}/accounts/regions/${country_id}/`, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get region ${country_id} error:`, error);
@@ -1987,7 +2893,10 @@ export const authAPI = {
 
   getDistrict: async (region_id: number): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.get(`/accounts/districts/${region_id}/`);
+      const response = await axios.get(`${API_BASE_URL}/accounts/districts/${region_id}/`, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get district ${region_id} error:`, error);
@@ -1997,7 +2906,10 @@ export const authAPI = {
 
   getSettlement: async (district_id: number): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.get(`/accounts/settlements/${district_id}/`);
+      const response = await axios.get(`${API_BASE_URL}/accounts/settlements/${district_id}/`, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get settlement ${district_id} error:`, error);
@@ -2007,8 +2919,11 @@ export const authAPI = {
 
   socialLogin: async (provider: string, accessToken: string): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.post(`/accounts/social-login/${provider}/`, {
+      const response = await axios.post(`${API_BASE_URL}/accounts/social-login/${provider}/`, {
         access_token: accessToken,
+      }, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
       });
       return { success: true, data: response.data };
     } catch (error: any) {
@@ -2020,7 +2935,10 @@ export const authAPI = {
   fetchStories: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/stories/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/stories/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch stories error:", error);
@@ -2030,7 +2948,13 @@ export const authAPI = {
 
   resendVerificationEmail: async (email: string): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.post('/accounts/resend-verification-email/', { email });
+      const response = await axios.post(`${API_BASE_URL}/accounts/resend-verification-email/`,
+          { email },
+          {
+            headers: getDefaultHeaders(),
+            timeout: 15000,
+          }
+      );
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Resend verification email error:", error);
@@ -2040,7 +2964,10 @@ export const authAPI = {
 
   verifyEmail: async (token: string): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.get(`/accounts/verify-email/${token}/`);
+      const response = await axios.get(`${API_BASE_URL}/accounts/verify-email/${token}/`, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Verify email error:", error);
@@ -2050,7 +2977,13 @@ export const authAPI = {
 
   sendPasswordResetEmail: async (email: string): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.post('/accounts/send-password-reset/', { email });
+      const response = await axios.post(`${API_BASE_URL}/accounts/send-password-reset/`,
+          { email },
+          {
+            headers: getDefaultHeaders(),
+            timeout: 15000,
+          }
+      );
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Send password reset email error:", error);
@@ -2060,7 +2993,13 @@ export const authAPI = {
 
   resetPassword: async (token: string, password: string): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.post('/accounts/reset-password/', { token, password });
+      const response = await axios.post(`${API_BASE_URL}/accounts/reset-password/`,
+          { token, password },
+          {
+            headers: getDefaultHeaders(),
+            timeout: 15000,
+          }
+      );
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Reset password error:", error);
@@ -2071,7 +3010,12 @@ export const authAPI = {
   fetchNotifications: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get(`/accounts/notifications/`);
+      console.log('🔔 Fetching notifications...');
+      const response = await axios.get(`${API_BASE_URL}/accounts/notifications/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+      console.log('✅ Notifications response:', response.status);
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch notifications error:", error);
@@ -2082,7 +3026,13 @@ export const authAPI = {
   markNotificationAsRead: async (notificationId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch(`/accounts/notifications/${notificationId}/`, { is_read: true });
+      const response = await axios.patch(`${API_BASE_URL}/accounts/notifications/${notificationId}/`,
+          { is_read: true },
+          {
+            headers: getAuthHeaders(),
+            timeout: 15000,
+          }
+      );
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Mark notification as read ${notificationId} error:`, error);
@@ -2093,7 +3043,10 @@ export const authAPI = {
   markAllNotificationsAsRead: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/accounts/notifications/mark-all-read/`);
+      const response = await axios.post(`${API_BASE_URL}/accounts/notifications/mark-all-read/`, {}, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Mark all notifications as read error:", error);
@@ -2107,7 +3060,10 @@ export const accountsAPI = {
   getUserFollowData: async (userId: number): Promise<APIResponse<FollowDataResponse>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get(`/accounts/followers/${userId}/`);
+      const response = await axios.get(`${API_BASE_URL}/accounts/followers/${userId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get user follow data ${userId} error:`, error);
@@ -2118,7 +3074,10 @@ export const accountsAPI = {
   toggleFollow: async (userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/accounts/followers/${userId}/toggle/`);
+      const response = await axios.post(`${API_BASE_URL}/accounts/followers/${userId}/toggle/`, {}, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Toggle follow error:", error);
@@ -2129,7 +3088,10 @@ export const accountsAPI = {
   getLeaderboard: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/leaderboard/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/leaderboard/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get leaderboard error:", error);
@@ -2140,7 +3102,10 @@ export const accountsAPI = {
   getAds: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/ads/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/ads/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get ads error:", error);
@@ -2151,7 +3116,10 @@ export const accountsAPI = {
   createAd: async (data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/accounts/ads/', data);
+      const response = await axios.post(`${API_BASE_URL}/accounts/ads/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create ad error:", error);
@@ -2162,7 +3130,10 @@ export const accountsAPI = {
   getSubscriptions: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/subscriptions/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/subscriptions/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get subscriptions error:", error);
@@ -2173,7 +3144,11 @@ export const accountsAPI = {
   searchUsers: async (query: string): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/search/', { params: { q: query } });
+      const response = await axios.get(`${API_BASE_URL}/accounts/search/`, {
+        params: { q: query },
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Search users error:", error);
@@ -2184,7 +3159,10 @@ export const accountsAPI = {
   createSubscription: async (data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/accounts/subscriptions/', data);
+      const response = await axios.post(`${API_BASE_URL}/accounts/subscriptions/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create subscription error:", error);
@@ -2195,7 +3173,10 @@ export const accountsAPI = {
   getNotifications: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/notifications/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/notifications/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get notifications error:", error);
@@ -2206,7 +3187,10 @@ export const accountsAPI = {
   getRecomendedUsers: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/accounts/recommended-users/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/recommended-users/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get recommended users error:", error);
@@ -2215,65 +3199,16 @@ export const accountsAPI = {
   },
 };
 
-// ==================== UTILITY FUNCTIONS ====================
-export const refreshToken = async (): Promise<APIResponse<TokenRefreshResponse>> => {
-  try {
-    const refreshTokenValue = tokenManager.getRefreshToken();
-    if (!refreshTokenValue) {
-      tokenManager.clearTokens();
-      throw new Error('REFRESH_TOKEN_NOT_FOUND');
-    }
-
-    const response = await api.post('/accounts/token/refresh/', {
-      refresh: refreshTokenValue,
-    });
-
-    if (response.data.access) {
-      localStorage.setItem('access_token', response.data.access);
-      return {
-        success: true,
-        data: response.data
-      };
-    } else {
-      tokenManager.clearTokens();
-      throw new Error('NO_ACCESS_TOKEN_IN_RESPONSE');
-    }
-  } catch (error: any) {
-    console.error('❌ Refresh token error:', error);
-
-    tokenManager.clearTokens();
-    if (typeof window !== 'undefined' &&
-        !window.location.pathname.includes('/login') &&
-        !window.location.pathname.includes('/register')) {
-      window.location.href = '/login';
-    }
-
-    return handleApiError(error);
-  }
-};
-
-export const updateProfileImage = async (formData: FormData): Promise<APIResponse<any>> => {
-  try {
-    await tokenManager.requireAuth();
-    const response = await formAPI.patch("/accounts/me/update/", formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    console.error("❌ Update profile image error:", error);
-    return handleApiError(error);
-  }
-};
-
 // ==================== PASSWORD RESET ====================
 export const passwordResetAPI = {
   sendResetCode: async (contact: string, method: 'email' | 'sms'): Promise<APIResponse<any>> => {
     try {
-      const response = await publicApi.post('/accounts/send-reset-code/', {
+      const response = await axios.post(`${API_BASE_URL}/accounts/send-reset-code/`, {
         contact,
         method,
+      }, {
+        headers: getDefaultHeaders(),
+        timeout: 15000,
       });
       return { success: true, data: response.data };
     } catch (error: any) {
@@ -2285,7 +3220,10 @@ export const passwordResetAPI = {
 // ==================== VALIDATION FUNCTIONS ====================
 export const checkUsername = async (username: string): Promise<boolean> => {
   try {
-    const response = await publicApi.get(`/accounts/check-username/?username=${username}`);
+    const response = await axios.get(`${API_BASE_URL}/accounts/check-username/?username=${username}`, {
+      headers: getDefaultHeaders(),
+      timeout: 15000,
+    });
     return response.data?.available || false;
   } catch (error) {
     console.error('Username check error:', error);
@@ -2295,7 +3233,10 @@ export const checkUsername = async (username: string): Promise<boolean> => {
 
 export const checkEmail = async (email: string): Promise<boolean> => {
   try {
-    const response = await publicApi.get(`/accounts/check-email/?email=${email}`);
+    const response = await axios.get(`${API_BASE_URL}/accounts/check-email/?email=${email}`, {
+      headers: getDefaultHeaders(),
+      timeout: 15000,
+    });
     return response.data?.available || false;
   } catch (error) {
     console.error('Email check error:', error);
@@ -2305,7 +3246,10 @@ export const checkEmail = async (email: string): Promise<boolean> => {
 
 export const checkReferral = async (referral: string): Promise<boolean> => {
   try {
-    const response = await publicApi.get(`/accounts/check-referral/?referral-code=${referral}`);
+    const response = await axios.get(`${API_BASE_URL}/accounts/check-referral/?referral-code=${referral}`, {
+      headers: getDefaultHeaders(),
+      timeout: 15000,
+    });
     return response.data?.available || false;
   } catch (error) {
     console.error('Referral check error:', error);
@@ -2317,7 +3261,10 @@ export const checkReferral = async (referral: string): Promise<boolean> => {
 export const userProfile = async (username: string): Promise<{ user: any; stats: any }> => {
   try {
     await tokenManager.requireAuth();
-    const response = await api.get(`/accounts/profile/${username}/`);
+    const response = await axios.get(`${API_BASE_URL}/accounts/profile/${username}/`, {
+      headers: getAuthHeaders(),
+      timeout: 15000,
+    });
     const { user, stats } = response.data;
     return { user, stats };
   } catch (error: any) {
@@ -2328,8 +3275,6 @@ export const userProfile = async (username: string): Promise<{ user: any; stats:
 
 // ==================== SEARCH ====================
 export function useSearch() {
-  // Bu funksiya React hook bo'lgani uchun uni React component ichida ishlatish kerak
-  // Utility faylga mos emas, shuning uchun uni olib tashlaymiz yoki alohida hook faylida saqlash kerak
   throw new Error('useSearch hook faqat React component ichida ishlatilishi mumkin');
 }
 
@@ -2338,7 +3283,10 @@ export const leaderboardApi = {
   async getLeaderboardData(): Promise<LeaderboardUser[]> {
     await tokenManager.requireAuth();
     try {
-      const response = await api.get('/accounts/leaderboard/');
+      const response = await axios.get(`${API_BASE_URL}/accounts/leaderboard/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return response.data.results.map((u: any) => ({
         username: u.username,
         profile_image: u.profile_image,
@@ -2357,7 +3305,10 @@ export const leaderboardApi = {
   toggleFollow: async (userId: number): Promise<any> => {
     await tokenManager.requireAuth();
     try {
-      const res = await api.post(`/accounts/followers/${userId}/toggle/`);
+      const res = await axios.post(`${API_BASE_URL}/accounts/followers/${userId}/toggle/`, {}, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return res.data;
     } catch (error) {
       console.error('Error toggling follow:', error);
@@ -2369,7 +3320,10 @@ export const leaderboardApi = {
 export const getLeaderboard = async (page = 1): Promise<APIResponse<any>> => {
   try {
     await tokenManager.requireAuth();
-    const response = await api.get(`/accounts/leaderboard/?page=${page}`);
+    const response = await axios.get(`${API_BASE_URL}/accounts/leaderboard/?page=${page}`, {
+      headers: getAuthHeaders(),
+      timeout: 15000,
+    });
     return { success: true, data: response.data };
   } catch (error: any) {
     console.error("❌ Get leaderboard error:", error);
@@ -2380,7 +3334,10 @@ export const getLeaderboard = async (page = 1): Promise<APIResponse<any>> => {
 export const toggleFollow = async (userId: number): Promise<APIResponse<any>> => {
   try {
     await tokenManager.requireAuth();
-    const response = await api.post(`/accounts/followers/${userId}/toggle/`);
+    const response = await axios.post(`${API_BASE_URL}/accounts/followers/${userId}/toggle/`, {}, {
+      headers: getAuthHeaders(),
+      timeout: 15000,
+    });
     return { success: true, data: response.data };
   } catch (error: any) {
     console.error("❌ Toggle follow error:", error);
@@ -2393,7 +3350,10 @@ export const systemAPI = {
   getConfig: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/system/config/');
+      const response = await axios.get(`${API_BASE_URL}/system/config/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get config error:", error);
@@ -2404,7 +3364,10 @@ export const systemAPI = {
   updateConfig: async (id: number, data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch(`/system/config/${id}/`, data);
+      const response = await axios.patch(`${API_BASE_URL}/system/config/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update config ${id} error:`, error);
@@ -2415,7 +3378,10 @@ export const systemAPI = {
   getFlags: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/system/flags/');
+      const response = await axios.get(`${API_BASE_URL}/system/flags/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get flags error:", error);
@@ -2426,7 +3392,10 @@ export const systemAPI = {
   getLogs: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/system/logs/');
+      const response = await axios.get(`${API_BASE_URL}/system/logs/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get logs error:", error);
@@ -2437,7 +3406,10 @@ export const systemAPI = {
   getRoles: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/system/roles/');
+      const response = await axios.get(`${API_BASE_URL}/system/roles/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get roles error:", error);
@@ -2448,7 +3420,10 @@ export const systemAPI = {
   updateRole: async (id: number, data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch(`/system/roles/${id}/`, data);
+      const response = await axios.patch(`${API_BASE_URL}/system/roles/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update role ${id} error:`, error);
@@ -2462,7 +3437,10 @@ export const chatAPI = {
   getChatRooms: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/chat/chatrooms/');
+      const response = await axios.get(`${API_BASE_URL}/chat/chatrooms/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get chat rooms error:", error);
@@ -2473,7 +3451,10 @@ export const chatAPI = {
   createOneOnOneChat: async (userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/chat/chatrooms/create-one-on-one/', { user_id: userId });
+      const response = await axios.post(`${API_BASE_URL}/chat/chatrooms/create-one-on-one/`, { user_id: userId }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create one-on-one chat error:", error);
@@ -2484,7 +3465,10 @@ export const chatAPI = {
   createGroupChat: async (data: { name: string; participants: number[] }): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/chat/chatrooms/create-group/', data);
+      const response = await axios.post(`${API_BASE_URL}/chat/chatrooms/create-group/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create group chat error:", error);
@@ -2495,7 +3479,10 @@ export const chatAPI = {
   getChatRoom: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get(`/chat/chatrooms/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/chat/chatrooms/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get chat room ${id} error:`, error);
@@ -2506,7 +3493,10 @@ export const chatAPI = {
   updateChatRoom: async (id: number, data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch(`/chat/chatrooms/${id}/`, data);
+      const response = await axios.patch(`${API_BASE_URL}/chat/chatrooms/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update chat room ${id} error:`, error);
@@ -2517,7 +3507,10 @@ export const chatAPI = {
   deleteChatRoom: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.delete(`/chat/chatrooms/${id}/`);
+      const response = await axios.delete(`${API_BASE_URL}/chat/chatrooms/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete chat room ${id} error:`, error);
@@ -2528,7 +3521,10 @@ export const chatAPI = {
   addParticipant: async (roomId: number, userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/chat/chatrooms/${roomId}/add-participant/`, { user_id: userId });
+      const response = await axios.post(`${API_BASE_URL}/chat/chatrooms/${roomId}/add-participant/`, { user_id: userId }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Add participant ${userId} to room ${roomId} error:`, error);
@@ -2539,7 +3535,10 @@ export const chatAPI = {
   removeParticipant: async (roomId: number, userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/chat/chatrooms/${roomId}/remove-participant/`, { user_id: userId });
+      const response = await axios.post(`${API_BASE_URL}/chat/chatrooms/${roomId}/remove-participant/`, { user_id: userId }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Remove participant ${userId} from room ${roomId} error:`, error);
@@ -2550,7 +3549,10 @@ export const chatAPI = {
   pinMessage: async (roomId: number, messageId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/chat/chatrooms/${roomId}/pin-message/`, { message_id: messageId });
+      const response = await axios.post(`${API_BASE_URL}/chat/chatrooms/${roomId}/pin-message/`, { message_id: messageId }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Pin message ${messageId} in room ${roomId} error:`, error);
@@ -2561,7 +3563,11 @@ export const chatAPI = {
   getMessages: async (params?: { page?: number; page_size?: number; chatroom?: number }): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/chat/messages/', { params });
+      const response = await axios.get(`${API_BASE_URL}/chat/messages/`, {
+        params,
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get messages error:", error);
@@ -2588,8 +3594,13 @@ export const chatAPI = {
           }
         }
       });
-      const response = await api.post('/chat/messages/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const response = await axios.post(`${API_BASE_URL}/chat/messages/`, formData, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${tokenManager.getAccessToken()}`,
+          'X-CSRFToken': csrfManager.getToken() || '',
+        },
+        timeout: 15000,
       });
       return { success: true, data: response.data };
     } catch (error: any) {
@@ -2601,7 +3612,10 @@ export const chatAPI = {
   getMessage: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get(`/chat/messages/${id}/`);
+      const response = await axios.get(`${API_BASE_URL}/chat/messages/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get message ${id} error:`, error);
@@ -2612,7 +3626,10 @@ export const chatAPI = {
   updateMessage: async (id: number, data: any): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch(`/chat/messages/${id}/`, data);
+      const response = await axios.patch(`${API_BASE_URL}/chat/messages/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update message ${id} error:`, error);
@@ -2623,7 +3640,10 @@ export const chatAPI = {
   deleteMessage: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.delete(`/chat/messages/${id}/`);
+      const response = await axios.delete(`${API_BASE_URL}/chat/messages/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete message ${id} error:`, error);
@@ -2634,7 +3654,10 @@ export const chatAPI = {
   deleteMessageForAll: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.delete(`/chat/messages/${id}/delete-for-all/`);
+      const response = await axios.delete(`${API_BASE_URL}/chat/messages/${id}/delete-for-all/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete message for all ${id} error:`, error);
@@ -2645,7 +3668,10 @@ export const chatAPI = {
   forwardMessage: async (id: number, chatroomIds: number[]): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/chat/messages/${id}/forward/`, { chatroom_ids: chatroomIds });
+      const response = await axios.post(`${API_BASE_URL}/chat/messages/${id}/forward/`, { chatroom_ids: chatroomIds }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Forward message ${id} error:`, error);
@@ -2656,7 +3682,10 @@ export const chatAPI = {
   reactToMessage: async (id: number, emoji: string): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post(`/chat/messages/${id}/react/`, { emoji });
+      const response = await axios.post(`${API_BASE_URL}/chat/messages/${id}/react/`, { emoji }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ React to message ${id} error:`, error);
@@ -2667,7 +3696,10 @@ export const chatAPI = {
   getQuizAttempts: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/chat/quiz-attempts/');
+      const response = await axios.get(`${API_BASE_URL}/chat/quiz-attempts/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get quiz attempts error:", error);
@@ -2681,7 +3713,10 @@ export const chatAPI = {
   }): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/chat/quiz-attempts/', data);
+      const response = await axios.post(`${API_BASE_URL}/chat/quiz-attempts/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create quiz attempt error:", error);
@@ -2692,7 +3727,10 @@ export const chatAPI = {
   getBlockedUsers: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/chat/blocked-users/');
+      const response = await axios.get(`${API_BASE_URL}/chat/blocked-users/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get blocked users error:", error);
@@ -2703,7 +3741,10 @@ export const chatAPI = {
   blockUser: async (userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/chat/blocked-users/', { blocked_user: userId });
+      const response = await axios.post(`${API_BASE_URL}/chat/blocked-users/`, { blocked_user: userId }, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Block user ${userId} error:`, error);
@@ -2714,7 +3755,10 @@ export const chatAPI = {
   unblockUser: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.delete(`/chat/blocked-users/${id}/`);
+      const response = await axios.delete(`${API_BASE_URL}/chat/blocked-users/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Unblock user ${id} error:`, error);
@@ -2725,7 +3769,10 @@ export const chatAPI = {
   getDrafts: async (): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.get('/chat/drafts/');
+      const response = await axios.get(`${API_BASE_URL}/chat/drafts/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Get drafts error:", error);
@@ -2736,7 +3783,10 @@ export const chatAPI = {
   createDraft: async (data: { chatroom: number; content: string }): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.post('/chat/drafts/', data);
+      const response = await axios.post(`${API_BASE_URL}/chat/drafts/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create draft error:", error);
@@ -2747,7 +3797,10 @@ export const chatAPI = {
   updateDraft: async (id: number, data: { content: string }): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.patch(`/chat/drafts/${id}/`, data);
+      const response = await axios.patch(`${API_BASE_URL}/chat/drafts/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update draft ${id} error:`, error);
@@ -2758,7 +3811,10 @@ export const chatAPI = {
   deleteDraft: async (id: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
-      const response = await api.delete(`/chat/drafts/${id}/`);
+      const response = await axios.delete(`${API_BASE_URL}/chat/drafts/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete draft ${id} error:`, error);
@@ -2771,8 +3827,11 @@ export const chatAPI = {
 export const liveQuizAPI = {
   fetchMyLiveQuizzes: async (): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.get("/quiz/live-quiz/my/");
+      await requireAuthForQuiz();
+      const response = await axios.get(`${API_BASE_URL}/quiz/live-quiz/my/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Fetch my live quizzes error:", error);
@@ -2791,7 +3850,7 @@ export const liveQuizAPI = {
     time_per_question?: number;
   }): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
+      await requireAuthForQuiz();
 
       let csrfToken = csrfManager.getToken();
       if (!csrfToken) {
@@ -2818,15 +3877,15 @@ export const liveQuizAPI = {
         }),
       };
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
+      const headers = getAuthHeaders();
       if (csrfToken) {
         headers["X-CSRFToken"] = csrfToken;
       }
 
-      const response = await api.post("/quiz/live-quiz/save/", payload, { headers });
+      const response = await axios.post(`${API_BASE_URL}/quiz/live-quiz/save/`, payload, {
+        headers,
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("❌ Create live quiz error:", error);
@@ -2836,8 +3895,11 @@ export const liveQuizAPI = {
 
   getLiveQuiz: async (id: number): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.get(`/quiz/live-quiz/${id}/`);
+      await requireAuthForQuiz();
+      const response = await axios.get(`${API_BASE_URL}/quiz/live-quiz/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get live quiz ${id} error:`, error);
@@ -2847,8 +3909,11 @@ export const liveQuizAPI = {
 
   updateLiveQuiz: async (id: number, data: any): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.patch(`/quiz/live-quiz/${id}/`, data);
+      await requireAuthForQuiz();
+      const response = await axios.patch(`${API_BASE_URL}/quiz/live-quiz/${id}/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Update live quiz ${id} error:`, error);
@@ -2858,8 +3923,11 @@ export const liveQuizAPI = {
 
   deleteLiveQuiz: async (id: number): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.delete(`/quiz/live-quiz/${id}/`);
+      await requireAuthForQuiz();
+      const response = await axios.delete(`${API_BASE_URL}/quiz/live-quiz/${id}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Delete live quiz ${id} error:`, error);
@@ -2869,8 +3937,11 @@ export const liveQuizAPI = {
 
   joinLiveQuiz: async (quizId: number): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.post(`/quiz/live-quiz/${quizId}/join/`);
+      await requireAuthForQuiz();
+      const response = await axios.post(`${API_BASE_URL}/quiz/live-quiz/${quizId}/join/`, {}, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Join live quiz ${quizId} error:`, error);
@@ -2880,8 +3951,11 @@ export const liveQuizAPI = {
 
   getLiveQuizParticipants: async (quizId: number): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.get(`/quiz/live-quiz/${quizId}/participants/`);
+      await requireAuthForQuiz();
+      const response = await axios.get(`${API_BASE_URL}/quiz/live-quiz/${quizId}/participants/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get live quiz participants ${quizId} error:`, error);
@@ -2898,8 +3972,11 @@ export const liveQuizAPI = {
       },
   ): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.post(`/quiz/live-quiz/${quizId}/submit-answer/`, data);
+      await requireAuthForQuiz();
+      const response = await axios.post(`${API_BASE_URL}/quiz/live-quiz/${quizId}/submit-answer/`, data, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Submit live quiz answer ${quizId} error:`, error);
@@ -2909,8 +3986,11 @@ export const liveQuizAPI = {
 
   getLiveQuizResults: async (quizId: number): Promise<APIResponse<any>> => {
     try {
-      await tokenManager.requireAuth();
-      const response = await api.get(`/quiz/live-quiz/${quizId}/results/`);
+      await requireAuthForQuiz();
+      const response = await axios.get(`${API_BASE_URL}/quiz/live-quiz/${quizId}/results/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error(`❌ Get live quiz results ${quizId} error:`, error);
@@ -2922,7 +4002,10 @@ export const liveQuizAPI = {
 // ==================== HEALTH CHECK ====================
 export const checkApiHealth = async (): Promise<{ healthy: boolean; data?: any; error?: string; code?: string }> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/health/`, { timeout: 5000 });
+    const response = await axios.get(`${API_BASE_URL}/health/`, {
+      timeout: 5000,
+      headers: getDefaultHeaders(),
+    });
     return { healthy: true, data: response.data };
   } catch (error: any) {
     return {
@@ -2986,7 +4069,10 @@ export const checkBackendHealth = async (): Promise<{
   error?: string;
 }> => {
   try {
-    await axios.get(API_BASE_URL, { timeout: 5000 });
+    await axios.get(API_BASE_URL, {
+      timeout: 5000,
+      headers: getDefaultHeaders(),
+    });
     return { healthy: true };
   } catch (error: any) {
     return {
@@ -3145,4 +4231,4 @@ export class ChatWebSocket {
 }
 
 // ==================== DEFAULT EXPORT ====================
-export default api;
+export default axios;

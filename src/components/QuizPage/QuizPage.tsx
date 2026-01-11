@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter, Eye, MoreVertical, Smile, BarChart3, Search, RefreshCw } from "lucide-react";
-import { quizAPI, accountsAPI } from "../../utils/api";
+import { quizAPI, accountsAPI, tokenManager, infiniteScrollManager } from "../../utils/api";
 import { useParams, useNavigate } from "react-router-dom";
 import Logo from "../assets/images/logo.jpg";
 import defaultAvatar from "../assets/images/defaultuseravatar.png";
@@ -108,22 +108,19 @@ const REACTION_CHOICES = [
 
 type ReactionType = typeof REACTION_CHOICES[number]['id'];
 
-const BATCH_SIZE = 10;
-const MIN_QUIZZES_BEFORE_LOAD = 2;
+const INFINITE_SCROLL_PAGE_SIZE = 10;
+const INFINITE_SCROLL_THRESHOLD = 2;
+const SCROLL_DEBOUNCE_DELAY = 100;
 
 const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const navigate = useNavigate();
     const { questionId } = useParams<{ questionId: string }>();
 
-    // useSimpleQuizViews hook ni ishlatish
     const {
         getStatistics,
         recordView: recordQuizView,
         initialize: initializeViews,
-        getCurrentUserId,
-        fetchViewsList,
-        updateTotalViews,
-        updateUniqueViews
+        getCurrentUserId
     } = useSimpleQuizViews();
 
     const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
@@ -136,15 +133,12 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         submittedQuizzes: new Set<number>(),
     });
 
-    // Animation states
     const [shakingAnswerId, setShakingAnswerId] = useState<number | null>(null);
     const [coinAnimation, setCoinAnimation] = useState<{ quizId: number, answerId: number, show: boolean } | null>(null);
     const [correctAnimation, setCorrectAnimation] = useState<number | null>(null);
 
-    // Filter states
     const [filterOptions, setFilterOptions] = useState<FilterOptions>({
         category: "All",
-        page_size: BATCH_SIZE,
         ordering: "-created_at",
         is_random: true
     });
@@ -154,19 +148,17 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
     const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
     const [hasMore, setHasMore] = useState(true);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
-    const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
     const [quizReactions, setQuizReactions] = useState<Map<number, QuizReaction>>(new Map());
     const [isReacting, setIsReacting] = useState<Set<number>>(new Set());
 
-    // UI State'lar
     const [showReactions, setShowReactions] = useState<number | null>(null);
     const [showDropdown, setShowDropdown] = useState<number | null>(null);
     const [showReactionStats, setShowReactionStats] = useState<number | null>(null);
 
-    // Quiz Stats State'lar
     const [quizStats, setQuizStats] = useState<Map<number, {
         views: number;
         unique_views: number;
@@ -176,20 +168,767 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         accuracy: number;
     }>>(new Map());
 
-    const [viewedQuizzes, setViewedQuizzes] = useState<Set<number>>(new Set());
-
-    // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isLoadingRef = useRef(false);
-    const lastLoadMoreTimeRef = useRef(0);
-    const currentPageRef = useRef(1);
+    const lastScrollTopRef = useRef<number>(0);
+    const viewedQuizzesRef = useRef<Set<number>>(new Set());
+    const initialLoadRef = useRef(false);
 
-    // Infinite loopni oldini olish uchun flag
-    const isLoadMoreInProgressRef = useRef(false);
+    // Infinite scroll state
+    const [infiniteScrollState, setInfiniteScrollState] = useState(() => infiniteScrollManager.getState());
 
-    // Stats Functions - useCallback bilan muammolarni oldini olish
+    // ==================== JAVOB TANLASH VA SUBMIT QILISH FUNKSIYALARI ====================
+
+    // Javobni tanlash funksiyasi
+    const selectAnswer = async (quizId: number, answerId: number) => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (!quiz) return;
+
+        // Agar savol submit qilingan bo'lsa, yana tanlashga ruxsat bermaslik
+        if (userInteractions.submittedQuizzes.has(quizId)) return;
+
+        // Agar multiple choice bo'lsa
+        if (quiz.question_type === 'multiple') {
+            handleMultipleChoice(quizId, answerId);
+            return;
+        }
+
+        // Agar single choice bo'lsa
+        if (submittingQuestions.has(quizId) || userInteractions.submittedQuizzes.has(quizId)) return;
+
+        // Javobni tanlash (state da saqlash)
+        setUserInteractions(prev => {
+            const newSelectedAnswers = new Map(prev.selectedAnswers);
+            newSelectedAnswers.set(quizId, [answerId]);
+            return {
+                ...prev,
+                selectedAnswers: newSelectedAnswers
+            };
+        });
+
+        // Submit qilish
+        setSubmittingQuestions(prev => new Set(prev).add(quizId));
+        try {
+            const res = await quizAPI.submitAnswers({
+                question: quizId,
+                selected_answer_ids: [answerId]
+            });
+
+            const isCorrect = res.data?.is_correct;
+            console.log(`✅ Answer submitted for quiz ${quizId}: correct=${isCorrect}`);
+
+            setUserInteractions(prev => ({
+                ...prev,
+                answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
+                submittedQuizzes: new Set(prev.submittedQuizzes).add(quizId),
+            }));
+
+            if (isCorrect) {
+                // To'g'ri javob animatsiyasi
+                setCorrectAnimation(quizId);
+                setTimeout(() => setCorrectAnimation(null), 2000);
+
+                // Coin animatsiyasi
+                setCoinAnimation({ quizId, answerId, show: true });
+                setTimeout(() => setCoinAnimation(null), 2000);
+            } else {
+                // Noto'g'ri javob animatsiyasi
+                setShakingAnswerId(answerId);
+                setTimeout(() => setShakingAnswerId(null), 1000);
+            }
+
+            // Statistikani yangilash
+            setTimeout(async () => {
+                try {
+                    await fetchQuizStats(quizId);
+                } catch (error) {
+                    console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
+                }
+            }, 500);
+
+        } catch (err) {
+            console.error("❌ Select answer error:", err);
+        } finally {
+            setSubmittingQuestions(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(quizId);
+                return newSet;
+            });
+        }
+    };
+
+    // Multiple choice javob tanlash
+    const handleMultipleChoice = (quizId: number, answerId: number) => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (!quiz || userInteractions.submittedQuizzes.has(quizId)) return;
+
+        setUserInteractions(prev => {
+            const current = prev.selectedAnswers.get(quizId) || [];
+            let newAnswers;
+
+            // Agar answer allaqachon tanlangan bo'lsa, olib tashlash
+            if (current.includes(answerId)) {
+                newAnswers = current.filter(id => id !== answerId);
+            } else {
+                // Yangi javobni qo'shish
+                newAnswers = [...current, answerId];
+            }
+
+            return {
+                ...prev,
+                selectedAnswers: new Map(prev.selectedAnswers).set(quizId, newAnswers)
+            };
+        });
+    };
+
+    // Multiple choice submit qilish
+    const submitMultipleChoice = async (quizId: number) => {
+        const selected = userInteractions.selectedAnswers.get(quizId) || [];
+        if (selected.length === 0 || submittingQuestions.has(quizId) || userInteractions.submittedQuizzes.has(quizId)) return;
+
+        setSubmittingQuestions(prev => new Set(prev).add(quizId));
+        try {
+            const res = await quizAPI.submitAnswers({
+                question: quizId,
+                selected_answer_ids: selected
+            });
+
+            const isCorrect = res.data?.is_correct;
+            console.log(`✅ Multiple choice submitted for quiz ${quizId}: correct=${isCorrect}`);
+
+            setUserInteractions(prev => ({
+                ...prev,
+                answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
+                submittedQuizzes: new Set(prev.submittedQuizzes).add(quizId),
+            }));
+
+            if (isCorrect) {
+                // To'g'ri javob animatsiyasi
+                setCorrectAnimation(quizId);
+                setTimeout(() => setCorrectAnimation(null), 2000);
+
+                // Coin animatsiyasi
+                const quiz = quizData.find(q => q.id === quizId);
+                if (quiz) {
+                    const correctAnswer = quiz.answers.find(a => a.is_correct);
+                    if (correctAnswer) {
+                        setCoinAnimation({ quizId, answerId: correctAnswer.id, show: true });
+                        setTimeout(() => setCoinAnimation(null), 2000);
+                    }
+                }
+            } else {
+                // Noto'g'ri tanlangan javoblar uchun animatsiya
+                selected.forEach((answerId) => {
+                    const answer = quizData.find(q => q.id === quizId)?.answers.find(a => a.id === answerId);
+                    if (answer && !answer.is_correct) {
+                        setShakingAnswerId(answerId);
+                    }
+                });
+                setTimeout(() => setShakingAnswerId(null), 1000);
+            }
+
+            // Statistikani yangilash
+            setTimeout(async () => {
+                try {
+                    await fetchQuizStats(quizId);
+                } catch (error) {
+                    console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
+                }
+            }, 500);
+
+        } catch (err) {
+            console.error("❌ Submit multiple choice error:", err);
+        } finally {
+            setSubmittingQuestions(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(quizId);
+                return newSet;
+            });
+        }
+    };
+
+    // ==================== RENDER QUESTION CONTENT FUNKSIYASI ====================
+
+    const renderQuestionContent = (quiz: Quiz) => {
+        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
+        const answerState = userInteractions.answerStates.get(quiz.id);
+        const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
+        const isMultipleChoice = quiz.question_type === 'multiple';
+        const isSubmitting = submittingQuestions.has(quiz.id);
+
+        // Javoblarni render qilish
+        const renderAnswers = () => {
+            if (!quiz.answers || quiz.answers.length === 0) {
+                return <div className="text-gray-400 text-center py-4">Javob variantlari mavjud emas</div>;
+            }
+
+            return quiz.answers.map((answer, idx) => {
+                const isSelected = selectedAnswers.includes(answer.id);
+                const isCorrect = answer.is_correct;
+                const isShaking = shakingAnswerId === answer.id;
+                const letter = answer.letter || String.fromCharCode(65 + idx);
+
+                // Submit qilinganidan keyin ko'rinish
+                let bgColor = 'bg-white/5';
+                let borderColor = 'border-white/10';
+                let textColor = 'text-gray-200';
+
+                if (hasSubmitted) {
+                    if (isCorrect) {
+                        bgColor = 'bg-green-500/20';
+                        borderColor = 'border-green-500';
+                        textColor = 'text-green-400';
+                    } else if (isSelected && !isCorrect) {
+                        bgColor = 'bg-red-500/20';
+                        borderColor = 'border-red-500';
+                        textColor = 'text-red-400';
+                    }
+                } else if (isSelected) {
+                    bgColor = 'bg-blue-500/20';
+                    borderColor = 'border-blue-500';
+                    textColor = 'text-white';
+                }
+
+                return (
+                    <div
+                        key={answer.id}
+                        className={`relative mb-3 p-4 rounded-lg border transition-all cursor-pointer
+                            ${bgColor} ${borderColor} ${isShaking ? 'animate-shake' : ''}
+                            ${!hasSubmitted ? 'hover:bg-white/10' : ''}
+                        `}
+                        onClick={() => {
+                            if (!hasSubmitted && !isSubmitting) {
+                                selectAnswer(quiz.id, answer.id);
+                            }
+                        }}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center
+                                ${isSelected ? 'bg-blue-500' : 'bg-white/10'}
+                                ${hasSubmitted && isCorrect ? 'bg-green-500' : ''}
+                                ${hasSubmitted && isSelected && !isCorrect ? 'bg-red-500' : ''}
+                            `}>
+                                <span className={`font-bold ${isSelected || (hasSubmitted && isCorrect) ? 'text-white' : 'text-gray-300'}`}>
+                                    {letter}
+                                </span>
+                            </div>
+                            <div className="flex-1">
+                                <div className={`text-sm md:text-base ${textColor}`}>
+                                    {answer.answer_text}
+                                </div>
+                            </div>
+
+                            {/* Check iconlari */}
+                            {hasSubmitted && isCorrect && (
+                                <div className="text-green-400">
+                                    <Check size={20} />
+                                </div>
+                            )}
+                            {hasSubmitted && isSelected && !isCorrect && (
+                                <div className="text-red-400">
+                                    <X size={20} />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Multiple choice uchun checkbox */}
+                        {isMultipleChoice && !hasSubmitted && (
+                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                                <input
+                                    type="checkbox"
+                                    className="w-5 h-5 cursor-pointer"
+                                    checked={isSelected}
+                                    onChange={() => handleMultipleChoice(quiz.id, answer.id)}
+                                    disabled={hasSubmitted || isSubmitting}
+                                />
+                            </div>
+                        )}
+
+                        {/* Single choice uchun radio */}
+                        {!isMultipleChoice && !hasSubmitted && (
+                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                                <input
+                                    type="radio"
+                                    name={`quiz-${quiz.id}`}
+                                    className="w-5 h-5 cursor-pointer"
+                                    checked={isSelected}
+                                    onChange={() => {}}
+                                    disabled={hasSubmitted || isSubmitting}
+                                />
+                            </div>
+                        )}
+                    </div>
+                );
+            });
+        };
+
+        // Submit tugmasi
+        const renderSubmitButton = () => {
+            if (hasSubmitted) {
+                return (
+                    <div className="mt-6">
+                        <div className={`text-center py-3 rounded-lg font-medium ${
+                            answerState === 'correct'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }`}>
+                            {answerState === 'correct' ? '✅ To\'g\'ri javob!' : '❌ Noto\'g\'ri javob!'}
+                        </div>
+                        <button
+                            onClick={() => {
+                                // Keyingi savolga o'tish
+                                const nextIndex = currentQuizIndex + 1;
+                                if (nextIndex < quizData.length && containerRef.current) {
+                                    containerRef.current.scrollTo({
+                                        top: nextIndex * window.innerHeight,
+                                        behavior: 'smooth'
+                                    });
+                                }
+                            }}
+                            className="w-full mt-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+                        >
+                            Keyingi savol
+                        </button>
+                    </div>
+                );
+            }
+
+            if (isMultipleChoice) {
+                const hasSelectedAnswers = selectedAnswers.length > 0;
+                return (
+                    <div className="mt-6">
+                        <button
+                            onClick={() => submitMultipleChoice(quiz.id)}
+                            disabled={!hasSelectedAnswers || isSubmitting}
+                            className={`w-full py-3 rounded-lg font-medium transition ${
+                                hasSelectedAnswers && !isSubmitting
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                            }`}
+                        >
+                            {isSubmitting ? (
+                                <div className="flex items-center justify-center gap-2">
+                                    <Loader2 size={18} className="animate-spin" />
+                                    Tekshirilmoqda...
+                                </div>
+                            ) : 'Javobni tekshirish'}
+                        </button>
+                    </div>
+                );
+            }
+
+            // Single choice uchun submit tugmasi (agar javob tanlanmagan bo'lsa)
+            const hasSelectedAnswer = selectedAnswers.length > 0;
+            if (!hasSelectedAnswer) {
+                return (
+                    <div className="mt-6">
+                        <div className="w-full py-3 bg-gray-700 text-gray-400 rounded-lg font-medium text-center">
+                            Javob tanlang
+                        </div>
+                    </div>
+                );
+            }
+
+            return null; // Single choice da javob tanlangandan so'ng avtomatik submit qilinadi
+        };
+
+        return (
+            <div className="space-y-4">
+                {/* Media content (image/video) */}
+                {quiz.media && (
+                    <div className="relative rounded-lg overflow-hidden mb-4">
+                        {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img
+                                src={quiz.media}
+                                alt="Question media"
+                                className="w-full h-auto max-h-64 object-cover rounded-lg"
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                        ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
+                            <video
+                                src={quiz.media}
+                                className="w-full h-auto max-h-64 rounded-lg"
+                                controls
+                            />
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Answers */}
+                <div className="space-y-2">
+                    {renderAnswers()}
+                </div>
+
+                {/* Submit button */}
+                {renderSubmitButton()}
+
+                {/* Coin animatsiyasi */}
+                {coinAnimation?.show && coinAnimation.quizId === quiz.id && (
+                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                        <div className="text-4xl animate-coin-bounce">
+                            🪙
+                        </div>
+                    </div>
+                )}
+
+                {/* Correct animatsiyasi */}
+                {correctAnimation === quiz.id && (
+                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                        <div className="text-6xl animate-correct-pulse">
+                            ✅
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ==================== FILTER MODAL RENDER FUNKSIYASI ====================
+    const renderFilterModal = () => {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                <div className="bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-700">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl font-semibold text-white">Filterlar</h3>
+                        <button
+                            onClick={() => setShowFilterModal(false)}
+                            className="text-gray-400 hover:text-white"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* Category filter */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Kategoriya
+                            </label>
+                            <select
+                                value={filterOptions.category === "All" ? "All" : filterOptions.category}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    applyFilter({
+                                        category: value === "All" ? "All" : parseInt(value)
+                                    });
+                                }}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                            >
+                                <option value="All">Hammasi</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.emoji} {cat.title}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Difficulty filter */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Qiyinlik darajasi
+                            </label>
+                            <div className="flex gap-4">
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={filterOptions.difficulty_min || 0}
+                                    onChange={(e) => applyFilter({
+                                        difficulty_min: parseInt(e.target.value)
+                                    })}
+                                    className="flex-1"
+                                />
+                                <div className="text-white text-sm">
+                                    {filterOptions.difficulty_min || 0}%
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Worked filter */}
+                        <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-white">
+                                <input
+                                    type="checkbox"
+                                    checked={filterOptions.worked || false}
+                                    onChange={(e) => applyFilter({
+                                        worked: e.target.checked,
+                                        unworked: false
+                                    })}
+                                    className="w-4 h-4"
+                                />
+                                Ishlàganlar
+                            </label>
+                            <label className="flex items-center gap-2 text-white">
+                                <input
+                                    type="checkbox"
+                                    checked={filterOptions.unworked || false}
+                                    onChange={(e) => applyFilter({
+                                        unworked: e.target.checked,
+                                        worked: false
+                                    })}
+                                    className="w-4 h-4"
+                                />
+                                Ishlanmaganlar
+                            </label>
+                        </div>
+
+                        {/* Sort order */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Tartiblash
+                            </label>
+                            <select
+                                value={filterOptions.ordering || "-created_at"}
+                                onChange={(e) => applyFilter({
+                                    ordering: e.target.value as FilterOptions['ordering']
+                                })}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                            >
+                                <option value="-created_at">Yangi → Eski</option>
+                                <option value="created_at">Eski → Yangi</option>
+                                <option value="difficulty_percentage">Oson → Qiyin</option>
+                                <option value="-difficulty_percentage">Qiyin → Oson</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-8">
+                        <button
+                            onClick={() => {
+                                resetFilters();
+                                setShowFilterModal(false);
+                            }}
+                            className="flex-1 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition"
+                        >
+                            Tozalash
+                        </button>
+                        <button
+                            onClick={() => setShowFilterModal(false)}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        >
+                            Saqlash
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ==================== REACTIONS MENU RENDER FUNKSIYASI ====================
+    const renderReactionsMenu = (quizId: number) => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (!quiz) return null;
+
+        const currentReaction = userInteractions.reactions.get(quizId);
+
+        return (
+            <div
+                className="absolute bottom-full right-0 mb-2 p-2 bg-gray-900/90 backdrop-blur-lg rounded-xl border border-gray-700 shadow-lg z-50"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex gap-2">
+                    {REACTION_CHOICES.map((reaction) => {
+                        const isActive = currentReaction === reaction.id;
+                        const reactionCount = quiz.reactions_summary?.[reaction.id as keyof typeof quiz.reactions_summary] || 0;
+
+                        return (
+                            <button
+                                key={reaction.id}
+                                onClick={() => handleReaction(quizId, reaction.id)}
+                                disabled={isReacting.has(quizId)}
+                                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition relative
+                                    ${isActive ? 'bg-gray-800' : 'hover:bg-gray-800'}
+                                    ${isReacting.has(quizId) ? 'opacity-50 cursor-not-allowed' : ''}
+                                `}
+                            >
+                                {reaction.emoji}
+                                {reactionCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                                        {reactionCount}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    // ==================== DROPDOWN MENU RENDER FUNKSIYASI ====================
+    const renderDropdownMenu = (quizId: number) => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (!quiz) return null;
+
+        return (
+            <div
+                className="absolute bottom-full right-0 mb-2 p-2 bg-gray-900/90 backdrop-blur-lg rounded-xl border border-gray-700 shadow-lg z-50 min-w-[200px]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="space-y-1">
+                    <button
+                        onClick={() => {
+                            // Share functionality
+                            navigator.clipboard.writeText(window.location.href);
+                            alert("Link nusxalandi!");
+                            setShowDropdown(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-white hover:bg-gray-800 rounded-lg flex items-center gap-3"
+                    >
+                        <Share size={18} />
+                        Ulashish
+                    </button>
+
+                    <button
+                        onClick={async () => {
+                            try {
+                                const response = await quizAPI.toggleBookmark(quizId);
+                                if (response.success) {
+                                    setQuizData(prev => prev.map(q =>
+                                        q.id === quizId
+                                            ? { ...q, is_bookmarked: response.data?.is_bookmarked }
+                                            : q
+                                    ));
+                                }
+                            } catch (err) {
+                                console.error("Bookmark error:", err);
+                            } finally {
+                                setShowDropdown(null);
+                            }
+                        }}
+                        className="w-full px-4 py-2 text-left text-white hover:bg-gray-800 rounded-lg flex items-center gap-3"
+                    >
+                        <Bookmark size={18} />
+                        {quiz.is_bookmarked ? "Bookmarkdan o'chirish" : "Bookmark qilish"}
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            setShowReactionStats(showReactionStats === quizId ? null : quizId);
+                            setShowDropdown(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-white hover:bg-gray-800 rounded-lg flex items-center gap-3"
+                    >
+                        <BarChart3 size={18} />
+                        Statistikalar
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            // Report functionality
+                            alert("Report submitted!");
+                            setShowDropdown(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-red-400 hover:bg-gray-800 rounded-lg"
+                    >
+                        Shikoyat qilish
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // ==================== REACTION STATS RENDER FUNKSIYASI ====================
+    const renderReactionStats = (quizId: number) => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (!quiz?.reactions_summary) return null;
+
+        const stats = quiz.reactions_summary;
+        const total = stats.total;
+
+        return (
+            <div
+                className="absolute bottom-full right-0 mb-2 p-4 bg-gray-900/90 backdrop-blur-lg rounded-xl border border-gray-700 shadow-lg z-50 min-w-[300px]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h4 className="text-white font-medium mb-3">Reaksiya statistikasi</h4>
+                <div className="space-y-2">
+                    {REACTION_CHOICES.map((reaction) => {
+                        const count = stats[reaction.id as keyof typeof stats] || 0;
+                        const percentage = total > 0 ? (count / total * 100).toFixed(1) : 0;
+
+                        return (
+                            <div key={reaction.id} className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl">{reaction.emoji}</span>
+                                    <span className="text-white text-sm">{reaction.label}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white font-medium">{count}</span>
+                                    <span className="text-gray-400 text-sm">({percentage}%)</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="mt-4 pt-3 border-t border-gray-700">
+                    <div className="flex justify-between text-white">
+                        <span>Jami:</span>
+                        <span className="font-medium">{total}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ==================== HEADER RENDER FUNKSIYASI ====================
+    const renderHeader = () => (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-2xl px-4">
+            <div className="flex items-center justify-between glass-morphism rounded-xl p-3">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="p-2 text-white hover:bg-white/10 rounded-lg transition"
+                    >
+                        ←
+                    </button>
+                    <h1 className="text-white font-medium text-sm md:text-base">Testlar</h1>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Qidirish..."
+                            className="pl-10 pr-4 py-2 bg-black/40 backdrop-blur-lg border border-white/10 rounded-lg text-white placeholder-gray-400 text-sm w-40 md:w-48 focus:outline-none focus:border-blue-500 transition"
+                        />
+                        {isSearching && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <Loader2 size={16} className="animate-spin text-blue-400" />
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={() => setShowFilterModal(true)}
+                        className="p-2 text-white hover:bg-white/10 rounded-lg transition"
+                    >
+                        <Filter size={20} />
+                    </button>
+
+                    <button
+                        onClick={() => loadQuizzes(true, true)}
+                        className="p-2 text-white hover:bg-white/10 rounded-lg transition"
+                    >
+                        <RefreshCw size={20} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    // ==================== ASOSIY FUNKSIYALAR (O'ZGARMAGAN) ====================
+
+    // fetchQuizStats funksiyasi
     const fetchQuizStats = useCallback(async (quizId: number): Promise<void> => {
         try {
             const statsResponse = await quizAPI.getQuestionStats(quizId);
@@ -198,7 +937,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             if (statsResponse.success && statsResponse.data) {
                 const stats = statsResponse.data;
 
-                // Stats Map ni yangilash
                 setQuizStats(prev => {
                     const newMap = new Map(prev);
                     newMap.set(quizId, {
@@ -213,7 +951,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     return newMap;
                 });
 
-                // QuizData ni yangilash
                 setQuizData(prev => prev.map(q => {
                     if (q.id === quizId) {
                         return {
@@ -240,35 +977,25 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
     }, []);
 
-    // Record View - useCallback bilan muammolarni oldini olish
+    // Stable recordView funksiyasi
     const recordView = useCallback(async (quizId: number): Promise<void> => {
-        if (viewedQuizzes.has(quizId)) return;
+        if (viewedQuizzesRef.current.has(quizId)) return;
 
         console.log(`👁️ Recording view for quiz ${quizId}`);
 
         try {
-            // useSimpleQuizViews orqali view yozish
             const result = await recordQuizView(quizId);
 
             if (result.success) {
-                // Local state ni yangilash
-                setViewedQuizzes(prev => {
-                    const newSet = new Set(prev);
-                    newSet.add(quizId);
-                    return newSet;
-                });
-
-                // Stats ni yangilash
+                viewedQuizzesRef.current.add(quizId);
                 await fetchQuizStats(quizId);
-
                 console.log(`✅ View recorded for quiz ${quizId}`);
             }
         } catch (err) {
             console.error(`❌ Error recording view for quiz ${quizId}:`, err);
         }
-    }, [viewedQuizzes, recordQuizView, fetchQuizStats]);
+    }, [recordQuizView, fetchQuizStats]);
 
-    // Load Categories
     const loadCategories = useCallback(async () => {
         try {
             const res = await quizAPI.fetchCategories();
@@ -291,331 +1018,171 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
     }, []);
 
-    // Fetch Random Quizzes - TUZATILGAN VERSIYA
-    const fetchRandomQuizzes = useCallback(async (isInitialLoad: boolean = false) => {
-        if (isLoadingRef.current || (!isInitialLoad && !hasMore)) return;
+    // Stable loadQuizzes funksiyasi
+    const loadQuizzes = useCallback(async (isInitialLoad: boolean = false, resetData: boolean = false) => {
+        if (isLoadingRef.current) {
+            console.log(`🚫 loadQuizzes skipped: already loading`);
+            return;
+        }
+
+        // Token validatsiyasini tekshirish
+        try {
+            await tokenManager.validateAndRefreshToken();
+        } catch (authError) {
+            console.error('❌ Authentication error:', authError);
+            return;
+        }
 
         isLoadingRef.current = true;
-        setLoading(true);
-        console.log(`🔄 fetchRandomQuizzes called: isInitialLoad=${isInitialLoad}, hasMore=${hasMore}`);
+
+        if (isInitialLoad) {
+            setLoading(true);
+            setIsInitialLoading(true);
+        } else {
+            setLoadingMore(true);
+        }
+
+        console.log(`🔄 loadQuizzes called: isInitialLoad=${isInitialLoad}, resetData=${resetData}`);
 
         try {
-            const pageToFetch = isInitialLoad ? 1 : currentPageRef.current;
+            let result;
 
-            console.log(`🎲 Fetching random quizzes: page=${pageToFetch}, page_size=${BATCH_SIZE}`);
-
-            const res = await quizAPI.fetchRandomQuizzes(BATCH_SIZE, pageToFetch);
-
-            console.log("📥 Random quizzes response:", res);
-
-            if (!res.success) {
-                console.error("❌ Failed to fetch random quizzes:", res.error);
-                setHasMore(false);
-                return;
+            if (resetData) {
+                // Ma'lumotlarni tozalash va yangidan boshlash
+                infiniteScrollManager.reset();
             }
 
-            let results: Quiz[] = [];
-            let nextPage: string | null = null;
+            if (isInitialLoad || resetData) {
+                // Infinite scroll ni filterlar bilan initialize qilish
+                const filtersForInfinite: any = { ...filterOptions };
 
-            // Response strukturasini aniqlash
-            if (res.data?.results && Array.isArray(res.data.results)) {
-                results = res.data.results;
-                nextPage = res.data.next || null;
-                console.log(`🎯 Found ${results.length} quizzes in results array`);
-            } else if (Array.isArray(res.data)) {
-                results = res.data;
-                console.log(`🎯 Found ${results.length} quizzes in direct array`);
-            } else if (res.data?.data && Array.isArray(res.data.data)) {
-                results = res.data.data;
-                console.log(`🎯 Found ${results.length} quizzes in data array`);
-            } else {
-                console.warn("⚠️ No quiz data found in response");
-                setHasMore(false);
-                return;
-            }
-
-            if (results.length === 0) {
-                console.log("📭 No more quizzes available");
-                setHasMore(false);
-                return;
-            }
-
-            // Format quiz data
-            const formattedResults = results.map((quiz: any) => ({
-                ...quiz,
-                id: quiz.id || Date.now() + Math.random(),
-                category: quiz.category || undefined,
-                view_count: quiz.view_count || quiz.total_views || 0,
-                unique_viewers: quiz.unique_viewers || 0,
-                total_views: quiz.total_views || quiz.view_count || 0,
-                correct_count: quiz.correct_count || quiz.correct_attempts || 0,
-                wrong_count: quiz.wrong_count || quiz.wrong_attempts || 0,
-                stats: quiz.stats || {
-                    total_attempts: (quiz.correct_count || 0) + (quiz.wrong_count || 0),
-                    correct_attempts: quiz.correct_count || 0,
-                    wrong_attempts: quiz.wrong_count || 0,
-                    accuracy: quiz.accuracy || 0,
-                    average_time: quiz.average_time || 0,
-                },
-                has_worked: quiz.has_worked || false,
-                answers: quiz.answers || []
-            }));
-
-            const newQuizIds = formattedResults.map(q => q.id);
-            console.log(`📝 Formatted ${formattedResults.length} quizzes with IDs:`, newQuizIds);
-
-            // QuizData ga qo'shish
-            setQuizData(prev => {
-                if (isInitialLoad) {
-                    return formattedResults;
-                } else {
-                    const existingIds = new Set(prev.map(q => q.id));
-                    const unique = formattedResults.filter(q => !existingIds.has(q.id));
-                    return [...prev, ...unique];
+                if (filtersForInfinite.category === "All") {
+                    delete filtersForInfinite.category;
                 }
+
+                if (filtersForInfinite.search) {
+                    filtersForInfinite.search = filtersForInfinite.search.trim();
+                }
+
+                // Is_random filterini infinite scroll uchun moslashtirish
+                if (filtersForInfinite.is_random) {
+                    filtersForInfinite.ordering = '?';
+                }
+
+                console.log("🎯 Initializing infinite scroll with filters:", filtersForInfinite);
+                const initState = infiniteScrollManager.init(filtersForInfinite);
+                setInfiniteScrollState(initState);
+
+                // Dastlabki batch ni yuklash
+                result = await infiniteScrollManager.loadMore();
+            } else {
+                // Keyingi batch ni yuklash
+                result = await infiniteScrollManager.loadMore();
+            }
+
+            console.log("📥 Infinite scroll result:", {
+                success: result.success,
+                hasMore: result.hasMore,
+                loadedItems: result.results?.length || 0
             });
 
-            // Har bir yangi quiz uchun stats olish - sequential
-            for (const quizId of newQuizIds) {
-                try {
-                    await fetchQuizStats(quizId);
-                } catch (error) {
-                    console.error(`❌ Error fetching initial stats for quiz ${quizId}:`, error);
+            if (result.success && result.results) {
+                const newQuizzes: Quiz[] = result.results.map((quiz: any) => ({
+                    ...quiz,
+                    id: quiz.id || Date.now() + Math.random(),
+                    category: quiz.category || undefined,
+                    view_count: quiz.view_count || quiz.total_views || 0,
+                    unique_viewers: quiz.unique_viewers || 0,
+                    total_views: quiz.total_views || quiz.view_count || 0,
+                    correct_count: quiz.correct_count || quiz.correct_attempts || 0,
+                    wrong_count: quiz.wrong_count || quiz.wrong_attempts || 0,
+                    stats: quiz.stats || {
+                        total_attempts: (quiz.correct_count || 0) + (quiz.wrong_count || 0),
+                        correct_attempts: quiz.correct_count || 0,
+                        wrong_attempts: quiz.wrong_count || 0,
+                        accuracy: quiz.accuracy || 0,
+                        average_time: quiz.average_time || 0,
+                    },
+                    has_worked: quiz.has_worked || false,
+                    answers: quiz.answers || []
+                }));
+
+                setQuizData(prev => {
+                    if (resetData || isInitialLoad) {
+                        return newQuizzes;
+                    }
+                    // Yangi savollarni qo'shish, lekin duplicate ID larni oldini olish
+                    const existingIds = new Set(prev.map(q => q.id));
+                    const uniqueNewQuizzes = newQuizzes.filter(q => !existingIds.has(q.id));
+                    return [...prev, ...uniqueNewQuizzes];
+                });
+
+                setHasMore(result.hasMore || false);
+
+                // Faqat dastlabki 3 ta savol uchun view record qilish
+                const initialViews = newQuizzes.slice(0, 3);
+                for (const quiz of initialViews) {
+                    try {
+                        await recordView(quiz.id);
+                    } catch (error) {
+                        console.error(`❌ Error recording view for quiz ${quiz.id}:`, error);
+                    }
                 }
-            }
 
-            // Record views for first few quizzes - sequential yozish
-            const initialViews = newQuizIds.slice(0, 3);
-            for (const quizId of initialViews) {
-                try {
-                    await recordView(quizId);
-                } catch (error) {
-                    console.error(`❌ Error recording view for quiz ${quizId}:`, error);
+                // Qolgan savollar uchun backgroundda view record qilish
+                const remainingQuizzes = newQuizzes.slice(3);
+                if (remainingQuizzes.length > 0) {
+                    setTimeout(() => {
+                        remainingQuizzes.forEach(async (quiz) => {
+                            try {
+                                await recordView(quiz.id);
+                            } catch (error) {
+                                console.error(`❌ Error lazy recording view for quiz ${quiz.id}:`, error);
+                            }
+                        });
+                    }, 1000);
                 }
-            }
 
-            // Lazy load remaining views
-            const remainingQuizzes = newQuizIds.slice(3);
-            if (remainingQuizzes.length > 0) {
-                setTimeout(() => {
-                    remainingQuizzes.forEach(async (quizId) => {
-                        try {
-                            await recordView(quizId);
-                        } catch (error) {
-                            console.error(`❌ Error lazy recording view for quiz ${quizId}:`, error);
-                        }
-                    });
-                }, 1500);
-            }
-
-            // Pagination logic
-            const hasMoreResults = results.length >= BATCH_SIZE;
-            setHasMore(hasMoreResults);
-
-            if (!isInitialLoad && hasMoreResults) {
-                currentPageRef.current += 1;
-            }
-
-            // Next page URL
-            if (nextPage) {
-                setNextPageUrl(nextPage);
-            } else if (hasMoreResults) {
-                setNextPageUrl(`/api/quiz/random/?page=${pageToFetch + 1}&page_size=${BATCH_SIZE}`);
+                console.log(`✅ Loaded ${newQuizzes.length} quizzes, hasMore: ${result.hasMore}`);
             } else {
-                setNextPageUrl(null);
+                console.error("❌ Failed to load quizzes:", result.error);
+                setHasMore(false);
             }
 
-            console.log(`📄 Pagination: hasMore=${hasMoreResults}, nextPageUrl=${nextPageUrl}, currentPageRef=${currentPageRef.current}`);
-
-            lastLoadMoreTimeRef.current = Date.now();
+            // Infinite scroll state ni yangilash
+            setInfiniteScrollState(infiniteScrollManager.getState());
 
         } catch (err: any) {
-            console.error("❌ Fetch random quizzes error:", err);
+            console.error("❌ Load quizzes error:", err);
             setHasMore(false);
         } finally {
             isLoadingRef.current = false;
-            setLoading(false);
-            isLoadMoreInProgressRef.current = false;
-            console.log(`✅ fetchRandomQuizzes completed: isInitialLoad=${isInitialLoad}`);
-        }
-    }, [hasMore, fetchQuizStats, recordView]);
-
-    // Fetch Quizzes with Filters
-    const fetchQuizzesWithFilters = useCallback(async (filters: FilterOptions, isInitialLoad: boolean = false, url?: string) => {
-        if (isLoadingRef.current || (!isInitialLoad && !hasMore)) return;
-
-        isLoadingRef.current = true;
-        setLoading(true);
-        console.log(`🔄 fetchQuizzesWithFilters called: isInitialLoad=${isInitialLoad}, hasMore=${hasMore}, url=${url}`);
-
-        try {
-            let res;
-
-            if (url) {
-                res = await quizAPI.fetchQuizzesByUrl(url);
+            if (isInitialLoad) {
+                setLoading(false);
+                setIsInitialLoading(false);
             } else {
-                // Tozalangan filterlar bilan so'rov yuborish
-                const cleanFilters: any = { ...filters };
-
-                // Agar "All" bo'lsa, category ni o'chirish
-                if (cleanFilters.category === "All") {
-                    delete cleanFilters.category;
-                }
-
-                // Agar worked/unworked undefined bo'lsa, o'chirish
-                if (cleanFilters.worked === undefined) {
-                    delete cleanFilters.worked;
-                }
-                if (cleanFilters.unworked === undefined) {
-                    delete cleanFilters.unworked;
-                }
-
-                console.log("🔍 Fetching with filters:", cleanFilters);
-                res = await quizAPI.fetchQuizzesWithFilters(cleanFilters);
+                setLoadingMore(false);
             }
-
-            console.log("📥 Filtered quizzes response:", res);
-
-            if (!res.success) {
-                console.error("❌ Failed to fetch filtered quizzes:", res.error);
-                setHasMore(false);
-                return;
-            }
-
-            let results: Quiz[] = [];
-            let nextPage: string | null = null;
-
-            // Response strukturasini aniqlash
-            if (res.data?.results && Array.isArray(res.data.results)) {
-                results = res.data.results;
-                nextPage = res.data.next || null;
-            } else if (Array.isArray(res.data)) {
-                results = res.data;
-            } else if (res.data?.data && Array.isArray(res.data.data)) {
-                results = res.data.data;
-            }
-
-            console.log(`📊 Got ${results.length} filtered quizzes, nextPage: ${nextPage}`);
-
-            if (results.length === 0) {
-                console.log("📭 No quizzes found with current filters");
-                setHasMore(false);
-                return;
-            }
-
-            // Format quiz data
-            const formattedResults = results.map((quiz: any) => ({
-                ...quiz,
-                id: quiz.id || Date.now() + Math.random(),
-                category: quiz.category || undefined,
-                view_count: quiz.view_count || quiz.total_views || 0,
-                unique_viewers: quiz.unique_viewers || 0,
-                total_views: quiz.total_views || quiz.view_count || 0,
-                correct_count: quiz.correct_count || quiz.correct_attempts || 0,
-                wrong_count: quiz.wrong_count || quiz.wrong_attempts || 0,
-                stats: quiz.stats || {
-                    total_attempts: (quiz.correct_count || 0) + (quiz.wrong_count || 0),
-                    correct_attempts: quiz.correct_count || 0,
-                    wrong_attempts: quiz.wrong_count || 0,
-                    accuracy: quiz.accuracy || 0,
-                    average_time: quiz.average_time || 0,
-                },
-                has_worked: quiz.has_worked || false,
-                answers: quiz.answers || []
-            }));
-
-            const newQuizIds = formattedResults.map(q => q.id);
-
-            // QuizData ga qo'shish
-            setQuizData(prev => {
-                if (isInitialLoad || !url) {
-                    return formattedResults;
-                } else {
-                    const existingIds = new Set(prev.map(q => q.id));
-                    const unique = formattedResults.filter(q => !existingIds.has(q.id));
-                    return [...prev, ...unique];
-                }
-            });
-
-            // Har bir yangi quiz uchun stats olish - sequential
-            for (const quizId of newQuizIds) {
-                try {
-                    await fetchQuizStats(quizId);
-                } catch (error) {
-                    console.error(`❌ Error fetching stats for quiz ${quizId}:`, error);
-                }
-            }
-
-            // Record views - sequential
-            const initialViews = newQuizIds.slice(0, 3);
-            for (const quizId of initialViews) {
-                try {
-                    await recordView(quizId);
-                } catch (error) {
-                    console.error(`❌ Error recording view for quiz ${quizId}:`, error);
-                }
-            }
-
-            // Lazy load remaining
-            const remainingQuizzes = newQuizIds.slice(3);
-            if (remainingQuizzes.length > 0) {
-                setTimeout(() => {
-                    remainingQuizzes.forEach(async (quizId) => {
-                        try {
-                            await recordView(quizId);
-                        } catch (error) {
-                            console.error(`❌ Error lazy recording view for quiz ${quizId}:`, error);
-                        }
-                    });
-                }, 1500);
-            }
-
-            // Pagination logic
-            const hasMoreResults = results.length >= BATCH_SIZE;
-            setHasMore(hasMoreResults || !!nextPage);
-
-            if (nextPage) {
-                setNextPageUrl(nextPage);
-            } else {
-                setNextPageUrl(null);
-            }
-
-            if (!isInitialLoad && hasMoreResults && !url) {
-                currentPageRef.current += 1;
-            }
-
-            lastLoadMoreTimeRef.current = Date.now();
-
-        } catch (err: any) {
-            console.error("❌ Fetch filtered quizzes error:", err);
-            setHasMore(false);
-        } finally {
-            isLoadingRef.current = false;
-            setLoading(false);
-            isLoadMoreInProgressRef.current = false;
-            console.log(`✅ fetchQuizzesWithFilters completed: isInitialLoad=${isInitialLoad}`);
+            console.log(`✅ loadQuizzes completed: isInitialLoad=${isInitialLoad}`);
         }
-    }, [hasMore, fetchQuizStats, recordView]);
+    }, [filterOptions, recordView]);
 
-    // Apply Filter
+    // Stable applyFilter funksiyasi
     const applyFilter = useCallback(async (newFilters: Partial<FilterOptions>) => {
         console.log("🔄 applyFilter called with:", newFilters);
 
         const updatedFilters = {
             ...filterOptions,
             ...newFilters,
-            page: 1,
-            page_size: BATCH_SIZE
+            page: 1
         };
 
         setFilterOptions(updatedFilters);
-        currentPageRef.current = 1;
 
-        // Reset states
+        // State ni tozalash
         setCurrentQuizIndex(0);
         setQuizData([]);
         setHasMore(true);
-        setNextPageUrl(null);
         setUserInteractions({
             selectedAnswers: new Map(),
             textAnswers: new Map(),
@@ -623,47 +1190,54 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             reactions: new Map(),
             submittedQuizzes: new Set(),
         });
-        setViewedQuizzes(new Set());
+        viewedQuizzesRef.current.clear();
         setQuizStats(new Map());
 
-        try {
-            // Agar random tanlansa
-            if (updatedFilters.is_random) {
-                console.log("🎲 Applying random filter");
-                await fetchRandomQuizzes(true);
-            } else {
-                // Filterlar bilan fetch
-                console.log("🔍 Applying filter with options:", updatedFilters);
-                await fetchQuizzesWithFilters(updatedFilters, true);
-            }
-        } catch (error) {
-            console.error("❌ Apply filter error:", error);
+        // Infinite scroll ni yangi filterlar bilan initialize qilish
+        const filtersForInfinite: any = { ...updatedFilters };
+
+        if (filtersForInfinite.category === "All") {
+            delete filtersForInfinite.category;
         }
+
+        if (filtersForInfinite.search) {
+            filtersForInfinite.search = filtersForInfinite.search.trim();
+        }
+
+        if (filtersForInfinite.is_random) {
+            filtersForInfinite.ordering = '?';
+        }
+
+        console.log("🔄 Updating infinite scroll filters:", filtersForInfinite);
+
+        infiniteScrollManager.reset();
+        const initState = infiniteScrollManager.init(filtersForInfinite);
+        setInfiniteScrollState(initState);
+
+        // Yangi savollarni yuklash
+        await loadQuizzes(true, true);
 
         if (containerRef.current) {
             containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
-    }, [filterOptions, fetchRandomQuizzes, fetchQuizzesWithFilters]);
+    }, [filterOptions, loadQuizzes]);
 
-    // Reset Filters
+    // Stable resetFilters funksiyasi
     const resetFilters = useCallback(async () => {
         console.log("🔄 resetFilters called");
 
         const defaultFilters: FilterOptions = {
             category: "All",
-            page_size: BATCH_SIZE,
             ordering: "-created_at",
             is_random: true
         };
         setFilterOptions(defaultFilters);
         setSearchQuery("");
-        currentPageRef.current = 1;
 
-        // Reset states
+        // State ni tozalash
         setCurrentQuizIndex(0);
         setQuizData([]);
         setHasMore(true);
-        setNextPageUrl(null);
         setUserInteractions({
             selectedAnswers: new Map(),
             textAnswers: new Map(),
@@ -671,99 +1245,59 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             reactions: new Map(),
             submittedQuizzes: new Set(),
         });
-        setViewedQuizzes(new Set());
+        viewedQuizzesRef.current.clear();
         setQuizStats(new Map());
 
-        // Fetch random quizzes
-        await fetchRandomQuizzes(true);
+        // Infinite scroll ni reset qilish
+        infiniteScrollManager.reset();
+        const initState = infiniteScrollManager.init(defaultFilters);
+        setInfiniteScrollState(initState);
+
+        await loadQuizzes(true, true);
 
         if (containerRef.current) {
             containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
-    }, [fetchRandomQuizzes]);
+    }, [loadQuizzes]);
 
-    // Load More Effect - INFINITE LOOP MUAMMOSINI TUZATISH
-    const loadMoreData = useCallback(async () => {
-        // Agar yuklanayotgan bo'lsa yoki boshqa bir yuklash jarayonda bo'lsa, to'xtat
-        if (isLoadingRef.current || isLoadMoreInProgressRef.current || !hasMore || quizData.length === 0) {
-            console.log(`🚫 loadMoreData skipped: isLoadingRef=${isLoadingRef.current}, isLoadMoreInProgressRef=${isLoadMoreInProgressRef.current}, hasMore=${hasMore}, quizData.length=${quizData.length}`);
+    // Stable checkAndLoadMore funksiyasi
+    const checkAndLoadMore = useCallback(() => {
+        if (isLoadingRef.current || !hasMore || quizData.length === 0) {
+            console.log(`🚫 checkAndLoadMore skipped: isLoading=${isLoadingRef.current}, hasMore=${hasMore}, quizCount=${quizData.length}`);
             return;
         }
 
-        const now = Date.now();
-        // Minimum 1 soniya kutish
-        if (now - lastLoadMoreTimeRef.current < 1000) {
-            console.log(`⏰ loadMoreData: Too soon since last load, waiting...`);
-            return;
-        }
+        // Infinite scroll manager orqali tekshirish - FAQAT SCROLL PASTGA BORGANDA
+        const shouldLoad = infiniteScrollManager.shouldLoadMore(currentQuizIndex);
 
-        const remainingQuizzes = quizData.length - currentQuizIndex - 1;
+        console.log(`🔍 Infinite scroll check: currentIndex=${currentQuizIndex}, totalLoaded=${quizData.length}, shouldLoad=${shouldLoad}`);
 
-        console.log(`🔍 LoadMore check: currentIndex=${currentQuizIndex}, total=${quizData.length}, remaining=${remainingQuizzes}, MIN_QUIZZES_BEFORE_LOAD=${MIN_QUIZZES_BEFORE_LOAD}`);
+        if (shouldLoad) {
+            console.log(`⏳ Loading more quizzes. Current index: ${currentQuizIndex}`);
 
-        if (remainingQuizzes <= MIN_QUIZZES_BEFORE_LOAD) {
-            console.log(`🔍 Loading more quizzes. Current index: ${currentQuizIndex}, Total: ${quizData.length}, Remaining: ${remainingQuizzes}`);
-
-            // Flag ni true qilish
-            isLoadMoreInProgressRef.current = true;
-            console.log(`🚩 isLoadMoreInProgressRef set to TRUE`);
-
-            try {
-                if (filterOptions.is_random) {
-                    console.log("🎲 Loading more random quizzes...");
-                    await fetchRandomQuizzes(false);
-                } else if (nextPageUrl) {
-                    console.log(`🔗 Loading more with nextPageUrl: ${nextPageUrl}`);
-                    await fetchQuizzesWithFilters(filterOptions, false, nextPageUrl);
-                } else {
-                    console.log(`📄 Loading more with page: ${currentPageRef.current + 1}`);
-                    await fetchQuizzesWithFilters({
-                        ...filterOptions,
-                        page: currentPageRef.current + 1
-                    }, false);
-                }
-            } finally {
-                lastLoadMoreTimeRef.current = now;
-                // Flag ni false qilish
-                isLoadMoreInProgressRef.current = false;
-                console.log(`🚩 isLoadMoreInProgressRef set to FALSE`);
+            // Load more timeout ni tozalash
+            if (loadMoreTimeoutRef.current) {
+                clearTimeout(loadMoreTimeoutRef.current);
             }
-        }
-    }, [currentQuizIndex, quizData.length, hasMore, filterOptions, nextPageUrl, fetchRandomQuizzes, fetchQuizzesWithFilters]);
 
-    // Scroll Handling - useCallback bilan muammolarni oldini olish
-    const handleScroll = useCallback(() => {
-        if (!containerRef.current || isLoadingRef.current || quizData.length === 0) return;
-
-        const container = containerRef.current;
-        const { scrollTop, scrollHeight, clientHeight } = container;
-
-        // Hozirgi quiz indeksini hisoblash (scroll snap uchun)
-        const index = Math.round(scrollTop / clientHeight);
-
-        console.log(`📜 Scroll: index=${index}, currentIndex=${currentQuizIndex}, scrollTop=${scrollTop}, clientHeight=${clientHeight}`);
-
-        if (index >= 0 && index < quizData.length && index !== currentQuizIndex) {
-            console.log(`🔄 Scrolling to quiz ${index + 1}/${quizData.length}`);
-            const newQuiz = quizData[index];
-            if (newQuiz) {
-                // Faqat bir marta recordView chaqirish
-                if (!viewedQuizzes.has(newQuiz.id)) {
-                    recordView(newQuiz.id);
+            // Debounce qo'shish
+            loadMoreTimeoutRef.current = setTimeout(async () => {
+                try {
+                    console.log(`🚀 Starting loadMore from checkAndLoadMore`);
+                    await loadQuizzes(false, false);
+                } catch (error) {
+                    console.error("❌ Error loading more data:", error);
+                    setLoadingMore(false);
+                    isLoadingRef.current = false;
                 }
-                setCurrentQuizIndex(index);
-
-                // Scroll bilan yangi quizga o'tganda load more ni tekshirish
-                // setTimeout ni olib tashlaymiz, chunki bu infinite loopga olib kelishi mumkin
-                // loadMoreData ni alohida useEffect ichida chaqiramiz
-            }
+            }, 500);
         }
-    }, [currentQuizIndex, quizData, viewedQuizzes, recordView]);
+    }, [currentQuizIndex, hasMore, quizData.length, loadQuizzes]);
 
-    // Scroll event listener
-    useEffect(() => {
+    // Stable scroll event listener
+    const setupScrollListener = useCallback(() => {
         const container = containerRef.current;
-        if (!container) return;
+        if (!container || quizData.length === 0) return;
 
         const onScroll = () => {
             if (scrollTimeoutRef.current) {
@@ -771,8 +1305,43 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             }
 
             scrollTimeoutRef.current = setTimeout(() => {
-                handleScroll();
-            }, 100);
+                if (!containerRef.current || quizData.length === 0) return;
+
+                const container = containerRef.current;
+                const { scrollTop, clientHeight, scrollHeight } = container;
+
+                // Scroll yo'nalishini aniqlash
+                const isScrollingDown = scrollTop > lastScrollTopRef.current;
+                lastScrollTopRef.current = scrollTop;
+
+                // Hozirgi scroll pozitsiyasi bo'yicha indeksni hisoblash
+                const index = Math.floor(scrollTop / clientHeight);
+
+                if (index >= 0 && index < quizData.length && index !== currentQuizIndex) {
+                    console.log(`📜 Scrolling to quiz ${index + 1}/${quizData.length}, scrolling down: ${isScrollingDown}`);
+
+                    const newQuiz = quizData[index];
+                    if (newQuiz) {
+                        // Agar bu savolga view record qilinmagan bo'lsa
+                        if (!viewedQuizzesRef.current.has(newQuiz.id)) {
+                            recordView(newQuiz.id);
+                        }
+                        setCurrentQuizIndex(index);
+                    }
+
+                    // Faqat pastga scroll qilganda va oxiriga yaqinlashganda loadMore ni tekshirish
+                    if (isScrollingDown) {
+                        const scrollPosition = scrollTop + clientHeight;
+                        const scrollThreshold = scrollHeight - 300; // 300px oldin tekshirish
+
+                        if (scrollPosition >= scrollThreshold) {
+                            console.log(`🔍 Reached scroll threshold, checking loadMore...`);
+                            checkAndLoadMore();
+                        }
+                    }
+                }
+
+            }, SCROLL_DEBOUNCE_DELAY);
         };
 
         container.addEventListener("scroll", onScroll, { passive: true });
@@ -783,25 +1352,32 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 clearTimeout(scrollTimeoutRef.current);
             }
         };
-    }, [handleScroll]);
+    }, [quizData.length, currentQuizIndex, checkAndLoadMore, recordView]);
 
-    // Current quiz index o'zgarganda load more ni tekshirish
+    // Setup scroll listener
     useEffect(() => {
-        console.log(`🔄 useEffect: currentQuizIndex changed to ${currentQuizIndex}`);
+        const cleanup = setupScrollListener();
+        return cleanup;
+    }, [setupScrollListener]);
 
-        // Faqat currentQuizIndex o'zgarganda loadMoreData ni chaqirish
-        if (currentQuizIndex > 0) {
-            // setTimeout bilan chaqirish to avoid race conditions
-            const timer = setTimeout(() => {
-                loadMoreData();
-            }, 300);
+    // currentQuizIndex o'zgarganda faqat view record qilish
+    useEffect(() => {
+        console.log(`🔄 currentQuizIndex changed to ${currentQuizIndex}, total quizzes: ${quizData.length}`);
 
-            return () => clearTimeout(timer);
+        // Faqat view record qilish
+        if (quizData[currentQuizIndex]) {
+            const quiz = quizData[currentQuizIndex];
+            if (!viewedQuizzesRef.current.has(quiz.id)) {
+                recordView(quiz.id);
+            }
         }
-    }, [currentQuizIndex, loadMoreData]);
+    }, [currentQuizIndex, quizData, recordView]);
 
-    // Initial Data Fetch
+    // Dastlabki yuklash - FIXED
     useEffect(() => {
+        if (initialLoadRef.current) return;
+        initialLoadRef.current = true;
+
         let isMounted = true;
 
         const fetchInitialData = async () => {
@@ -821,7 +1397,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     if (quizRes.success && quizRes.data) {
                         const quiz: Quiz = quizRes.data;
 
-                        await fetchQuizStats(id);
+                        // Infinite scroll ni reset qilish va faqat bitta quiz bilan ishlash
+                        infiniteScrollManager.reset();
+                        infiniteScrollManager.addItem(quiz);
+                        setInfiniteScrollState(infiniteScrollManager.getState());
 
                         setQuizData([{
                             ...quiz,
@@ -839,38 +1418,45 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                         }]);
 
                         await recordView(id);
+                        setHasMore(false);
                         console.log(`✅ Loaded specific quiz: ${quiz.question_text.substring(0, 50)}...`);
                     } else {
                         console.error(`❌ Failed to fetch quiz with ID ${id}`);
-                        // Fallback to random quizzes
-                        await fetchRandomQuizzes(true);
+                        await loadQuizzes(true, true);
                     }
                 } else {
-                    // Default: random savollar
-                    console.log("🎲 Loading random quizzes...");
-                    await fetchRandomQuizzes(true);
+                    console.log("🎲 Loading initial batch of quizzes with infinite scroll...");
+                    await loadQuizzes(true, true);
                 }
             } catch (err) {
                 console.error("❌ Initial data fetch error:", err);
             } finally {
                 if (isMounted) {
-                    setTimeout(() => {
-                        setIsInitialLoading(false);
-                        console.log("✅ Initial loading complete");
-                    }, 500);
+                    setIsInitialLoading(false);
+                    console.log("✅ Initial loading complete");
                 }
             }
         };
 
-        // Faqat bir marta chaqirish
         fetchInitialData();
 
         return () => {
             isMounted = false;
+            isLoadingRef.current = false;
+
+            // Cleanup timeouts
+            if (loadMoreTimeoutRef.current) {
+                clearTimeout(loadMoreTimeoutRef.current);
+            }
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
         };
     }, [questionId]);
 
-    // Search Handler
     const handleSearch = useCallback(async () => {
         if (searchQuery.trim() === "") {
             await resetFilters();
@@ -887,28 +1473,30 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         setIsSearching(false);
     }, [searchQuery, applyFilter, resetFilters]);
 
-    // Search debounce
+    // Search debounce - FIXED
     useEffect(() => {
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
         }
 
-        searchTimeoutRef.current = setTimeout(() => {
-            if (searchQuery.trim() !== "") {
-                handleSearch();
-            } else if (searchQuery === "") {
-                resetFilters();
-            }
-        }, 500);
+        // Faqat searchQuery bo'sh bo'lganda yoki to'liq o'zgarganida reset qilish
+        if (searchQuery === "") {
+            resetFilters();
+        } else {
+            searchTimeoutRef.current = setTimeout(() => {
+                if (searchQuery.trim() !== "") {
+                    handleSearch();
+                }
+            }, 500);
+        }
 
         return () => {
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
             }
         };
-    }, [searchQuery, handleSearch, resetFilters]);
+    }, [searchQuery]);
 
-    // Reaction Functions
     const loadQuizReactions = useCallback(async (quizId: number) => {
         try {
             const result = await quizAPI.getQuizReactions(quizId);
@@ -1042,177 +1630,32 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
     };
 
-    // Answer Handlers
-    const selectAnswer = async (quizId: number, answerId: number) => {
-        if (submittingQuestions.has(quizId) || userInteractions.submittedQuizzes.has(quizId)) return;
-
-        setSubmittingQuestions(prev => new Set(prev).add(quizId));
-        try {
-            const res = await quizAPI.submitAnswers({
-                question: quizId,
-                selected_answer_ids: [answerId]
-            });
-
-            const isCorrect = res.data?.is_correct;
-            console.log(`✅ Answer submitted for quiz ${quizId}: correct=${isCorrect}`);
-
-            // User interactions yangilash
-            setUserInteractions(prev => ({
-                ...prev,
-                selectedAnswers: new Map(prev.selectedAnswers).set(quizId, [answerId]),
-                answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
-                submittedQuizzes: new Set(prev.submittedQuizzes).add(quizId),
-            }));
-
-            // Animatsiyalar
-            if (isCorrect) {
-                setCorrectAnimation(quizId);
-                setTimeout(() => setCorrectAnimation(null), 2000);
-
-                setCoinAnimation({ quizId, answerId, show: true });
-                setTimeout(() => setCoinAnimation(null), 2000);
-            } else {
-                setShakingAnswerId(answerId);
-                setTimeout(() => setShakingAnswerId(null), 1000);
-            }
-
-            // Stats ni yangilash
-            setTimeout(async () => {
-                try {
-                    await fetchQuizStats(quizId);
-                } catch (error) {
-                    console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
-                }
-            }, 500);
-
-        } catch (err) {
-            console.error("❌ Select answer error:", err);
-        } finally {
-            setSubmittingQuestions(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(quizId);
-                return newSet;
-            });
-        }
-    };
-
-    const handleMultipleChoice = (quizId: number, answerId: number) => {
-        const answerState = userInteractions.answerStates.get(quizId);
-        if (answerState || userInteractions.submittedQuizzes.has(quizId)) return;
-
-        setUserInteractions(prev => {
-            const current = prev.selectedAnswers.get(quizId) || [];
-            let newAnswers;
-            if (current.includes(answerId)) {
-                newAnswers = current.filter(id => id !== answerId);
-            } else {
-                newAnswers = [...current, answerId];
-            }
-            return {
-                ...prev,
-                selectedAnswers: new Map(prev.selectedAnswers).set(quizId, newAnswers)
-            };
-        });
-    };
-
-    const submitMultipleChoice = async (quizId: number) => {
-        const selected = userInteractions.selectedAnswers.get(quizId) || [];
-        if (selected.length === 0 || submittingQuestions.has(quizId) || userInteractions.submittedQuizzes.has(quizId)) return;
-
-        setSubmittingQuestions(prev => new Set(prev).add(quizId));
-        try {
-            const res = await quizAPI.submitAnswers({
-                question: quizId,
-                selected_answer_ids: selected
-            });
-
-            const isCorrect = res.data?.is_correct;
-            console.log(`✅ Multiple choice submitted for quiz ${quizId}: correct=${isCorrect}`);
-
-            setUserInteractions(prev => ({
-                ...prev,
-                answerStates: new Map(prev.answerStates).set(quizId, isCorrect ? "correct" : "incorrect"),
-                submittedQuizzes: new Set(prev.submittedQuizzes).add(quizId),
-            }));
-
-            // Animatsiyalar
-            if (isCorrect) {
-                setCorrectAnimation(quizId);
-                setTimeout(() => setCorrectAnimation(null), 2000);
-
-                const quiz = quizData.find(q => q.id === quizId);
-                if (quiz) {
-                    const correctAnswer = quiz.answers.find(a => a.is_correct);
-                    if (correctAnswer) {
-                        setCoinAnimation({ quizId, answerId: correctAnswer.id, show: true });
-                        setTimeout(() => setCoinAnimation(null), 2000);
-                    }
-                }
-            } else {
-                selected.forEach((answerId) => {
-                    const answer = quizData.find(q => q.id === quizId)?.answers.find(a => a.id === answerId);
-                    if (answer && !answer.is_correct) {
-                        setShakingAnswerId(answerId);
-                    }
-                });
-                setTimeout(() => setShakingAnswerId(null), 1000);
-            }
-
-            // Stats ni yangilash
-            setTimeout(async () => {
-                try {
-                    await fetchQuizStats(quizId);
-                } catch (error) {
-                    console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
-                }
-            }, 500);
-
-        } catch (err) {
-            console.error("❌ Submit multiple choice error:", err);
-        } finally {
-            setSubmittingQuestions(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(quizId);
-                return newSet;
-            });
-        }
-    };
-
-    // Utility Functions
     const getFinalViewCount = useCallback((quizId: number): number => {
-        // Avval quizData'dan
         const quiz = quizData.find(q => q.id === quizId);
         if (quiz?.view_count) return quiz.view_count;
 
-        // Keyin quizStats'dan
         const stats = quizStats.get(quizId);
         if (stats?.views) return stats.views;
 
-        // Oxirida useSimpleQuizViews'dan
         const viewStats = getStatistics(quizId);
         return viewStats.totalViews || 0;
     }, [quizData, quizStats, getStatistics]);
 
     const getQuizUniqueViews = useCallback((quizId: number): number => {
-        // Avval quizData'dan
         const quiz = quizData.find(q => q.id === quizId);
         if (quiz?.unique_viewers) return quiz.unique_viewers;
 
-        // Keyin quizStats'dan
         const stats = quizStats.get(quizId);
         if (stats?.unique_views) return stats.unique_views;
 
-        // Oxirida useSimpleQuizViews'dan
         const viewStats = getStatistics(quizId);
         return viewStats.uniqueViews || 0;
     }, [quizData, quizStats, getStatistics]);
 
     const getCorrectCount = useCallback((quizId: number): number => {
-        // Avval quizData'dan
         const quiz = quizData.find(q => q.id === quizId);
         if (quiz?.correct_count) return quiz.correct_count;
 
-        // Keyin quizStats'dan
         const stats = quizStats.get(quizId);
         if (stats?.correct_attempts) return stats.correct_attempts;
 
@@ -1220,11 +1663,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     }, [quizData, quizStats]);
 
     const getWrongCount = useCallback((quizId: number): number => {
-        // Avval quizData'dan
         const quiz = quizData.find(q => q.id === quizId);
         if (quiz?.wrong_count) return quiz.wrong_count;
 
-        // Keyin quizStats'dan
         const stats = quizStats.get(quizId);
         if (stats?.wrong_attempts) return stats.wrong_attempts;
 
@@ -1246,608 +1687,54 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         return false;
     }, []);
 
-    // Render Functions (UI o'zgarmadi)
-    const renderReactionsMenu = (quizId: number) => {
-        const userReaction = userInteractions.reactions.get(quizId);
-        const quiz = quizData.find(q => q.id === quizId);
-        const isReactingQuiz = isReacting.has(quizId);
-        if (!quiz) return null;
+    // Memoize helper funksiyalar
+    const memoizedHelpers = useMemo(() => ({
+        getFinalViewCount,
+        getQuizUniqueViews,
+        getCorrectCount,
+        getWrongCount,
+        isTrueFalseQuestion
+    }), [getFinalViewCount, getQuizUniqueViews, getCorrectCount, getWrongCount, isTrueFalseQuestion]);
 
+    // Skeleton loader
+    if (isInitialLoading && quizData.length === 0) {
         return (
-            <div className="absolute right-0 bottom-full mb-2 bg-gray-800 rounded-xl p-3 shadow-xl border border-gray-700 z-50 animate-fade-in">
-                <div className="flex gap-2">
-                    {REACTION_CHOICES.map(reaction => {
-                        const reactionCount = quiz.reactions_summary?.[reaction.id as keyof typeof quiz.reactions_summary] || 0;
-                        const isActive = userReaction === reaction.id;
-                        return (
-                            <button
-                                key={reaction.id}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReaction(quizId, reaction.id);
-                                }}
-                                disabled={isReactingQuiz}
-                                className={`flex flex-col items-center p-2 rounded-lg transition-all hover:bg-gray-700 ${
-                                    isActive ? 'bg-blue-500/20 border border-blue-500/30' : ''
-                                } ${isReactingQuiz ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                title={`${reaction.label} (${reactionCount})`}
-                            >
-                                {isReactingQuiz && isActive ? (
-                                    <Loader2 size={20} className="animate-spin text-white" />
-                                ) : (
-                                    <span className="text-2xl">{reaction.emoji}</span>
-                                )}
-                                {reactionCount > 0 && (
-                                    <span className="text-xs text-gray-300 mt-1">{reactionCount}</span>
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
-
-    const renderDropdownMenu = (quizId: number) => {
-        const quiz = quizData.find(q => q.id === quizId);
-        const totalReactions = quiz?.reactions_summary?.total || 0;
-        const viewStats = getStatistics(quizId);
-
-        return (
-            <div className="absolute right-0 bottom-full mb-2 bg-gray-800 rounded-xl p-2 shadow-xl border border-gray-700 z-50 animate-fade-in min-w-[200px]">
-                {totalReactions > 0 && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setShowReactionStats(showReactionStats === quizId ? null : quizId);
-                            setShowDropdown(null);
-                        }}
-                        className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-gray-700 transition text-white text-sm"
-                    >
-                        <BarChart3 size={16} />
-                        <span>Reaksiya statistikasi</span>
-                    </button>
-                )}
-                {viewStats.totalViews > 0 && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            alert(`${quizId} - IDli savolga ${viewStats.totalViews} marta ko'rilgan. ${viewStats.uniqueViews} ta foydalanuvchi ko'rgan.`);
-                        }}
-                        className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-gray-700 transition text-white text-sm"
-                    >
-                        <Eye size={16} />
-                        <span>Views statistikasi</span>
-                    </button>
-                )}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(`${window.location.origin}/questions/${quizId}`);
-                        alert("Link nusxalandi!");
-                    }}
-                    className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-gray-700 transition text-white text-sm"
-                >
-                    <Share size={16} />
-                    <span>Ulashish</span>
-                </button>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setShowFilterModal(true);
-                    }}
-                    className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-gray-700 transition text-white text-sm"
-                >
-                    <Filter size={16} />
-                    <span>Filter</span>
-                </button>
-                <button
-                    onClick={async (e) => {
-                        e.stopPropagation();
-                        try {
-                            const response = await quizAPI.bookmarkQuestion({
-                                question: quizId
-                            });
-                            if (response.status === 201) {
-                                alert("Savol saqlandi!");
-                            } else if (response.status === 200) {
-                                alert("Savol saqlanganlar ro'yxatidan olib tashlandi");
-                            }
-                        } catch (err) {
-                            console.error("Bookmark error:", err);
-                        }
-                    }}
-                    className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-gray-700 transition text-white text-sm"
-                >
-                    <Bookmark size={16} className={quiz?.is_bookmarked ? "fill-current text-yellow-400" : ""} />
-                    <span>Saqlash</span>
-                </button>
-            </div>
-        );
-    };
-
-    const renderReactionStats = (quizId: number) => {
-        const quiz = quizData.find(q => q.id === quizId);
-        if (!quiz || !quiz.reactions_summary) return null;
-        const totalReactions = quiz.reactions_summary.total || 0;
-        if (totalReactions === 0) return null;
-
-        return (
-            <div className="absolute right-0 bottom-full mb-2 bg-gray-800 rounded-xl p-4 shadow-xl border border-gray-700 z-50 animate-fade-in min-w-[200px]">
-                <h4 className="text-white font-medium mb-3 text-sm">Reaksiyalar statistikasi</h4>
-                <div className="space-y-2">
-                    {REACTION_CHOICES.map(reaction => {
-                        const count = quiz.reactions_summary![reaction.id as keyof typeof quiz.reactions_summary] || 0;
-                        const percentage = totalReactions > 0 ? Math.round((count / totalReactions) * 100) : 0;
-                        return (
-                            <div key={reaction.id} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">{reaction.emoji}</span>
-                                    <span className="text-gray-300 text-sm">{reaction.label}</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-24 bg-gray-700 rounded-full h-2 overflow-hidden">
-                                        <div
-                                            className="h-full bg-blue-500 rounded-full"
-                                            style={{ width: `${percentage}%` }}
-                                        />
-                                    </div>
-                                    <span className="text-white text-sm font-medium w-8 text-right">
-                                        {count}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="mt-3 pt-3 border-t border-gray-700 text-center">
-                    <span className="text-gray-400 text-xs">Jami: ${totalReactions} ta reaksiya</span>
-                </div>
-            </div>
-        );
-    };
-
-    const renderFilterModal = () => {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
-                <div
-                    className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
-                    onClick={() => setShowFilterModal(false)}
-                />
-                <div className="relative bg-gray-800 rounded-xl shadow-lg w-11/12 max-w-md max-h-[80vh] flex flex-col z-50 border border-gray-700">
-                    <div className="p-4 border-b border-gray-700">
-                        <h2 className="text-lg font-semibold text-white">Filterlar</h2>
-                    </div>
-                    <div className="p-4 overflow-y-auto flex-1 space-y-4">
-                        {/* Category */}
-                        <div>
-                            <label className="text-white text-sm mb-2 block">Kategoriya</label>
-                            <select
-                                value={filterOptions.category === "All" ? "All" : filterOptions.category}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    applyFilter({
-                                        category: value === "All" ? "All" : Number(value),
-                                        is_random: false
-                                    });
-                                }}
-                                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg"
-                            >
-                                <option value="All">Barcha kategoriyalar</option>
-                                {categories.map(cat => (
-                                    <option key={cat.id} value={cat.id}>
-                                        {cat.emoji} {cat.title}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Sort */}
-                        <div>
-                            <label className="text-white text-sm mb-2 block">Saralash</label>
-                            <select
-                                value={filterOptions.ordering || "-created_at"}
-                                onChange={(e) => applyFilter({
-                                    ordering: e.target.value as FilterOptions['ordering'],
-                                    is_random: false
-                                })}
-                                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg"
-                            >
-                                <option value="-created_at">Yangi → Eski</option>
-                                <option value="created_at">Eski → Yangi</option>
-                                <option value="difficulty_percentage">Oson → Qiyin</option>
-                                <option value="-difficulty_percentage">Qiyin → Oson</option>
-                            </select>
-                        </div>
-
-                        {/* Worked/Unworked Filters */}
-                        <div className="space-y-2">
-                            <label className="text-white text-sm block">Ishlanganlik holati</label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2">
-                                    <input
-                                        type="radio"
-                                        name="worked"
-                                        checked={filterOptions.worked === true}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                applyFilter({
-                                                    worked: true,
-                                                    unworked: undefined,
-                                                    is_random: false
-                                                });
-                                            }
-                                        }}
-                                        className="w-4 h-4"
-                                    />
-                                    <span className="text-white text-sm">Ishlangan</span>
-                                </label>
-                                <label className="flex items-center gap-2">
-                                    <input
-                                        type="radio"
-                                        name="worked"
-                                        checked={filterOptions.unworked === true}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                applyFilter({
-                                                    worked: undefined,
-                                                    unworked: true,
-                                                    is_random: false
-                                                });
-                                            }
-                                        }}
-                                        className="w-4 h-4"
-                                    />
-                                    <span className="text-white text-sm">Ishlanmagan</span>
-                                </label>
-                                <label className="flex items-center gap-2">
-                                    <input
-                                        type="radio"
-                                        name="worked"
-                                        checked={filterOptions.worked === undefined && filterOptions.unworked === undefined}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                applyFilter({
-                                                    worked: undefined,
-                                                    unworked: undefined,
-                                                    is_random: false
-                                                });
-                                            }
-                                        }}
-                                        className="w-4 h-4"
-                                    />
-                                    <span className="text-white text-sm">Hammasi</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* Random */}
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="checkbox"
-                                id="random"
-                                checked={filterOptions.is_random || false}
-                                onChange={(e) => applyFilter({
-                                    is_random: e.target.checked,
-                                    category: "All",
-                                    ordering: "-created_at",
-                                    worked: undefined,
-                                    unworked: undefined,
-                                    search: undefined,
-                                    difficulty_min: undefined,
-                                    difficulty_max: undefined
-                                })}
-                                className="w-5 h-5"
-                            />
-                            <label htmlFor="random" className="text-white text-sm">
-                                Tasodifiy savollar
-                            </label>
-                        </div>
-
-                        {/* Difficulty Range */}
-                        <div>
-                            <label className="text-white text-sm mb-2 block">Qiyinlik darajasi</label>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    placeholder="Min"
-                                    value={filterOptions.difficulty_min || ''}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        applyFilter({
-                                            difficulty_min: value ? Number(value) : undefined,
-                                            is_random: false
-                                        });
-                                    }}
-                                    className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg"
-                                />
-                                <span className="text-white">-</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    placeholder="Max"
-                                    value={filterOptions.difficulty_max || ''}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        applyFilter({
-                                            difficulty_max: value ? Number(value) : undefined,
-                                            is_random: false
-                                        });
-                                    }}
-                                    className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="p-4 border-t border-gray-700 flex gap-3 justify-between">
-                        <button
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-                            onClick={() => {
-                                resetFilters();
-                                setShowFilterModal(false);
-                            }}
-                        >
-                            Tozalash
-                        </button>
-                        <div className="flex gap-3">
-                            <button
-                                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition"
-                                onClick={() => setShowFilterModal(false)}
-                            >
-                                Yopish
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderQuestionContent = (quiz: Quiz) => {
-        const isSubmitting = submittingQuestions.has(quiz.id);
-        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
-        const answerState = userInteractions.answerStates.get(quiz.id);
-        const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
-        const showCorrectAnimation = correctAnimation === quiz.id;
-
-        // Shake animation style
-        const getShakeStyle = (answerId: number) => {
-            if (shakingAnswerId === answerId) {
-                return {
-                    animation: 'shake 0.5s ease-in-out',
-                };
-            }
-            return {};
-        };
-
-        // Coin animation component
-        const renderCoinAnimation = (answerId: number) => {
-            if (coinAnimation?.quizId === quiz.id && coinAnimation?.answerId === answerId && coinAnimation.show) {
-                return (
-                    <div className="absolute top-0 left-0 right-0 flex justify-center z-50">
-                        <div className="animate-coin-bounce">
-                            <span className="text-3xl">🪙</span>
-                        </div>
-                    </div>
-                );
-            }
-            return null;
-        };
-
-        // Correct answer overlay animation
-        const renderCorrectAnimation = () => {
-            if (showCorrectAnimation) {
-                return (
-                    <div className="absolute inset-0 flex items-center justify-center z-40">
-                        <div className="animate-correct-pulse">
-                            <div className="text-6xl mb-4">🎉</div>
-                            <div className="text-2xl text-white font-bold bg-green-500/80 px-6 py-3 rounded-full">
-                                To'g'ri!
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-            return null;
-        };
-
-        if (isTrueFalseQuestion(quiz)) {
-            return (
-                <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                    {renderCorrectAnimation()}
-                    {quiz.answers.map(option => {
-                        const isSelected = selectedAnswers.includes(option.id);
-                        const isCorrect = option.is_correct;
-                        const showCorrect = answerState && isCorrect;
-                        const showIncorrect = answerState && isSelected && !isCorrect;
-                        const isUserCorrect = isSelected && answerState === "correct";
-                        const getBtnClass = () => {
-                            if (hasSubmitted) {
-                                if (isCorrect) return "border-green-400/60 bg-green-500/30";
-                                if (isSelected && !isCorrect) return "border-red-400/60 bg-red-500/30";
-                            }
-                            if (isUserCorrect || showCorrect) return "border-green-400/60 bg-green-500/30";
-                            if (showIncorrect) return "border-red-400/60 bg-red-500/30";
-                            if (isSelected) return "border-blue-400/60 bg-blue-500/30";
-                            return "border-white/30 hover:bg-black/50 hover:border-white/40";
-                        };
-                        const isTrue = ["true", "ha", "yes", "to'g'ri", "rost"].includes(
-                            option.answer_text.toLowerCase()
-                        );
-                        return (
-                            <button
-                                key={option.id}
-                                onClick={() => selectAnswer(quiz.id, option.id)}
-                                disabled={hasSubmitted || isSubmitting}
-                                style={getShakeStyle(option.id)}
-                                className={`relative flex flex-col items-center justify-center gap-3 sm:gap-4 py-6 sm:py-8 px-4 sm:px-6 rounded-xl bg-black/40 backdrop-blur-lg border transition-all shadow-lg ${getBtnClass()}`}
-                            >
-                                {renderCoinAnimation(option.id)}
-                                {isTrue ? (
-                                    <ThumbsUp size={28} className="text-green-400 sm:w-8 sm:h-8"/>
-                                ) : (
-                                    <ThumbsDown size={28} className="text-red-400 sm:w-8 sm:h-8"/>
-                                )}
-                                <span className="text-base sm:text-lg font-medium text-white">
-                                    {option.answer_text}
-                                </span>
-                                {isSubmitting && isSelected && (
-                                    <Loader2 size={16} className="animate-spin text-white"/>
-                                )}
-                                {isUserCorrect && <Check size={20} className="text-green-400"/>}
-                                {showIncorrect && <X size={20} className="text-red-400"/>}
-                            </button>
-                        );
-                    })}
-                </div>
-            );
-        }
-
-        if (quiz.question_type === "multiple") {
-            return (
-                <div className="space-y-3 sm:space-y-4">
-                    {renderCorrectAnimation()}
-                    <div className="grid gap-3 sm:gap-4 w-full">
-                        {quiz.answers.map(option => {
-                            const isSelected = selectedAnswers.includes(option.id);
-                            const showCorrect = answerState && option.is_correct;
-                            const showIncorrect = answerState && isSelected && !option.is_correct;
-                            const btnClass = hasSubmitted
-                                ? (option.is_correct ? "border-green-400/60 bg-green-500/30" :
-                                    isSelected && !option.is_correct ? "border-red-400/60 bg-red-500/30" : "border-white/30")
-                                : showCorrect
-                                    ? "border-green-400/60 bg-green-500/30"
-                                    : showIncorrect
-                                        ? "border-red-400/60 bg-red-500/30"
-                                        : isSelected
-                                            ? "border-blue-400/60 bg-blue-500/30"
-                                            : "border-white/30 hover:bg-black/50 hover:border-white/40";
-                            const circleClass = showCorrect
-                                ? "bg-green-500 text-white"
-                                : showIncorrect
-                                    ? "bg-red-500 text-white"
-                                    : isSelected
-                                        ? "bg-blue-500 text-white"
-                                        : "bg-white/30 text-white";
-                            return (
-                                <button
-                                    key={option.id}
-                                    onClick={() => handleMultipleChoice(quiz.id, option.id)}
-                                    disabled={hasSubmitted || isSubmitting}
-                                    style={getShakeStyle(option.id)}
-                                    className={`relative flex w-full items-center gap-3 sm:gap-4 px-5 py-4 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${btnClass}`}
-                                >
-                                    {renderCoinAnimation(option.id)}
-                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${circleClass}`}>
-                                        {(isSelected || showCorrect) && <Check size={14}/>}
-                                        {showIncorrect && <X size={14}/>}
-                                    </div>
-                                    <span className="flex-1 font-medium text-white text-sm sm:text-base">
-                                        {option.answer_text}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {selectedAnswers.length > 0 && !hasSubmitted && (
-                        <button
-                            onClick={() => submitMultipleChoice(quiz.id)}
-                            disabled={isSubmitting}
-                            className={`w-full py-4 rounded-xl bg-black/40 backdrop-blur-lg border border-white/30 text-white font-medium flex items-center justify-center gap-2 transition-all shadow-lg ${
-                                isSubmitting ? "bg-blue-500/40" : "hover:bg-black/50 hover:border-white/40"
-                            }`}
-                        >
-                            {isSubmitting ? (
-                                <Loader2 size={20} className="animate-spin"/>
-                            ) : (
-                                <Send size={20}/>
-                            )}
-                            <span>Javobni yuborish ({selectedAnswers.length} ta tanlangan)</span>
-                        </button>
-                    )}
-                </div>
-            );
-        }
-
-        // Default single choice
-        return (
-            <div className="space-y-3 sm:space-y-4">
-                {renderCorrectAnimation()}
-                {quiz.answers.map(option => {
-                    const isSelected = selectedAnswers.includes(option.id);
-                    const isCorrect = option.is_correct;
-                    const showCorrect = answerState && isCorrect;
-                    const showIncorrect = answerState && isSelected && !isCorrect;
-                    const btnClass = hasSubmitted
-                        ? (isCorrect ? "border-green-400/60 bg-green-500/30" :
-                            isSelected && !isCorrect ? "border-red-400/60 bg-red-500/30" : "border-white/30")
-                        : showCorrect
-                            ? "border-green-400/60 bg-green-500/30"
-                            : showIncorrect
-                                ? "border-red-400/60 bg-red-500/30"
-                                : isSelected
-                                    ? "border-blue-400/60 bg-blue-500/30"
-                                    : "border-white/30 hover:bg-black/50 hover:border-white/40";
-                    const circleClass = showCorrect
-                        ? "bg-green-500 text-white"
-                        : showIncorrect
-                            ? "bg-red-500 text-white"
-                            : isSelected
-                                ? "bg-blue-500 text-white"
-                                : "bg-white/30 text-white";
-                    return (
-                        <button
-                            key={option.id}
-                            onClick={() => selectAnswer(quiz.id, option.id)}
-                            disabled={hasSubmitted || isSubmitting}
-                            style={getShakeStyle(option.id)}
-                            className={`relative flex items-center w-full gap-3 sm:gap-4 px-5 py-4 rounded-xl bg-black/40 backdrop-blur-lg border transition-all text-left shadow-lg ${btnClass}`}
-                        >
-                            {renderCoinAnimation(option.id)}
-                            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${circleClass}`}>
-                                {option.letter}
-                            </div>
-                            <span className="flex-1 font-medium text-white text-sm sm:text-base">
-                                {option.answer_text}
-                            </span>
-                            {isSubmitting && isSelected && (
-                                <Loader2 size={16} className="animate-spin text-white"/>
-                            )}
-                            {isSelected && answerState === "correct" && <Check size={18} className="text-green-400"/>}
-                            {showIncorrect && <X size={18} className="text-red-400"/>}
-                        </button>
-                    );
-                })}
-            </div>
-        );
-    };
-
-    // Loading State
-    if (isInitialLoading) {
-        return (
-            <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
+            <div className="fixed inset-0 bg-gray-900">
+                {renderHeader()}
                 <QuizSkeletonLoader />
             </div>
         );
     }
 
-    // Empty State
-    if (quizData.length === 0 && !loading) {
+    // Loading state
+    if (loading && quizData.length === 0) {
         return (
             <div className="fixed inset-0 bg-gray-900 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="text-4xl mb-4">😔</div>
-                    <h2 className="text-xl text-white mb-2">Savollar topilmadi</h2>
-                    <p className="text-gray-400 mb-6">Tanlangan filterda savollar mavjud emas</p>
-                    <button
-                        onClick={resetFilters}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    >
-                        Barcha savollarni ko'rish
-                    </button>
+                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-white text-lg">Yuklanmoqda...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // No quizzes found
+    if (!loading && quizData.length === 0) {
+        return (
+            <div className="fixed inset-0 bg-gray-900">
+                {renderHeader()}
+                <div className="h-full flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="text-6xl mb-4">😕</div>
+                        <h2 className="text-2xl text-white mb-2">Testlar topilmadi</h2>
+                        <p className="text-gray-400 mb-6">Boshqa filterlar bilan qayta urinib ko'ring</p>
+                        <button
+                            onClick={resetFilters}
+                            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        >
+                            Filterlarni tozalash
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -1880,14 +1767,12 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     border: 1px solid rgba(255, 255, 255, 0.1);
                 }
                 
-                /* Shake Animation */
                 @keyframes shake {
                     0%, 100% { transform: translateX(0); }
                     10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
                     20%, 40%, 60%, 80% { transform: translateX(5px); }
                 }
                 
-                /* Coin Animation */
                 @keyframes coin-bounce {
                     0% { 
                         transform: translateY(0) scale(1); 
@@ -1915,7 +1800,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     animation: coin-bounce 2s ease-out forwards;
                 }
                 
-                /* Correct Answer Animation */
                 @keyframes correct-pulse {
                     0% { 
                         transform: scale(0.5); 
@@ -1934,41 +1818,29 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 .animate-correct-pulse {
                     animation: correct-pulse 0.6s ease-out forwards;
                 }
+                
+                .animate-shake {
+                    animation: shake 0.5s ease-in-out;
+                }
             `}</style>
-
-            {/* Search Input */}
-            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-md px-4">
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Savollarni qidirish..."
-                        className="w-full px-4 py-3 bg-black/40 backdrop-blur-lg border border-white/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
-                    />
-                    {isSearching ? (
-                        <Loader2 className="absolute right-3 top-3 animate-spin text-white" size={20} />
-                    ) : (
-                        <Search className="absolute right-3 top-3 text-white" size={20} />
-                    )}
-                </div>
-            </div>
 
             {/* Filter Modal */}
             {showFilterModal && renderFilterModal()}
 
+            {/* Header */}
+            {renderHeader()}
+
             {/* Main Container */}
             <div
                 ref={containerRef}
-                className="h-full overflow-y-auto scrollbar-hide snap-y snap-mandatory"
+                className="h-full overflow-y-auto scrollbar-hide snap-y snap-mandatory pt-20"
             >
-                {/* Questions */}
                 {quizData.map((quiz, idx) => {
                     const userReaction = userInteractions.reactions.get(quiz.id);
-                    const finalViewCount = getFinalViewCount(quiz.id);
-                    const uniqueViewCount = getQuizUniqueViews(quiz.id);
-                    const correctCount = getCorrectCount(quiz.id);
-                    const wrongCount = getWrongCount(quiz.id);
+                    const finalViewCount = memoizedHelpers.getFinalViewCount(quiz.id);
+                    const uniqueViewCount = memoizedHelpers.getQuizUniqueViews(quiz.id);
+                    const correctCount = memoizedHelpers.getCorrectCount(quiz.id);
+                    const wrongCount = memoizedHelpers.getWrongCount(quiz.id);
                     const totalReactions = quiz.reactions_summary?.total || 0;
                     const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
                     const currentStats = quizStats.get(quiz.id);
@@ -1997,7 +1869,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                             </div>
 
                             <div className="relative w-full max-w-2xl mx-auto h-full px-2 sm:px-6 flex flex-col justify-center rounded-lg">
-                                {/* Logo and Telegram Link */}
                                 <div className="absolute top-3 left-0 right-0 z-20 px-1 rounded-lg">
                                     <div className="flex items-center justify-center rounded-lg">
                                         <a
@@ -2016,7 +1887,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                     </div>
                                 </div>
 
-                                {/* Question Card */}
                                 <div className="glass-morphism rounded-xl p-4 sm:p-6 mb-6 shadow-lg">
                                     <div className="text-sm sm:text-lg leading-relaxed text-white">
                                         {quiz.question_text}
@@ -2046,12 +1916,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                     </div>
                                 </div>
 
-                                {/* Answers */}
                                 <div>
                                     {renderQuestionContent(quiz)}
                                 </div>
 
-                                {/* User Info */}
                                 <div className="absolute bottom-[88px] left-1 right-1">
                                     <div className="glass-morphism md:rounded-xl p-4 w-full">
                                         <div className="flex items-center justify-between">
@@ -2109,9 +1977,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                     </div>
                                 </div>
 
-                                {/* Stats Icons */}
                                 <div className="absolute right-4 bottom-1/4 flex flex-col gap-4">
-                                    {/* Correct Count */}
                                     <div className="flex flex-col items-center">
                                         <div className="w-10 h-10 bg-green-500/30 rounded-full flex items-center justify-center border border-green-500/50">
                                             <span className="text-green-400 font-bold text-lg">✓</span>
@@ -2121,7 +1987,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                         </span>
                                     </div>
 
-                                    {/* Wrong Count */}
                                     <div className="flex flex-col items-center">
                                         <div className="w-10 h-10 bg-red-500/30 rounded-full flex items-center justify-center border border-red-500/50">
                                             <span className="text-red-400 font-bold text-lg">✗</span>
@@ -2131,7 +1996,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                         </span>
                                     </div>
 
-                                    {/* Views Count */}
                                     <div className="flex flex-col items-center">
                                         <div className="w-10 h-10 bg-blue-500/30 rounded-full flex items-center justify-center border border-blue-500/50">
                                             <Eye size={18} className="text-blue-400"/>
@@ -2144,7 +2008,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                         )}
                                     </div>
 
-                                    {/* Reactions */}
                                     <div className="relative">
                                         <button
                                             onClick={(e) => {
@@ -2171,7 +2034,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                         {showReactions === quiz.id && renderReactionsMenu(quiz.id)}
                                     </div>
 
-                                    {/* More Options */}
                                     <div className="relative">
                                         <button
                                             onClick={(e) => {
@@ -2197,8 +2059,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     );
                 })}
 
-                {/* Loading Indicator */}
-                {loading && quizData.length > 0 && (
+                {loadingMore && (
                     <div className="h-screen w-full flex justify-center items-center snap-start">
                         <div className="flex flex-col items-center gap-4">
                             <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -2207,8 +2068,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     </div>
                 )}
 
-                {/* End of content */}
-                {!hasMore && !loading && quizData.length > 0 && (
+                {!hasMore && !loading && !loadingMore && quizData.length > 0 && (
                     <div className="h-screen w-full flex justify-center items-center snap-start">
                         <div className="text-center">
                             <div className="text-4xl mb-4">🎉</div>

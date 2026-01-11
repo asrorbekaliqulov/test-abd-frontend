@@ -568,6 +568,7 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
         return badges[level as keyof typeof badges] || badges.beginner
     }
 
+    // Profil rasmini yangilash funksiyasi
     const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]
         if (!file) return
@@ -584,18 +585,35 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
 
         setImageUploading(true)
         try {
+            // 1. FormData yaratish
             const formData = new FormData()
             formData.append("profile_image", file)
 
-            const response = await updateProfileImage(formData)
-            setMestats((prev) => (prev ? {...prev, profile_image: response.data.profile_image} : null))
-            showToast("Profil rasmi muvaffaqiyatli yangilandi!", "success")
+            // 2. API orqali rasmni yuklash - yangi optimallashtirilgan funksiya
+            const response = await authAPI.updateProfileImage(formData)
+
+            // 3. Agar yangilangan ma'lumotlar qaytsa, state'ni yangilash
+            if (response.success && response.data) {
+                // Profil ma'lumotlarini yangilash
+                const updatedUser = { ...mestats, profile_image: response.data.profile_image }
+                setMestats(updatedUser as UserData)
+
+                // Agar API to'liq user ma'lumotini qaytarsa
+                if (response.data.user) {
+                    setMestats(response.data.user as UserData)
+                    localStorage.setItem('user', JSON.stringify(response.data.user))
+                }
+
+                showToast("Profil rasmi muvaffaqiyatli yangilandi!", "success")
+            } else {
+                throw new Error(response.error || "Rasm yuklashda xatolik")
+            }
         } catch (error) {
             console.error("Image upload error:", error)
             showToast("Rasm yuklashda xatolik yuz berdi", "error")
         } finally {
             setImageUploading(false)
-            event.target.value = ""
+            event.target.value = "" // Inputni tozalash
         }
     }
 

@@ -8,9 +8,12 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    allowedHosts: ['*'],
-  //   host: true, // kerak bo‘lsa
-  //   port: 5173, // yoki sizning portingiz
+    allowedHosts: [
+      'localhost:5173',
+      '127.0.0.1',
+      'backend.testabd.uz',
+      '192.168.1.140',
+    ]
   },
 });
 

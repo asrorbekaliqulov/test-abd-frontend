@@ -17,7 +17,7 @@ import {
     Hash,
     ChevronLeft,
 } from "lucide-react"
-import { useSearch, quizAPI } from "../utils/api"
+import { quizAPI, searchAPI } from "../utils/api" // ✅ useSearch o'rniga searchAPI
 
 interface SearchPageProps {}
 
@@ -70,19 +70,26 @@ interface ApiUser {
     is_premium?: boolean
 }
 
-interface ApiResponse {
+interface SearchResults {
     tests: ApiTest[]
     questions: ApiQuestion[]
     users: ApiUser[]
+    total: number
 }
 
 const SearchPage: React.FC<SearchPageProps> = () => {
     const navigate = useNavigate()
-    const { search, loading, data } = useSearch()
     const [searchQuery, setSearchQuery] = useState("")
     const [showFilters, setShowFilters] = useState(false)
     const [activeCategory, setActiveCategory] = useState<number | null>(null)
     const [recentSearches, setRecentSearches] = useState<string[]>([])
+    const [loading, setLoading] = useState(false)
+    const [searchResults, setSearchResults] = useState<SearchResults>({
+        tests: [],
+        questions: [],
+        users: [],
+        total: 0
+    })
 
     const [categories, setCategories] = useState<Category[]>([])
     const [selectedType, setSelectedType] = useState<string[]>([])
@@ -146,10 +153,53 @@ const SearchPage: React.FC<SearchPageProps> = () => {
             searchParams.sort_by = sortBy
         }
 
+        setLoading(true)
         try {
-            await search(searchParams)
+            let result;
+
+            // Agar faqat kategoriya tanlangan bo'lsa
+            if (activeCategory && !searchQuery.trim()) {
+                result = await quizAPI.fetchQuizzesByCategory(activeCategory, 1, 20)
+                if (result.success) {
+                    setSearchResults({
+                        tests: result.data?.results || result.data || [],
+                        questions: [],
+                        users: [],
+                        total: result.data?.results?.length || result.data?.length || 0
+                    })
+                }
+            }
+            // Agar search query bo'lsa
+            else if (searchQuery.trim()) {
+                // Search API dan foydalanish
+                if (searchAPI) {
+                    result = await searchAPI.searchAll(searchQuery)
+                    if (result.success) {
+                        setSearchResults({
+                            tests: result.data?.quizzes || result.data?.tests || [],
+                            questions: result.data?.quizzes || result.data?.questions || [],
+                            users: result.data?.users || [],
+                            total: (result.data?.users?.length || 0) +
+                                (result.data?.quizzes?.length || result.data?.tests?.length || 0)
+                        })
+                    }
+                } else {
+                    // Agar searchAPI mavjud bo'lmasa, quizAPI orqali qidirish
+                    result = await quizAPI.fetchQuizzesWithFilters({ search: searchQuery })
+                    if (result.success) {
+                        setSearchResults({
+                            tests: result.data?.results || result.data || [],
+                            questions: result.data?.results || result.data || [],
+                            users: [],
+                            total: result.data?.results?.length || result.data?.length || 0
+                        })
+                    }
+                }
+            }
         } catch (error) {
             console.error("Search error:", error)
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -202,24 +252,13 @@ const SearchPage: React.FC<SearchPageProps> = () => {
         return `${Math.floor(diffDays / 30)} oy oldin`
     }
 
-    const getSearchResults = () => {
-        if (!data) return { tests: [], questions: [], users: [], total: 0 }
-
-        const apiData = data as ApiResponse
-        return {
-            tests: apiData.tests || [],
-            questions: apiData.questions || [],
-            users: apiData.users || [],
-            total: (apiData.tests?.length || 0) + (apiData.questions?.length || 0) + (apiData.users?.length || 0),
-        }
-    }
-
     const handleClearSearch = () => {
         setSearchQuery("")
         setActiveCategory(null)
         setSelectedType([])
         setSortBy("popular")
         setDateRange("all")
+        setSearchResults({ tests: [], questions: [], users: [], total: 0 })
     }
 
     const handleClearRecentSearches = () => {
@@ -242,7 +281,6 @@ const SearchPage: React.FC<SearchPageProps> = () => {
         }
     }
 
-    const searchResults = getSearchResults()
     const hasSearchQuery = searchQuery.trim() || activeCategory
 
     return (
