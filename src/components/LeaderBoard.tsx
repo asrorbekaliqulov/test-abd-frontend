@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import api, { quizViewsAPI } from "../utils/api";
+import { accountsAPI, LeaderboardUser as LeaderboardUserType, APIResponse } from "../utils/api"; // API import
 import { ArrowLeft, Search, RefreshCw, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import rank1Img from "./assets/images/rank1.png";
@@ -9,6 +9,7 @@ import rank2Img from "./assets/images/rank2.png";
 import rank3Img from "./assets/images/rank3.png";
 import defaultUserAvatar from "../components/assets/images/defaultuseravatar.png";
 
+// Interface - API bilan bir xil bo'lishi kerak
 interface LeaderboardUser {
     id: number;
     username: string;
@@ -26,7 +27,7 @@ const useDebounce = (value: string, delay = 250) => {
     React.useEffect(() => {
         const timer = setTimeout(() => setDebounced(value), delay);
         return () => clearTimeout(timer);
-    }, [value]);
+    }, [value, delay]);
     return debounced;
 };
 
@@ -50,6 +51,34 @@ const Leaderboard: React.FC = () => {
     const navigate = useNavigate();
     const refreshIntervalRef = useRef<NodeJS.Timeout>();
 
+    // API orqali leaderboard ma'lumotlarini olish
+    const fetchLeaderboardData = async (pageNum: number = 1): Promise<APIResponse<any>> => {
+        try {
+            const response = await accountsAPI.getLeaderboard();
+            return response;
+        } catch (error) {
+            console.error("Leaderboard ma'lumotlarini olishda xatolik:", error);
+            return {
+                success: false,
+                error: "Ma'lumotlarni olishda xatolik",
+            };
+        }
+    };
+
+    // Follow/Unfollow funksiyasi
+    const toggleFollowUser = async (userId: number): Promise<APIResponse<any>> => {
+        try {
+            const response = await accountsAPI.toggleFollow(userId);
+            return response;
+        } catch (error) {
+            console.error("Follow/unfollow xatosi:", error);
+            return {
+                success: false,
+                error: "Follow amalini bajarishda xatolik",
+            };
+        }
+    };
+
     // Yangilash funksiyasi
     const refreshLeaderboard = async (silent = false) => {
         if (!silent) {
@@ -58,22 +87,29 @@ const Leaderboard: React.FC = () => {
 
         try {
             // Faqat 1-sahifani yangilash
-            const res = await api.get(`/accounts/leaderboard/?page=1`);
-            const newUsers: LeaderboardUser[] = res.data.results || [];
+            const res = await fetchLeaderboardData(1);
 
-            // Stats hisoblash
-            const totalCoins = newUsers.reduce((sum, user) => sum + user.coins, 0);
-            const avgCoins = newUsers.length > 0 ? Math.round(totalCoins / newUsers.length) : 0;
+            if (res.success && res.data) {
+                const newUsers: LeaderboardUser[] = res.data.results || res.data || [];
 
-            setUsers(newUsers);
-            setStats({
-                totalUsers: newUsers.length,
-                totalCoins,
-                avgCoins,
-                activeUsers: Math.floor(newUsers.length * 0.3),
-            });
-            setLastUpdated(new Date());
+                // Stats hisoblash
+                const totalCoins = newUsers.reduce((sum, user) => sum + user.coins, 0);
+                const avgCoins = newUsers.length > 0 ? Math.round(totalCoins / newUsers.length) : 0;
 
+                setUsers(newUsers);
+                setPage(2); // Keyingi sahifa 2 bo'ladi
+                setHasMore(!!res.data.next);
+
+                setStats({
+                    totalUsers: newUsers.length,
+                    totalCoins,
+                    avgCoins,
+                    activeUsers: Math.floor(newUsers.length * 0.3),
+                });
+                setLastUpdated(new Date());
+            } else {
+                console.error("Leaderboard yangilashda xatolik:", res.error);
+            }
         } catch (err) {
             console.error("Error refreshing leaderboard:", err);
         } finally {
@@ -83,46 +119,48 @@ const Leaderboard: React.FC = () => {
         }
     };
 
-    // Dastlabki yuklash
+    // Dastlabki yuklash va keyingi sahifalar
     const loadUsers = async () => {
         if (loading || !hasMore) return;
         setLoading(true);
         try {
-            const res = await api.get(`/accounts/leaderboard/?page=${page}`);
-            const list: LeaderboardUser[] = res.data.results || [];
+            const res = await fetchLeaderboardData(page);
 
-            // Remove duplicates by ID
-            const existingIds = new Set(users.map(u => u.id));
-            const newUsers = list.filter(u => !existingIds.has(u.id));
+            if (res.success && res.data) {
+                const list: LeaderboardUser[] = res.data.results || res.data || [];
 
-            const combined = [...users, ...newUsers];
+                // Remove duplicates by ID
+                const existingIds = new Set(users.map(u => u.id));
+                const newUsers = list.filter(u => !existingIds.has(u.id));
 
-            // Sort globally by coins
-            combined.sort((a, b) => b.coins - a.coins);
+                const combined = [...users, ...newUsers];
 
-            setUsers(combined);
-            setPage(prev => prev + 1);
-            setHasMore(res.data.next !== null);
+                // Sort globally by coins
+                combined.sort((a, b) => b.coins - a.coins);
 
-            // Set current user
-            if (!currentUserId) {
-                const me = combined.find(u => u.is_self);
-                if (me) setCurrentUserId(me.id);
+                setUsers(combined);
+                setPage(prev => prev + 1);
+                setHasMore(!!res.data.next);
+
+                // Set current user
+                if (!currentUserId) {
+                    const me = combined.find(u => u.is_self);
+                    if (me) setCurrentUserId(me.id);
+                }
+
+                // Stats hisoblash
+                const totalCoins = combined.reduce((sum, user) => sum + user.coins, 0);
+                const avgCoins = combined.length > 0 ? Math.round(totalCoins / combined.length) : 0;
+
+                setStats({
+                    totalUsers: combined.length,
+                    totalCoins,
+                    avgCoins,
+                    activeUsers: Math.floor(combined.length * 0.3),
+                });
             }
-
-            // Stats hisoblash
-            const totalCoins = combined.reduce((sum, user) => sum + user.coins, 0);
-            const avgCoins = combined.length > 0 ? Math.round(totalCoins / combined.length) : 0;
-
-            setStats({
-                totalUsers: combined.length,
-                totalCoins,
-                avgCoins,
-                activeUsers: Math.floor(combined.length * 0.3),
-            });
-
         } catch (err) {
-            console.error(err);
+            console.error("Leaderboard yuklashda xatolik:", err);
         } finally {
             setLoading(false);
         }
@@ -162,9 +200,15 @@ const Leaderboard: React.FC = () => {
         );
 
         try {
-            await api.post(`/accounts/followers/${user.id}/toggle/`, {});
+            const response = await toggleFollowUser(user.id);
+            if (!response.success) {
+                // revert on error
+                setUsers(prev =>
+                    prev.map(u => u.id === user.id ? { ...u, is_following: originalState } : u)
+                );
+            }
         } catch (err) {
-            console.error(err);
+            console.error("Follow/unfollow xatosi:", err);
             // revert on error
             setUsers(prev =>
                 prev.map(u => u.id === user.id ? { ...u, is_following: originalState } : u)
@@ -297,10 +341,10 @@ const Leaderboard: React.FC = () => {
                             >
                                 {/* Avatar / Rank Image */}
                                 <div className={`
-                                    rounded-full shadow-xl
-                                    flex items-center justify-center overflow-hidden
-                                    ${sizeClass}
-                                `}>
+                  rounded-full shadow-xl
+                  flex items-center justify-center overflow-hidden
+                  ${sizeClass}
+                `}>
                                     <img
                                         src={rankImg}
                                         alt={`Rank ${idx + 1}`}
@@ -313,23 +357,23 @@ const Leaderboard: React.FC = () => {
 
                                 {/* Username */}
                                 <div className={`
-                                    w-20 sm:w-24 md:w-32 text-center mt-1 sm:mt-2 md:mt-3
-                                    py-1 rounded-xl font-semibold shadow-md
-                                    ${textSizeClass} text-white
-                                `}
+                  w-20 sm:w-24 md:w-32 text-center mt-1 sm:mt-2 md:mt-3
+                  py-1 rounded-xl font-semibold shadow-md
+                  ${textSizeClass} text-white
+                `}
                                      style={{ fontFamily: "Z003, sans-serif" }}>
                                     {user.username}
                                 </div>
 
                                 {/* Coins & Stats */}
                                 <div className="flex flex-col items-center mt-1">
-                                    <span className="text-yellow-400 font-bold text-xs">
-                                        🪙{user.coins}
-                                    </span>
+                  <span className="text-yellow-400 font-bold text-xs">
+                    🪙{user.coins}
+                  </span>
                                     {user.views !== undefined && (
                                         <span className="text-blue-400 text-xs">
-                                            👁 {user.views}
-                                        </span>
+                      👁 {user.views}
+                    </span>
                                     )}
                                 </div>
                             </div>
@@ -363,8 +407,8 @@ const Leaderboard: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 {/* Rank Number */}
                                 <span className={`text-base sm:text-2xl font-bold w-7 sm:w-8 flex justify-center ${getRankColor(rank)}`}>
-                                    {rank}
-                                </span>
+                  {rank}
+                </span>
 
                                 {/* Avatar */}
                                 <div className="relative">
@@ -380,12 +424,12 @@ const Leaderboard: React.FC = () => {
 
                                 {/* Username & Info */}
                                 <div className="flex flex-col">
-                                    <span className="text-white text-xs sm:text-sm md:text-base font-medium flex items-center gap-1">
-                                        {u.username}
-                                        {u.is_self && (
-                                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">Siz</span>
-                                        )}
-                                    </span>
+                  <span className="text-white text-xs sm:text-sm md:text-base font-medium flex items-center gap-1">
+                    {u.username}
+                      {u.is_self && (
+                          <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">Siz</span>
+                      )}
+                  </span>
 
                                     {/* Stats Row */}
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -403,13 +447,13 @@ const Leaderboard: React.FC = () => {
                             <button
                                 onClick={() => toggleFollow(u)}
                                 className={`
-                                    px-2 sm:px-3 md:px-4 py-1 rounded-md font-medium text-xs sm:text-sm md:text-base transition
-                                    ${u.is_following
+                  px-2 sm:px-3 md:px-4 py-1 rounded-md font-medium text-xs sm:text-sm md:text-base transition
+                  ${u.is_following
                                     ? "bg-gray-500 text-gray-200 hover:bg-gray-600"
                                     : "bg-blue-500 text-white hover:bg-blue-600"
                                 }
-                                    opacity-0 group-hover:opacity-100 transition-opacity
-                                `}
+                  opacity-0 group-hover:opacity-100 transition-opacity
+                `}
                             >
                                 {u.is_following ? "Unfollow" : "Follow"}
                             </button>
