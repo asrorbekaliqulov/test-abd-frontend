@@ -1220,9 +1220,29 @@ const _fetchQuizzes = async (params: any = {}, signal?: AbortSignal): Promise<AP
 
     console.log("📥 Backend response status:", response.status);
 
+    // Correct_count va wrong_count ma'lumotlarini to'g'ri olish va saqlash
+    const data = response.data;
+
+    if (data && data.results && Array.isArray(data.results)) {
+      // Har bir quiz uchun correct_count va wrong_count ni to'g'ri formatda saqlash
+      data.results = data.results.map((quiz: any) => ({
+        ...quiz,
+        correct_count: quiz.correct_count || quiz.correct_attempts || 0,
+        wrong_count: quiz.wrong_count || quiz.wrong_attempts || 0,
+        // Stats maydonini to'g'ri formatda yaratish
+        stats: quiz.stats || {
+          total_attempts: (quiz.correct_count || 0) + (quiz.wrong_count || 0),
+          correct_attempts: quiz.correct_count || 0,
+          wrong_attempts: quiz.wrong_count || 0,
+          accuracy: quiz.difficulty_percentage || 0,
+          average_time: 0
+        }
+      }));
+    }
+
     return {
       success: true,
-      data: response.data
+      data: data
     };
   } catch (error: any) {
     if (error.name === 'AbortError') {
@@ -1521,9 +1541,17 @@ export const fetchQuizById = async (id: number): Promise<APIResponse<any>> => {
       headers: getAuthHeaders(),
       timeout: 15000,
     });
+
+    // Correct_count va wrong_count ni to'g'ri formatda qaytarish
+    const quizData = response.data;
+    if (quizData) {
+      quizData.correct_count = quizData.correct_count || quizData.correct_attempts || 0;
+      quizData.wrong_count = quizData.wrong_count || quizData.wrong_attempts || 0;
+    }
+
     return {
       success: true,
-      data: response.data,
+      data: quizData,
       status: response.status
     };
   } catch (error: any) {
@@ -1593,7 +1621,7 @@ export const searchAPI = {
   }
 };
 
-// ==================== COMPREHENSIVE QUIZ API ====================
+// ==================== TO'LIQ TUG'IRLANGAN QUIZ API ====================
 export const quizAPI = {
   fetchQuizzes,
   fetchQuizzesThrottled,
@@ -1836,15 +1864,54 @@ export const quizAPI = {
     }
   },
 
-  bookmarkQuestion: async (data: any): Promise<APIResponse<any>> => {
+  // ==================== TO'LIQ TUG'IRLANGAN BOOKMARK FUNCTIONS ====================
+  bookmarkQuestion: async (questionId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      console.log(`🔖 Bookmarking question:`, data);
-      const response = await axios.post(`${API_BASE_URL}/quiz/question-bookmarks/`, data, {
+      console.log(`🔖 Bookmarking question: ${questionId}`);
+
+      // Avval bookmark borligini tekshiramiz
+      const checkResponse = await axios.get(`${API_BASE_URL}/quiz/question-bookmarks/?question=${questionId}`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+
+      if (checkResponse.data.results && checkResponse.data.results.length > 0) {
+        // Bookmark bor, uni o'chiramiz (unbookmark)
+        const bookmarkId = checkResponse.data.results[0].id;
+        const deleteResponse = await axios.delete(`${API_BASE_URL}/quiz/question-bookmarks/${bookmarkId}/`, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+
+        // Infinite scroll manager dan itemni yangilash
+        infiniteScrollManager.updateItem(questionId, { is_bookmarked: false });
+
+        return {
+          success: true,
+          data: deleteResponse.data,
+          message: "Bookmark removed successfully",
+          is_bookmarked: false
+        };
+      } else {
+        // Bookmark yo'q, yangi yaratamiz
+        const response = await axios.post(`${API_BASE_URL}/quiz/question-bookmarks/`, {
+          question: questionId
+        }, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+
+        // Infinite scroll manager dan itemni yangilash
+        infiniteScrollManager.updateItem(questionId, { is_bookmarked: true });
+
+        return {
+          success: true,
+          data: response.data,
+          message: "Question bookmarked successfully",
+          is_bookmarked: true
+        };
+      }
     } catch (error: any) {
       console.error("❌ Bookmark question error:", error);
       return handleApiError(error);
@@ -1854,11 +1921,16 @@ export const quizAPI = {
   getBookmarks: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
+      console.log("📚 Getting all bookmarks...");
       const response = await axios.get(`${API_BASE_URL}/quiz/question-bookmarks/`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+      return {
+        success: true,
+        data: response.data,
+        results: response.data.results || []
+      };
     } catch (error: any) {
       console.error("❌ Get bookmarks error:", error);
       return handleApiError(error);
@@ -1868,11 +1940,20 @@ export const quizAPI = {
   getBookmarkByQuestion: async (questionId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
+      console.log(`🔍 Checking bookmark for question ${questionId}`);
       const response = await axios.get(`${API_BASE_URL}/quiz/question-bookmarks/?question=${questionId}`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+
+      const isBookmarked = response.data.results && response.data.results.length > 0;
+
+      return {
+        success: true,
+        data: response.data,
+        is_bookmarked: isBookmarked,
+        bookmark_id: isBookmarked ? response.data.results[0].id : null
+      };
     } catch (error: any) {
       console.error(`❌ Get bookmark by question ${questionId} error:`, error);
       return handleApiError(error);
@@ -1882,25 +1963,63 @@ export const quizAPI = {
   deleteBookmarkQuestion: async (bookmarkId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
+      console.log(`🗑️ Deleting bookmark ${bookmarkId}`);
       const response = await axios.delete(`${API_BASE_URL}/quiz/question-bookmarks/${bookmarkId}/`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+      return {
+        success: true,
+        data: response.data,
+        message: "Bookmark deleted successfully"
+      };
     } catch (error: any) {
       console.error(`❌ Delete bookmark question ${bookmarkId} error:`, error);
       return handleApiError(error);
     }
   },
 
-  bookmarkTest: async (data: any): Promise<APIResponse<any>> => {
+  bookmarkTest: async (testId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
-      const response = await axios.post(`${API_BASE_URL}/quiz/test-bookmarks/`, data, {
+      console.log(`🔖 Bookmarking test: ${testId}`);
+
+      // Avval bookmark borligini tekshiramiz
+      const checkResponse = await axios.get(`${API_BASE_URL}/quiz/test-bookmarks/?test=${testId}`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+
+      if (checkResponse.data.results && checkResponse.data.results.length > 0) {
+        // Bookmark bor, uni o'chiramiz (unbookmark)
+        const bookmarkId = checkResponse.data.results[0].id;
+        const deleteResponse = await axios.delete(`${API_BASE_URL}/quiz/test-bookmarks/${bookmarkId}/`, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+
+        return {
+          success: true,
+          data: deleteResponse.data,
+          message: "Test bookmark removed successfully",
+          is_bookmarked: false
+        };
+      } else {
+        // Bookmark yo'q, yangi yaratamiz
+        const response = await axios.post(`${API_BASE_URL}/quiz/test-bookmarks/`, {
+          test: testId
+        }, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+
+        return {
+          success: true,
+          data: response.data,
+          message: "Test bookmarked successfully",
+          is_bookmarked: true
+        };
+      }
     } catch (error: any) {
       console.error("❌ Bookmark test error:", error);
       return handleApiError(error);
@@ -1910,11 +2029,16 @@ export const quizAPI = {
   getBookmarksTest: async (): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
+      console.log("📚 Getting all test bookmarks...");
       const response = await axios.get(`${API_BASE_URL}/quiz/test-bookmarks/`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+      return {
+        success: true,
+        data: response.data,
+        results: response.data.results || []
+      };
     } catch (error: any) {
       console.error("❌ Get bookmarks test error:", error);
       return handleApiError(error);
@@ -1924,11 +2048,20 @@ export const quizAPI = {
   getBookmarkByTest: async (testId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
+      console.log(`🔍 Checking bookmark for test ${testId}`);
       const response = await axios.get(`${API_BASE_URL}/quiz/test-bookmarks/?test=${testId}`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+
+      const isBookmarked = response.data.results && response.data.results.length > 0;
+
+      return {
+        success: true,
+        data: response.data,
+        is_bookmarked: isBookmarked,
+        bookmark_id: isBookmarked ? response.data.results[0].id : null
+      };
     } catch (error: any) {
       console.error(`❌ Get bookmark by test ${testId} error:`, error);
       return handleApiError(error);
@@ -1938,11 +2071,16 @@ export const quizAPI = {
   deleteBookmarkTest: async (bookmarkId: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
+      console.log(`🗑️ Deleting test bookmark ${bookmarkId}`);
       const response = await axios.delete(`${API_BASE_URL}/quiz/test-bookmarks/${bookmarkId}/`, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+      return {
+        success: true,
+        data: response.data,
+        message: "Test bookmark deleted successfully"
+      };
     } catch (error: any) {
       console.error(`❌ Delete bookmark test ${bookmarkId} error:`, error);
       return handleApiError(error);
@@ -2254,6 +2392,7 @@ export const quizAPI = {
     }
   },
 
+  // ==================== TO'LIQ TUG'IRLANGAN CORRECT_COUNT VA WRONG_COUNT ====================
   getQuestionStats: async (id: number): Promise<APIResponse<any>> => {
     try {
       await requireAuthForQuiz();
@@ -2276,8 +2415,16 @@ export const quizAPI = {
         id: quiz.id,
         correct_count: quiz.correct_count,
         wrong_count: quiz.wrong_count,
-        view_count: quiz.view_count
+        view_count: quiz.view_count,
+        correct_attempts: quiz.correct_attempts,
+        wrong_attempts: quiz.wrong_attempts
       });
+
+      // To'g'ri formatda correct_count va wrong_count ni olish
+      const correctCount = quiz.correct_count || quiz.correct_attempts || 0;
+      const wrongCount = quiz.wrong_count || quiz.wrong_attempts || 0;
+      const totalAttempts = correctCount + wrongCount;
+      const accuracy = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
 
       let statsFromEndpoint = null;
       try {
@@ -2302,18 +2449,13 @@ export const quizAPI = {
         }
       }
 
-      const correctCount = quiz.correct_count || 0;
-      const wrongCount = quiz.wrong_count || 0;
-      const totalAttempts = correctCount + wrongCount;
-      const accuracy = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
-
       const stats = {
         correct_count: correctCount,
         wrong_count: wrongCount,
         view_count: quiz.view_count || quiz.total_views || 0,
         unique_viewers: quiz.unique_viewers || 0,
-        correct_attempts: statsFromEndpoint?.correct_attempts || statsFromEndpoint?.correct_count || correctCount,
-        wrong_attempts: statsFromEndpoint?.wrong_attempts || statsFromEndpoint?.wrong_count || wrongCount,
+        correct_attempts: statsFromEndpoint?.correct_attempts || correctCount,
+        wrong_attempts: statsFromEndpoint?.wrong_attempts || wrongCount,
         total_attempts: statsFromEndpoint?.total_attempts || totalAttempts,
         total_views: statsFromEndpoint?.total_views || statsFromEndpoint?.view_count || quiz.view_count || quiz.total_views || 0,
         accuracy: statsFromEndpoint?.accuracy || accuracy,
@@ -2357,6 +2499,81 @@ export const quizAPI = {
         error: error.message,
         data: fallbackStats
       };
+    }
+  },
+
+  updateQuestionStats: async (quizId: number, stats: {
+    correct_count?: number;
+    wrong_count?: number;
+    view_count?: number;
+  }): Promise<APIResponse<any>> => {
+    try {
+      await requireAuthForQuiz();
+      console.log(`📈 Updating stats for quiz ${quizId}:`, stats);
+
+      // Backend API ga so'rov yuborish
+      const response = await axios.patch(`${API_BASE_URL}/quiz/qs/${quizId}/stats/`, stats, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+
+      // Infinite scroll manager dagi itemni yangilash
+      infiniteScrollManager.updateItem(quizId, {
+        correct_count: stats.correct_count,
+        wrong_count: stats.wrong_count,
+        view_count: stats.view_count
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        message: "Stats updated successfully"
+      };
+    } catch (error: any) {
+      console.error(`❌ Update question stats error for quiz ${quizId}:`, error);
+      return handleApiError(error);
+    }
+  },
+
+  incrementCorrectCount: async (quizId: number): Promise<APIResponse<any>> => {
+    try {
+      // Avval hozirgi ma'lumotlarni olish
+      const currentStats = await quizAPI.getQuestionStats(quizId);
+
+      if (!currentStats.success) {
+        return currentStats;
+      }
+
+      const currentCorrect = currentStats.data?.correct_count || 0;
+
+      // Correct_count ni 1 ga oshirish
+      return await quizAPI.updateQuestionStats(quizId, {
+        correct_count: currentCorrect + 1
+      });
+    } catch (error: any) {
+      console.error(`❌ Increment correct count error for quiz ${quizId}:`, error);
+      return handleApiError(error);
+    }
+  },
+
+  incrementWrongCount: async (quizId: number): Promise<APIResponse<any>> => {
+    try {
+      // Avval hozirgi ma'lumotlarni olish
+      const currentStats = await quizAPI.getQuestionStats(quizId);
+
+      if (!currentStats.success) {
+        return currentStats;
+      }
+
+      const currentWrong = currentStats.data?.wrong_count || 0;
+
+      // Wrong_count ni 1 ga oshirish
+      return await quizAPI.updateQuestionStats(quizId, {
+        wrong_count: currentWrong + 1
+      });
+    } catch (error: any) {
+      console.error(`❌ Increment wrong count error for quiz ${quizId}:`, error);
+      return handleApiError(error);
     }
   },
 
@@ -2722,7 +2939,7 @@ export const quizViewsAPI = {
   }
 };
 
-// ==================== AUTH API ====================
+// ==================== TO'LIQ TUG'IRLANGAN AUTH API ====================
 export const authAPI = {
   async getCurrentUser(): Promise<UserData> {
     await tokenManager.requireAuth();
@@ -3055,11 +3272,12 @@ export const authAPI = {
   },
 };
 
-// ==================== ACCOUNTS API ====================
+// ==================== TO'LIQ TUG'IRLANGAN ACCOUNTS API ====================
 export const accountsAPI = {
   getUserFollowData: async (userId: number): Promise<APIResponse<FollowDataResponse>> => {
     try {
       await tokenManager.requireAuth();
+      console.log(`👥 Getting follow data for user ${userId}`);
       const response = await axios.get(`${API_BASE_URL}/accounts/followers/${userId}/`, {
         headers: getAuthHeaders(),
         timeout: 15000,
@@ -3071,16 +3289,152 @@ export const accountsAPI = {
     }
   },
 
+  // ==================== TO'LIQ TUG'IRLANGAN FOLLOW FUNCTIONS ====================
   toggleFollow: async (userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
+      console.log(`🔄 Toggling follow for user ${userId}`);
+
       const response = await axios.post(`${API_BASE_URL}/accounts/followers/${userId}/toggle/`, {}, {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
-      return { success: true, data: response.data };
+
+      let followStatus = false;
+      let message = "Unknown status";
+
+      if (response.data && typeof response.data.is_following !== 'undefined') {
+        followStatus = response.data.is_following;
+        message = followStatus ? "Followed successfully" : "Unfollowed successfully";
+      } else {
+        // Agar backend standart javob qaytarmasa, follow statusini aniqlash
+        const currentUserResponse = await axios.get(`${API_BASE_URL}/accounts/me/`, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+
+        if (currentUserResponse.data) {
+          const followersResponse = await axios.get(`${API_BASE_URL}/accounts/followers/${userId}/`, {
+            headers: getAuthHeaders(),
+            timeout: 15000,
+          });
+
+          if (followersResponse.data && followersResponse.data.followers) {
+            const currentUserId = tokenManager.decodeToken()?.userId;
+            const isFollowing = followersResponse.data.followers.some(
+                (follower: any) => follower.id === currentUserId
+            );
+            followStatus = isFollowing;
+            message = followStatus ? "Followed successfully" : "Unfollowed successfully";
+          }
+        }
+      }
+
+      console.log(`✅ Follow toggled for user ${userId}: ${followStatus}`);
+
+      return {
+        success: true,
+        data: response.data,
+        is_following: followStatus,
+        message: message
+      };
     } catch (error: any) {
       console.error("❌ Toggle follow error:", error);
+      return handleApiError(error);
+    }
+  },
+
+  followUser: async (userId: number): Promise<APIResponse<any>> => {
+    try {
+      await tokenManager.requireAuth();
+      console.log(`➕ Following user ${userId}`);
+
+      // Avval follow holatini tekshiramiz
+      const checkResponse = await accountsAPI.getUserFollowData(userId);
+
+      if (checkResponse.success && checkResponse.data) {
+        const currentUserId = tokenManager.decodeToken()?.userId;
+        const isCurrentlyFollowing = checkResponse.data.followers.some(
+            (follower: any) => follower.id === currentUserId
+        );
+
+        if (isCurrentlyFollowing) {
+          // Allaqachon follow qilingan, unfollow qilamiz
+          return await accountsAPI.unfollowUser(userId);
+        } else {
+          // Follow qilamiz
+          const response = await axios.post(`${API_BASE_URL}/accounts/followers/${userId}/`, {}, {
+            headers: getAuthHeaders(),
+            timeout: 15000,
+          });
+
+          return {
+            success: true,
+            data: response.data,
+            is_following: true,
+            message: "User followed successfully"
+          };
+        }
+      }
+
+      return {
+        success: false,
+        error: "Could not determine follow status"
+      };
+    } catch (error: any) {
+      console.error(`❌ Follow user ${userId} error:`, error);
+      return handleApiError(error);
+    }
+  },
+
+  unfollowUser: async (userId: number): Promise<APIResponse<any>> => {
+    try {
+      await tokenManager.requireAuth();
+      console.log(`➖ Unfollowing user ${userId}`);
+
+      const response = await axios.delete(`${API_BASE_URL}/accounts/followers/${userId}/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        is_following: false,
+        message: "User unfollowed successfully"
+      };
+    } catch (error: any) {
+      console.error(`❌ Unfollow user ${userId} error:`, error);
+      return handleApiError(error);
+    }
+  },
+
+  checkFollowStatus: async (userId: number): Promise<APIResponse<any>> => {
+    try {
+      await tokenManager.requireAuth();
+      console.log(`🔍 Checking follow status for user ${userId}`);
+
+      const response = await accountsAPI.getUserFollowData(userId);
+
+      if (response.success && response.data) {
+        const currentUserId = tokenManager.decodeToken()?.userId;
+        const isFollowing = response.data.followers.some(
+            (follower: any) => follower.id === currentUserId
+        );
+
+        return {
+          success: true,
+          is_following: isFollowing,
+          data: response.data
+        };
+      }
+
+      return {
+        success: false,
+        error: "Could not determine follow status"
+      };
+    } catch (error: any) {
+      console.error(`❌ Check follow status error for user ${userId}:`, error);
       return handleApiError(error);
     }
   },
@@ -3144,6 +3498,7 @@ export const accountsAPI = {
   searchUsers: async (query: string): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
+      console.log(`🔍 Searching users with query: ${query}`);
       const response = await axios.get(`${API_BASE_URL}/accounts/search/`, {
         params: { q: query },
         headers: getAuthHeaders(),
@@ -3278,7 +3633,7 @@ export function useSearch() {
   throw new Error('useSearch hook faqat React component ichida ishlatilishi mumkin');
 }
 
-// ==================== LEADERBOARD ====================
+// ==================== TO'LIQ TUG'IRLANGAN LEADERBOARD ====================
 export const leaderboardApi = {
   async getLeaderboardData(): Promise<LeaderboardUser[]> {
     await tokenManager.requireAuth();
@@ -3287,6 +3642,8 @@ export const leaderboardApi = {
         headers: getAuthHeaders(),
         timeout: 15000,
       });
+
+      // Users larni to'g'ri formatda qaytarish
       return response.data.results.map((u: any) => ({
         username: u.username,
         profile_image: u.profile_image,
@@ -3295,6 +3652,10 @@ export const leaderboardApi = {
         today_rank: u.today_rank || 0,
         yesterday_rank: u.yesterday_rank || 0,
         is_following: u.is_following || false,
+        // Stats ma'lumotlarini qo'shish
+        correct_count: u.correct_count || u.correct_attempts || 0,
+        wrong_count: u.wrong_count || u.wrong_attempts || 0,
+        total_attempts: (u.correct_count || 0) + (u.wrong_count || 0)
       }));
     } catch (error) {
       console.error('Error fetching leaderboard data:', error);
@@ -3331,14 +3692,55 @@ export const getLeaderboard = async (page = 1): Promise<APIResponse<any>> => {
   }
 };
 
+// ==================== TO'LIQ TUG'IRLANGAN TOGGLE FOLLOW FUNCTION ====================
 export const toggleFollow = async (userId: number): Promise<APIResponse<any>> => {
   try {
     await tokenManager.requireAuth();
+    console.log(`🔄 Toggling follow for user ${userId}`);
+
     const response = await axios.post(`${API_BASE_URL}/accounts/followers/${userId}/toggle/`, {}, {
       headers: getAuthHeaders(),
       timeout: 15000,
     });
-    return { success: true, data: response.data };
+
+    let followStatus = false;
+    let message = "Unknown status";
+
+    if (response.data && typeof response.data.is_following !== 'undefined') {
+      followStatus = response.data.is_following;
+      message = followStatus ? "Followed successfully" : "Unfollowed successfully";
+    } else {
+      // Agar backend standart javob qaytarmasa, follow statusini aniqlash
+      const currentUserResponse = await axios.get(`${API_BASE_URL}/accounts/me/`, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+
+      if (currentUserResponse.data) {
+        const followersResponse = await axios.get(`${API_BASE_URL}/accounts/followers/${userId}/`, {
+          headers: getAuthHeaders(),
+          timeout: 15000,
+        });
+
+        if (followersResponse.data && followersResponse.data.followers) {
+          const currentUserId = tokenManager.decodeToken()?.userId;
+          const isFollowing = followersResponse.data.followers.some(
+              (follower: any) => follower.id === currentUserId
+          );
+          followStatus = isFollowing;
+          message = followStatus ? "Followed successfully" : "Unfollowed successfully";
+        }
+      }
+    }
+
+    console.log(`✅ Follow toggled for user ${userId}: ${followStatus}`);
+
+    return {
+      success: true,
+      data: response.data,
+      is_following: followStatus,
+      message: message
+    };
   } catch (error: any) {
     console.error("❌ Toggle follow error:", error);
     return handleApiError(error);

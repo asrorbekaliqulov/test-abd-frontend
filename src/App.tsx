@@ -26,6 +26,7 @@ import NotFound from "./pages/not-found";
 import CreateNewBlock from "./components/create/CreatePage.tsx";
 import CardsMarket from "./components/CardsMarket";
 import Leaderboard from "./components/LeaderBoard";
+import SettingsPage from "./components/my-profile/SettingsPage.tsx";
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({children}) => {
     const {isAuthenticated, loading} = useAuth();
@@ -297,6 +298,13 @@ const App: React.FC = () => {
                 <Route path="/profile" element={
                     <ProtectedRoute>
                         <ProfilePage />
+                        <BottomNavigation />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/settings" element={
+                    <ProtectedRoute>
+                        <SettingsPage />
                         <BottomNavigation />
                     </ProtectedRoute>
                 } />
