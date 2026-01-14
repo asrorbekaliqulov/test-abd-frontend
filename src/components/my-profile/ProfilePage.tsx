@@ -36,13 +36,14 @@ import {
     Star,
     ChevronRight,
     ChevronLeft,
-    AlertCircle
+    AlertCircle, Plus
 } from "lucide-react"
 import {quizAPI, authAPI, accountsAPI} from "../../utils/api.ts"
 import correctImg from "../assets/images/correct.png";
 import wrongImg from "../assets/images/wrong.png";
 import accuracyImg from "../assets/images/accuracy.png";
 import coinImg from "../assets/images/coin.png";
+import {useNavigate} from "react-router-dom";
 
 // Types
 export interface UserType {
@@ -227,6 +228,8 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
     const [updatingTest, setUpdatingTest] = useState(false);
     const [updatingQuestion, setUpdatingQuestion] = useState(false);
     const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+    const navigate = useNavigate();
 
     const showToast = (message: string, type: "success" | "error") => {
         setToast({message, type})
@@ -957,8 +960,9 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                     {/* Test Tab */}
                     {activeTabs === "test" && (
                         <div>
-                            <div className="flex flex-col sm:flex-row justify-start items-start sm:items-center gap-4 mb-6">
+                            <div className="flex flex-row justify-between items-start sm:items-center gap-4 mb-6">
                                 <h3 className="text-xl sm:text-2xl font-bold text-white">Mening Testlarim</h3>
+                                <button onClick={() => {navigate(`/create/test`)}} className={"flex flex-row items-center px-2 py-1 bg-blue-800 rounded-full md:text-lg text-xs text-white gap-1"}><Plus size={20}/> Test yaratish</button>
                             </div>
 
                             {myTests.length === 0 ? (
@@ -1085,8 +1089,9 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
 
                     {activeTabs === "question" && (
                         <div>
-                            <div className="flex flex-col sm:flex-row justify-start items-start sm:items-center gap-4 mb-6">
+                            <div className="flex flex-row justify-between items-start sm:items-center gap-4 mb-6">
                                 <h3 className="text-xl sm:text-2xl font-bold text-white">Mening Savollarim</h3>
+                                <button onClick={() => {navigate(`/create`)}} className={"flex flex-row items-center px-2 py-1 bg-blue-800 rounded-full md:text-lg text-xs text-white gap-1"}><Plus size={20}/> Savol yaratish</button>
                             </div>
 
                             {loadingQuestions ? (

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter, Eye, MoreVertical, Smile, BarChart3, RefreshCw, ChevronUp, Sparkles, Heart, Zap, Target, TrendingUp, Clock, Users, Award, ChevronRight } from "lucide-react";
+import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter, Eye, MoreVertical, Smile, BarChart3, RefreshCw, ChevronUp, Sparkles, Heart, Zap, Target, TrendingUp, Clock, Users, Award, ChevronRight, Search, Home, User, Compass, MessageCircle } from "lucide-react";
 import { quizAPI, accountsAPI, tokenManager, infiniteScrollManager } from "../../utils/api";
 import { useParams, useNavigate } from "react-router-dom";
 import Logo from "../assets/images/logo.jpg";
 import defaultAvatar from "../assets/images/defaultuseravatar.png";
 import QuizSkeletonLoader from "./QuizSkeletonLoader";
 import { useSimpleQuizViews } from "../hooks/useQuizViews";
+import adsIcon from "../assets/images/ads.webp";
 
 interface QuizPageProps {
     theme?: string;
@@ -40,6 +41,14 @@ interface QuizUser {
     username: string;
     profile_image: string | null;
     is_following?: boolean;
+}
+
+interface QuizStats {
+    total_attempts: number;
+    correct_attempts: number;
+    wrong_attempts: number;
+    accuracy: number;
+    average_time: number;
 }
 
 interface Quiz {
@@ -75,13 +84,7 @@ interface Quiz {
     };
     user_reaction?: string | null;
     has_worked?: boolean;
-    stats?: {
-        total_attempts: number;
-        correct_attempts: number;
-        wrong_attempts: number;
-        accuracy: number;
-        average_time: number;
-    };
+    stats?: QuizStats;
 }
 
 interface FilterOptions {
@@ -109,10 +112,9 @@ const REACTION_CHOICES = [
 type ReactionType = typeof REACTION_CHOICES[number]['id'];
 
 const INFINITE_SCROLL_PAGE_SIZE = 10;
-const INFINITE_SCROLL_THRESHOLD = 2;
 const SCROLL_DEBOUNCE_DELAY = 100;
 
-const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
+const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) => {
     const navigate = useNavigate();
     const { questionId } = useParams<{ questionId: string }>();
 
@@ -143,7 +145,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         is_random: true
     });
     const [showFilterModal, setShowFilterModal] = useState(false);
-    const [showFilterDropdown, setShowFilterDropdown] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
 
@@ -169,16 +170,15 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         accuracy: number;
     }>>(new Map());
 
-    // Header collapse state
-    const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
-    const [headerVisible, setHeaderVisible] = useState(true);
-
     // Filter state tracking
     const [activeCategory, setActiveCategory] = useState<number | "All">("All");
     const [applyingFilter, setApplyingFilter] = useState(false);
 
     // Bookmark state
     const [bookmarking, setBookmarking] = useState<Set<number>>(new Set());
+
+    // Instagram-like bottom navigation
+    const [activeNav, setActiveNav] = useState<'home' | 'search' | 'add' | 'reels' | 'profile'>('home');
 
     const containerRef = useRef<HTMLDivElement>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -191,73 +191,13 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     const lastScrollTopRef = useRef<number>(0);
     const viewedQuizzesRef = useRef<Set<number>>(new Set());
     const initialLoadRef = useRef(false);
+    const lastLoadTimeRef = useRef<number>(0);
 
     // Infinite scroll state
     const [infiniteScrollState, setInfiniteScrollState] = useState(() => infiniteScrollManager.getState());
 
-    // ==================== HEADER COLLAPSE LOGIC ====================
-    useEffect(() => {
-        collapseTimeoutRef.current = setTimeout(() => {
-            setIsHeaderCollapsed(true);
-        }, 5000);
-
-        return () => {
-            if (collapseTimeoutRef.current) {
-                clearTimeout(collapseTimeoutRef.current);
-            }
-        };
-    }, []);
-
-    const handleHeaderMouseEnter = () => {
-        if (headerTimeoutRef.current) {
-            clearTimeout(headerTimeoutRef.current);
-        }
-        setHeaderVisible(true);
-        setIsHeaderCollapsed(false);
-    };
-
-    const handleHeaderMouseLeave = () => {
-        if (headerTimeoutRef.current) {
-            clearTimeout(headerTimeoutRef.current);
-        }
-
-        headerTimeoutRef.current = setTimeout(() => {
-            setHeaderVisible(false);
-            setIsHeaderCollapsed(true);
-        }, 1000);
-    };
-
-    useEffect(() => {
-        const handleScroll = () => {
-            if (!isHeaderCollapsed) return;
-
-            setHeaderVisible(true);
-            setIsHeaderCollapsed(false);
-
-            if (headerTimeoutRef.current) {
-                clearTimeout(headerTimeoutRef.current);
-            }
-
-            headerTimeoutRef.current = setTimeout(() => {
-                setHeaderVisible(false);
-                setIsHeaderCollapsed(true);
-            }, 2000);
-        };
-
-        const container = containerRef.current;
-        if (container) {
-            container.addEventListener('scroll', handleScroll);
-        }
-
-        return () => {
-            if (container) {
-                container.removeEventListener('scroll', handleScroll);
-            }
-            if (headerTimeoutRef.current) {
-                clearTimeout(headerTimeoutRef.current);
-            }
-        };
-    }, [isHeaderCollapsed]);
+    // Background seed uchun
+    const [bgSeed, setBgSeed] = useState<number>(Date.now());
 
     // ==================== STATISTICS FUNCTIONS ====================
     const fetchQuizStats = useCallback(async (quizId: number): Promise<void> => {
@@ -266,7 +206,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             console.log(`📊 Stats response for quiz ${quizId}:`, statsResponse);
 
             if (statsResponse.success && statsResponse.data) {
-                const stats = statsResponse.data;
+                const stats = statsResponse.data as any;
 
                 setQuizStats(prev => {
                     const newMap = new Map(prev);
@@ -308,6 +248,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
     }, []);
 
+    // ==================== VIEW RECORDING FUNCTION ====================
     const recordView = useCallback(async (quizId: number): Promise<void> => {
         if (viewedQuizzesRef.current.has(quizId)) return;
 
@@ -318,18 +259,28 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
             if (result.success) {
                 viewedQuizzesRef.current.add(quizId);
-                await fetchQuizStats(quizId);
                 console.log(`✅ View recorded for quiz ${quizId}`);
+
+                // Fetch stats separately without waiting
+                setTimeout(() => {
+                    fetchQuizStats(quizId);
+                }, 100);
             }
         } catch (err) {
             console.error(`❌ Error recording view for quiz ${quizId}:`, err);
         }
-    }, [recordQuizView, fetchQuizStats]);
+    }, [recordQuizView]); // Only depends on recordQuizView
 
-    // ==================== LOAD QUIZZES FUNCTION ====================
+    // ==================== INFINITE SCROLL FUNCTIONS ====================
     const loadQuizzes = useCallback(async (isInitialLoad: boolean = false, resetData: boolean = false, customFilters?: Partial<FilterOptions>) => {
         if (isLoadingRef.current) {
             console.log(`🚫 loadQuizzes skipped: already loading`);
+            return;
+        }
+
+        const now = Date.now();
+        if (now - lastLoadTimeRef.current < 1000 && !isInitialLoad) {
+            console.log(`⏱️ Load throttled`);
             return;
         }
 
@@ -422,28 +373,15 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 });
 
                 setHasMore(result.hasMore || false);
+                lastLoadTimeRef.current = now;
 
-                const initialViews = newQuizzes.slice(0, 3);
-                for (const quiz of initialViews) {
-                    try {
-                        await recordView(quiz.id);
-                    } catch (error) {
+                // Record views for loaded quizzes without waiting
+                const quizzesToRecord = newQuizzes;
+                quizzesToRecord.forEach((quiz) => {
+                    recordView(quiz.id).catch(error => {
                         console.error(`❌ Error recording view for quiz ${quiz.id}:`, error);
-                    }
-                }
-
-                const remainingQuizzes = newQuizzes.slice(3);
-                if (remainingQuizzes.length > 0) {
-                    setTimeout(() => {
-                        remainingQuizzes.forEach(async (quiz) => {
-                            try {
-                                await recordView(quiz.id);
-                            } catch (error) {
-                                console.error(`❌ Error lazy recording view for quiz ${quiz.id}:`, error);
-                            }
-                        });
-                    }, 1000);
-                }
+                    });
+                });
 
                 console.log(`✅ Loaded ${newQuizzes.length} quizzes, hasMore: ${result.hasMore}`);
             } else {
@@ -466,25 +404,34 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             }
             console.log(`✅ loadQuizzes completed: isInitialLoad=${isInitialLoad}`);
         }
-    }, [filterOptions, recordView, navigate]);
+    }, [filterOptions, navigate, recordView]);
+
+    // Instagram style infinite scroll handler
+    const handleScroll = useCallback(() => {
+        if (!containerRef.current || isLoadingRef.current || !hasMore) return;
+
+        const container = containerRef.current;
+        const { scrollTop, scrollHeight, clientHeight } = container;
+
+        // Instagram usulida - 100px qolganda yuklash
+        const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+        if (isAtBottom) {
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+
+            scrollTimeoutRef.current = setTimeout(async () => {
+                if (!isLoadingRef.current && hasMore) {
+                    console.log("🔄 Instagram style: Loading more quizzes...");
+                    await loadQuizzes(false, false);
+                }
+            }, 300);
+        }
+    }, [hasMore, loadQuizzes]);
 
     // ==================== FILTER FUNCTIONS ====================
-    const applyFilter = useCallback(async (newFilters: Partial<FilterOptions>, immediate: boolean = true) => {
-        if (filterTimeoutRef.current) {
-            clearTimeout(filterTimeoutRef.current);
-        }
-
-        if (!immediate) {
-            filterTimeoutRef.current = setTimeout(async () => {
-                await applyFilterInternal(newFilters);
-            }, 300);
-            return;
-        }
-
-        await applyFilterInternal(newFilters);
-    }, []);
-
-    const applyFilterInternal = async (newFilters: Partial<FilterOptions>) => {
+    const applyFilter = useCallback(async (newFilters: Partial<FilterOptions>) => {
         console.log("🔄 Applying filter:", newFilters);
 
         const updatedFilters = {
@@ -512,6 +459,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         });
         viewedQuizzesRef.current.clear();
         setQuizStats(new Map());
+        setShowFilterModal(false);
+
+        // Background seedni yangilash
+        setBgSeed(Date.now());
 
         try {
             await loadQuizzes(true, true, updatedFilters);
@@ -524,7 +475,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         if (containerRef.current) {
             containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
-    };
+    }, [filterOptions, loadQuizzes]);
 
     const handleCategorySelect = useCallback((categoryId: number | "All") => {
         console.log("🎯 Category selected:", categoryId);
@@ -534,14 +485,39 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             return;
         }
 
-        setShowFilterDropdown(false);
         setActiveCategory(categoryId);
-
         applyFilter({
             category: categoryId,
             is_random: false
-        }, true);
+        });
     }, [activeCategory, applyFilter]);
+
+    const handleSearch = useCallback((query: string) => {
+        setSearchQuery(query);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            applyFilter({ search: query.trim() });
+        }, 500);
+    }, [applyFilter]);
+
+    const resetFilters = useCallback(async () => {
+        const defaultFilters: FilterOptions = {
+            category: "All",
+            ordering: "-created_at",
+            is_random: true
+        };
+
+        setFilterOptions(defaultFilters);
+        setActiveCategory("All");
+        setSearchQuery("");
+        setBgSeed(Date.now());
+
+        await loadQuizzes(true, true, defaultFilters);
+    }, [loadQuizzes]);
 
     // ==================== ANSWER SELECTION FUNCTIONS ====================
     const selectAnswer = async (quizId: number, answerId: number) => {
@@ -576,23 +552,31 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             const isCorrect = res.data?.is_correct;
             console.log(`✅ Answer submitted for quiz ${quizId}: correct=${isCorrect}`);
 
-            // Update quiz stats immediately
             setQuizData(prev => prev.map(q => {
                 if (q.id === quizId) {
-                    const newCorrectCount = isCorrect ? q.correct_count + 1 : q.correct_count;
-                    const newWrongCount = isCorrect ? q.wrong_count : q.wrong_count + 1;
+                    const currentCorrect = q.correct_count || 0;
+                    const currentWrong = q.wrong_count || 0;
+
+                    const newCorrectCount = isCorrect ? currentCorrect + 1 : currentCorrect;
+                    const newWrongCount = !isCorrect ? currentWrong + 1 : currentWrong;
                     const newTotal = newCorrectCount + newWrongCount;
 
                     return {
                         ...q,
                         correct_count: newCorrectCount,
                         wrong_count: newWrongCount,
-                        stats: {
+                        stats: q.stats ? {
                             ...q.stats,
                             correct_attempts: newCorrectCount,
                             wrong_attempts: newWrongCount,
                             total_attempts: newTotal,
                             accuracy: newTotal > 0 ? (newCorrectCount / newTotal) * 100 : 0
+                        } : {
+                            total_attempts: newTotal,
+                            correct_attempts: newCorrectCount,
+                            wrong_attempts: newWrongCount,
+                            accuracy: newTotal > 0 ? (newCorrectCount / newTotal) * 100 : 0,
+                            average_time: 0
                         }
                     };
                 }
@@ -616,10 +600,15 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 setTimeout(() => setShakingAnswerId(null), 1000);
             }
 
-            // Fetch updated stats from server
             setTimeout(async () => {
                 try {
-                    await fetchQuizStats(quizId);
+                    if (isCorrect) {
+                        await quizAPI.incrementCorrectCount(quizId);
+                    } else {
+                        await quizAPI.incrementWrongCount(quizId);
+                    }
+
+                    fetchQuizStats(quizId);
                 } catch (error) {
                     console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
                 }
@@ -661,6 +650,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         const selected = userInteractions.selectedAnswers.get(quizId) || [];
         if (selected.length === 0 || submittingQuestions.has(quizId) || userInteractions.submittedQuizzes.has(quizId)) return;
 
+        const quiz = quizData.find(q => q.id === quizId);
+        if (!quiz) return;
+
         setSubmittingQuestions(prev => new Set(prev).add(quizId));
         try {
             const res = await quizAPI.submitAnswers({
@@ -671,23 +663,31 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
             const isCorrect = res.data?.is_correct;
             console.log(`✅ Multiple choice submitted for quiz ${quizId}: correct=${isCorrect}`);
 
-            // Update quiz stats immediately
             setQuizData(prev => prev.map(q => {
                 if (q.id === quizId) {
-                    const newCorrectCount = isCorrect ? q.correct_count + 1 : q.correct_count;
-                    const newWrongCount = isCorrect ? q.wrong_count : q.wrong_count + 1;
+                    const currentCorrect = q.correct_count || 0;
+                    const currentWrong = q.wrong_count || 0;
+
+                    const newCorrectCount = isCorrect ? currentCorrect + 1 : currentCorrect;
+                    const newWrongCount = !isCorrect ? currentWrong + 1 : currentWrong;
                     const newTotal = newCorrectCount + newWrongCount;
 
                     return {
                         ...q,
                         correct_count: newCorrectCount,
                         wrong_count: newWrongCount,
-                        stats: {
+                        stats: q.stats ? {
                             ...q.stats,
                             correct_attempts: newCorrectCount,
                             wrong_attempts: newWrongCount,
                             total_attempts: newTotal,
                             accuracy: newTotal > 0 ? (newCorrectCount / newTotal) * 100 : 0
+                        } : {
+                            total_attempts: newTotal,
+                            correct_attempts: newCorrectCount,
+                            wrong_attempts: newWrongCount,
+                            accuracy: newTotal > 0 ? (newCorrectCount / newTotal) * 100 : 0,
+                            average_time: 0
                         }
                     };
                 }
@@ -704,13 +704,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 setCorrectAnimation(quizId);
                 setTimeout(() => setCorrectAnimation(null), 2000);
 
-                const quiz = quizData.find(q => q.id === quizId);
-                if (quiz) {
-                    const correctAnswer = quiz.answers.find(a => a.is_correct);
-                    if (correctAnswer) {
-                        setCoinAnimation({ quizId, answerId: correctAnswer.id, show: true });
-                        setTimeout(() => setCoinAnimation(null), 2000);
-                    }
+                const correctAnswer = quiz.answers.find(a => a.is_correct);
+                if (correctAnswer) {
+                    setCoinAnimation({ quizId, answerId: correctAnswer.id, show: true });
+                    setTimeout(() => setCoinAnimation(null), 2000);
                 }
             } else {
                 selected.forEach((answerId) => {
@@ -724,7 +721,13 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
             setTimeout(async () => {
                 try {
-                    await fetchQuizStats(quizId);
+                    if (isCorrect) {
+                        await quizAPI.incrementCorrectCount(quizId);
+                    } else {
+                        await quizAPI.incrementWrongCount(quizId);
+                    }
+
+                    fetchQuizStats(quizId);
                 } catch (error) {
                     console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
                 }
@@ -875,6 +878,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
     };
 
+    // ==================== NAVIGATION TO USER PROFILE ====================
+    const navigateToUserProfile = (userId: number, username: string) => {
+        navigate(`/profile/${username}?userId=${userId}`);
+    };
+
     // ==================== FOLLOW FUNCTION ====================
     const handleFollowToggle = async (quizId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
@@ -934,840 +942,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         }
     };
 
-    // ==================== HELPER FUNCTIONS ====================
-    const getFinalViewCount = useCallback((quizId: number): number => {
-        const quiz = quizData.find(q => q.id === quizId);
-        if (quiz?.view_count) return quiz.view_count;
-
-        const stats = quizStats.get(quizId);
-        if (stats?.views) return stats.views;
-
-        const viewStats = getStatistics(quizId);
-        return viewStats.totalViews || 0;
-    }, [quizData, quizStats, getStatistics]);
-
-    const getQuizUniqueViews = useCallback((quizId: number): number => {
-        const quiz = quizData.find(q => q.id === quizId);
-        if (quiz?.unique_viewers) return quiz.unique_viewers;
-
-        const stats = quizStats.get(quizId);
-        if (stats?.unique_views) return stats.unique_views;
-
-        const viewStats = getStatistics(quizId);
-        return viewStats.uniqueViews || 0;
-    }, [quizData, quizStats, getStatistics]);
-
-    const getCorrectCount = useCallback((quizId: number): number => {
-        const quiz = quizData.find(q => q.id === quizId);
-        if (quiz?.correct_count) return quiz.correct_count;
-
-        const stats = quizStats.get(quizId);
-        if (stats?.correct_attempts) return stats.correct_attempts;
-
-        return 0;
-    }, [quizData, quizStats]);
-
-    const getWrongCount = useCallback((quizId: number): number => {
-        const quiz = quizData.find(q => q.id === quizId);
-        if (quiz?.wrong_count) return quiz.wrong_count;
-
-        const stats = quizStats.get(quizId);
-        if (stats?.wrong_attempts) return stats.wrong_attempts;
-
-        return 0;
-    }, [quizData, quizStats]);
-
-    // ==================== SCROLL AND LOAD MORE FUNCTIONS ====================
-    const checkAndLoadMore = useCallback(() => {
-        if (isLoadingRef.current || !hasMore || quizData.length === 0) {
-            return;
-        }
-
-        const shouldLoad = infiniteScrollManager.shouldLoadMore(currentQuizIndex);
-
-        if (shouldLoad) {
-            if (loadMoreTimeoutRef.current) {
-                clearTimeout(loadMoreTimeoutRef.current);
-            }
-
-            loadMoreTimeoutRef.current = setTimeout(async () => {
-                try {
-                    await loadQuizzes(false, false);
-                } catch (error) {
-                    console.error("❌ Error loading more data:", error);
-                    setLoadingMore(false);
-                    isLoadingRef.current = false;
-                }
-            }, 500);
-        }
-    }, [currentQuizIndex, hasMore, quizData.length, loadQuizzes]);
-
-    const setupScrollListener = useCallback(() => {
-        const container = containerRef.current;
-        if (!container || quizData.length === 0) return;
-
-        const onScroll = () => {
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-            }
-
-            scrollTimeoutRef.current = setTimeout(() => {
-                if (!containerRef.current || quizData.length === 0) return;
-
-                const container = containerRef.current;
-                const { scrollTop, clientHeight } = container;
-
-                const isScrollingDown = scrollTop > lastScrollTopRef.current;
-                lastScrollTopRef.current = scrollTop;
-
-                const index = Math.floor(scrollTop / clientHeight);
-
-                if (index >= 0 && index < quizData.length && index !== currentQuizIndex) {
-                    console.log(`📜 Scrolling to quiz ${index + 1}/${quizData.length}, scrolling down: ${isScrollingDown}`);
-
-                    const newQuiz = quizData[index];
-                    if (newQuiz) {
-                        if (!viewedQuizzesRef.current.has(newQuiz.id)) {
-                            recordView(newQuiz.id);
-                        }
-                        setCurrentQuizIndex(index);
-                    }
-
-                    if (isScrollingDown) {
-                        const scrollPosition = scrollTop + clientHeight;
-                        const scrollHeight = container.scrollHeight;
-                        const scrollThreshold = scrollHeight - 300;
-
-                        if (scrollPosition >= scrollThreshold) {
-                            checkAndLoadMore();
-                        }
-                    }
-                }
-            }, SCROLL_DEBOUNCE_DELAY);
-        };
-
-        container.addEventListener("scroll", onScroll, { passive: true });
-
-        return () => {
-            container.removeEventListener("scroll", onScroll);
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-            }
-        };
-    }, [quizData.length, currentQuizIndex, checkAndLoadMore, recordView]);
-
-    // ==================== INITIAL LOAD AND SETUP ====================
-    const loadCategories = useCallback(async () => {
-        try {
-            const res = await quizAPI.fetchCategories();
-            if (res && res.success && res.data) {
-                let data: Category[] = [];
-                if (Array.isArray(res.data)) {
-                    data = res.data;
-                } else if (res.data.results && Array.isArray(res.data.results)) {
-                    data = res.data.results;
-                }
-                setCategories(data);
-            } else {
-                setCategories([]);
-            }
-        } catch (err) {
-            console.error("❌ Load categories error:", err);
-            setCategories([]);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (initialLoadRef.current) return;
-        initialLoadRef.current = true;
-
-        let isMounted = true;
-
-        const fetchInitialData = async () => {
-            if (!isMounted) return;
-
-            setIsInitialLoading(true);
-            try {
-                await loadCategories();
-                await initializeViews();
-
-                if (questionId) {
-                    const id = Number(questionId);
-                    const quizRes = await quizAPI.fetchQuizById(id);
-
-                    if (quizRes.success && quizRes.data) {
-                        const quiz: Quiz = quizRes.data;
-
-                        infiniteScrollManager.reset();
-                        infiniteScrollManager.addItem(quiz);
-                        setInfiniteScrollState(infiniteScrollManager.getState());
-
-                        setQuizData([{
-                            ...quiz,
-                            correct_count: quiz.correct_count || 0,
-                            wrong_count: quiz.wrong_count || 0,
-                            view_count: quiz.view_count || quiz.total_views || 0,
-                            unique_viewers: quiz.unique_viewers || 0,
-                            stats: quiz.stats || {
-                                total_attempts: 0,
-                                correct_attempts: 0,
-                                wrong_attempts: 0,
-                                accuracy: 0,
-                                average_time: 0,
-                            }
-                        }]);
-
-                        await recordView(id);
-                        setHasMore(false);
-                    } else {
-                        await loadQuizzes(true, true);
-                    }
-                } else {
-                    await loadQuizzes(true, true);
-                }
-            } catch (err) {
-                console.error("❌ Initial data fetch error:", err);
-            } finally {
-                if (isMounted) {
-                    setIsInitialLoading(false);
-                }
-            }
-        };
-
-        fetchInitialData();
-
-        return () => {
-            isMounted = false;
-            isLoadingRef.current = false;
-
-            if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
-            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-            if (headerTimeoutRef.current) clearTimeout(headerTimeoutRef.current);
-            if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
-            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
-        };
-    }, [questionId, loadCategories, initializeViews, recordView, loadQuizzes]);
-
-    useEffect(() => {
-        const cleanup = setupScrollListener();
-        return cleanup;
-    }, [setupScrollListener]);
-
-    useEffect(() => {
-        if (quizData[currentQuizIndex]) {
-            const quiz = quizData[currentQuizIndex];
-            if (!viewedQuizzesRef.current.has(quiz.id)) {
-                recordView(quiz.id);
-            }
-        }
-    }, [currentQuizIndex, quizData, recordView]);
-
-    // ==================== RENDER FUNCTIONS ====================
-    const renderFilterDropdown = () => {
-        if (!showFilterDropdown) return null;
-
-        return (
-            <div
-                className="fixed inset-0 z-50 flex items-start justify-end pt-16 bg-black/40 backdrop-blur-sm animate-fade-in"
-                onClick={() => setShowFilterDropdown(false)}
-            >
-                <div
-                    className="bg-gradient-to-b from-gray-900 to-black/95 backdrop-blur-xl rounded-3xl m-4 p-6 border border-white/10 shadow-2xl w-full max-w-md max-h-[80vh] overflow-y-auto"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-500/20 rounded-xl">
-                                <Filter size={20} className="text-blue-400" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white">Filterlar</h3>
-                        </div>
-                        <button
-                            onClick={() => setShowFilterDropdown(false)}
-                            className="p-2 rounded-xl hover:bg-white/10 transition-all duration-200 active:scale-95"
-                        >
-                            <X size={20} className="text-gray-400" />
-                        </button>
-                    </div>
-
-                    {/* Search Section */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-300 mb-3">
-                            <span className="flex items-center gap-2">
-                                <Sparkles size={14} />
-                                Qidirish
-                            </span>
-                        </label>
-                        <div className="relative">
-                            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </div>
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    if (searchTimeoutRef.current) {
-                                        clearTimeout(searchTimeoutRef.current);
-                                    }
-                                    searchTimeoutRef.current = setTimeout(() => {
-                                        applyFilter({ search: e.target.value }, false);
-                                    }, 500);
-                                }}
-                                placeholder="Savol yoki test nomini qidiring..."
-                                className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Category Section */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-300 mb-4">
-                            <span className="flex items-center gap-2">
-                                <Bookmark size={14} />
-                                Kategoriyalar
-                            </span>
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => handleCategorySelect("All")}
-                                className={`p-4 rounded-2xl transition-all duration-200 flex items-center justify-center gap-2 ${activeCategory === "All"
-                                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <span className="font-medium">Barchasi</span>
-                                {activeCategory === "All" && (
-                                    <Check size={16} />
-                                )}
-                            </button>
-                            {categories.map((category) => (
-                                <button
-                                    key={category.id}
-                                    onClick={() => handleCategorySelect(category.id)}
-                                    className={`p-4 rounded-2xl transition-all duration-200 flex items-center justify-center gap-2 ${activeCategory === category.id
-                                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
-                                        : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                    }`}
-                                >
-                                    <span className="mr-1">{category.emoji}</span>
-                                    <span className="font-medium truncate">{category.title}</span>
-                                    {activeCategory === category.id && (
-                                        <Check size={16} className="ml-auto" />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Sorting Section */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-300 mb-4">
-                            <span className="flex items-center gap-2">
-                                <TrendingUp size={14} />
-                                Tartiblash
-                            </span>
-                        </label>
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => applyFilter({ ordering: "-created_at" })}
-                                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${filterOptions.ordering === "-created_at"
-                                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <Clock size={16} />
-                                <span>Yangi → Eski</span>
-                                {filterOptions.ordering === "-created_at" && (
-                                    <Check size={16} className="ml-auto" />
-                                )}
-                            </button>
-                            <button
-                                onClick={() => applyFilter({ ordering: "created_at" })}
-                                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${filterOptions.ordering === "created_at"
-                                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <Clock size={16} />
-                                <span>Eski → Yangi</span>
-                                {filterOptions.ordering === "created_at" && (
-                                    <Check size={16} className="ml-auto" />
-                                )}
-                            </button>
-                            <button
-                                onClick={() => applyFilter({ ordering: "-difficulty_percentage" })}
-                                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${filterOptions.ordering === "-difficulty_percentage"
-                                    ? "bg-gradient-to-r from-red-500 to-orange-600 text-white shadow-lg shadow-red-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <Zap size={16} />
-                                <span>Qiyin → Oson</span>
-                                {filterOptions.ordering === "-difficulty_percentage" && (
-                                    <Check size={16} className="ml-auto" />
-                                )}
-                            </button>
-                            <button
-                                onClick={() => applyFilter({ ordering: "difficulty_percentage" })}
-                                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${filterOptions.ordering === "difficulty_percentage"
-                                    ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <Zap size={16} />
-                                <span>Oson → Qiyin</span>
-                                {filterOptions.ordering === "difficulty_percentage" && (
-                                    <Check size={16} className="ml-auto" />
-                                )}
-                            </button>
-                            <button
-                                onClick={() => applyFilter({ is_random: true, ordering: '?' })}
-                                className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center gap-3 ${filterOptions.is_random
-                                    ? "bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg shadow-purple-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <Sparkles size={16} />
-                                <span>Tasodifiy</span>
-                                {filterOptions.is_random && (
-                                    <Check size={16} className="ml-auto" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Worked Status */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-300 mb-4">
-                            <span className="flex items-center gap-2">
-                                <Target size={14} />
-                                Holati
-                            </span>
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => applyFilter({ worked: true })}
-                                className={`p-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${filterOptions.worked
-                                    ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <Check size={16} />
-                                <span>Ishlanganlar</span>
-                            </button>
-                            <button
-                                onClick={() => applyFilter({ unworked: true })}
-                                className={`p-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${filterOptions.unworked
-                                    ? "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/25"
-                                    : "bg-white/5 text-gray-300 hover:bg-white/10"
-                                }`}
-                            >
-                                <X size={16} />
-                                <span>Ishlamaganlar</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Difficulty Filter */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-300 mb-4">
-                            <span className="flex items-center gap-2">
-                                <Zap size={14} />
-                                Qiyinlik darajasi
-                            </span>
-                        </label>
-                        <div className="space-y-6">
-                            <div>
-                                <div className="flex justify-between mb-2">
-                                    <span className="text-sm text-gray-400">Minimal</span>
-                                    <span className="text-blue-400 font-semibold">{filterOptions.difficulty_min || 0}%</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={filterOptions.difficulty_min || 0}
-                                    onChange={(e) => applyFilter({ difficulty_min: parseInt(e.target.value) }, false)}
-                                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-                                />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-2">
-                                    <span className="text-sm text-gray-400">Maksimal</span>
-                                    <span className="text-blue-400 font-semibold">{filterOptions.difficulty_max || 100}%</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={filterOptions.difficulty_max || 100}
-                                    onChange={(e) => applyFilter({ difficulty_max: parseInt(e.target.value) }, false)}
-                                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3 pt-6 border-t border-white/10">
-                        <button
-                            onClick={() => {
-                                const defaultFilters: FilterOptions = {
-                                    category: "All",
-                                    ordering: "-created_at",
-                                    is_random: true
-                                };
-                                setFilterOptions(defaultFilters);
-                                setActiveCategory("All");
-                                setSearchQuery("");
-                                setShowFilterDropdown(false);
-                                loadQuizzes(true, true, defaultFilters);
-                            }}
-                            className="flex-1 px-4 py-3 bg-white/5 text-gray-300 rounded-xl font-medium hover:bg-white/10 transition-all duration-300 flex items-center justify-center gap-2"
-                        >
-                            <RefreshCw size={16} />
-                            Tozalash
-                        </button>
-                        <button
-                            onClick={() => setShowFilterDropdown(false)}
-                            className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg shadow-blue-500/25"
-                        >
-                            Qo'llash
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderCollapsedHeader = () => {
-        return (
-            <div
-                className={`fixed top-4 right-4 z-30 transition-all duration-300 ${headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-                }`}
-                onMouseEnter={handleHeaderMouseEnter}
-                onMouseLeave={handleHeaderMouseLeave}
-            >
-                <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/10">
-                    <div className="flex items-center gap-3">
-                        {isHeaderCollapsed ? (
-                            <>
-                                <button
-                                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                                    className={`p-3 rounded-xl transition-all duration-200 relative ${showFilterDropdown
-                                        ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-                                        : 'bg-white/10 text-white hover:bg-white/20 active:scale-95'
-                                    }`}
-                                >
-                                    <Filter size={20} />
-                                    {activeCategory !== "All" && (
-                                        <span className="absolute -top-1 -right-1 bg-gradient-to-br from-red-500 to-rose-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center shadow-lg animate-pulse">
-                                            1
-                                        </span>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => loadQuizzes(true, true)}
-                                    className="p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all duration-200 active:scale-95"
-                                    title="Yangilash"
-                                >
-                                    <RefreshCw size={20} />
-                                </button>
-                                <button
-                                    onClick={() => navigate(-1)}
-                                    className="p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all duration-200 active:scale-95"
-                                    title="Orqaga"
-                                >
-                                    ←
-                                </button>
-                            </>
-                        ) : (
-                            <div className="flex items-center gap-3 animate-fade-in">
-                                <button
-                                    onClick={() => navigate(-1)}
-                                    className="p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all duration-200 active:scale-95"
-                                >
-                                    ←
-                                </button>
-                                <div className="px-4 py-2 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 rounded-xl border border-blue-500/30">
-                                    <h1 className="text-white font-semibold text-sm">Testlar</h1>
-                                </div>
-                                <button
-                                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                                    className={`p-3 rounded-xl transition-all duration-200 relative ${showFilterDropdown
-                                        ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-                                        : 'bg-white/10 text-white hover:bg-white/20 active:scale-95'
-                                    }`}
-                                >
-                                    <Filter size={20} />
-                                    {activeCategory !== "All" && (
-                                        <span className="absolute -top-1 -right-1 bg-gradient-to-br from-red-500 to-rose-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center shadow-lg animate-pulse">
-                                            1
-                                        </span>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => loadQuizzes(true, true)}
-                                    className="p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all duration-200 active:scale-95"
-                                >
-                                    <RefreshCw size={20} />
-                                </button>
-                                <button
-                                    onClick={() => setIsHeaderCollapsed(true)}
-                                    className="p-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all duration-200 active:scale-95"
-                                >
-                                    <ChevronUp size={20} />
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {renderFilterDropdown()}
-            </div>
-        );
-    };
-
-    const renderQuestionContent = (quiz: Quiz) => {
-        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
-        const answerState = userInteractions.answerStates.get(quiz.id);
-        const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
-        const isMultipleChoice = quiz.question_type === 'multiple';
-        const isSubmitting = submittingQuestions.has(quiz.id);
-
-        const renderAnswers = () => {
-            if (!quiz.answers || quiz.answers.length === 0) {
-                return <div className="text-gray-400 text-center py-4">Javob variantlari mavjud emas</div>;
-            }
-
-            return quiz.answers.map((answer, idx) => {
-                const isSelected = selectedAnswers.includes(answer.id);
-                const isCorrect = answer.is_correct;
-                const isShaking = shakingAnswerId === answer.id;
-                const letter = answer.letter || String.fromCharCode(65 + idx);
-
-                let bgColor = 'bg-gradient-to-r from-white/5 to-white/3';
-                let borderColor = 'border-white/10';
-                let textColor = 'text-gray-100';
-                let shadowClass = 'shadow-lg';
-
-                if (hasSubmitted) {
-                    if (isCorrect) {
-                        bgColor = 'bg-gradient-to-r from-green-500/20 to-emerald-500/15';
-                        borderColor = 'border-green-500/50';
-                        textColor = 'text-green-100';
-                        shadowClass = 'shadow-lg shadow-green-500/25';
-                    } else if (isSelected && !isCorrect) {
-                        bgColor = 'bg-gradient-to-r from-red-500/20 to-rose-500/15';
-                        borderColor = 'border-red-500/50';
-                        textColor = 'text-red-100';
-                        shadowClass = 'shadow-lg shadow-red-500/25';
-                    }
-                } else if (isSelected) {
-                    bgColor = 'bg-gradient-to-r from-blue-500/20 to-indigo-500/15';
-                    borderColor = 'border-blue-500/50';
-                    textColor = 'text-white';
-                    shadowClass = 'shadow-lg shadow-blue-500/25';
-                }
-
-                return (
-                    <div
-                        key={answer.id}
-                        className={`relative mb-3 p-4 rounded-2xl border transition-all duration-300 cursor-pointer group
-                            ${bgColor} ${borderColor} ${shadowClass} ${isShaking ? 'animate-shake' : ''}
-                            ${!hasSubmitted ? 'hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98] hover:shadow-xl' : ''}
-                        `}
-                        onClick={() => {
-                            if (!hasSubmitted && !isSubmitting) {
-                                selectAnswer(quiz.id, answer.id);
-                            }
-                        }}
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-md
-                                ${isSelected ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/50' : 'bg-gradient-to-br from-white/10 to-white/5'}
-                                ${hasSubmitted && isCorrect ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/50' : ''}
-                                ${hasSubmitted && isSelected && !isCorrect ? 'bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/50' : ''}
-                            `}>
-                                <span className={`font-bold text-lg ${isSelected || (hasSubmitted && isCorrect) ? 'text-white' : 'text-gray-300'}`}>
-                                    {letter}
-                                </span>
-                            </div>
-                            <div className="flex-1">
-                                <div className={`text-base leading-relaxed ${textColor}`}>
-                                    {answer.answer_text}
-                                </div>
-                            </div>
-
-                            {hasSubmitted && isCorrect && (
-                                <div className="text-green-400 animate-bounce">
-                                    <Check size={24} />
-                                </div>
-                            )}
-                            {hasSubmitted && isSelected && !isCorrect && (
-                                <div className="text-red-400 animate-pulse">
-                                    <X size={24} />
-                                </div>
-                            )}
-                        </div>
-
-                        {isMultipleChoice && !hasSubmitted && (
-                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                                <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300
-                                    ${isSelected ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-blue-500' : 'bg-transparent border-gray-500'}
-                                `}>
-                                    {isSelected && <div className="w-3 h-3 bg-white rounded-sm"></div>}
-                                </div>
-                            </div>
-                        )}
-
-                        {!isMultipleChoice && !hasSubmitted && (
-                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                                <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all duration-300
-                                    ${isSelected ? 'border-blue-500 bg-blue-500/20' : 'border-gray-500'}
-                                `}>
-                                    {isSelected && <div className="w-3 h-3 bg-gradient-to-br from-blue-400 to-blue-300 rounded-full shadow-inner"></div>}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                );
-            });
-        };
-
-        const renderSubmitButton = () => {
-            if (hasSubmitted) {
-                return (
-                    <div className="mt-6 space-y-4">
-                        <div className={`text-center py-5 rounded-2xl font-medium backdrop-blur-sm border transition-all duration-500 animate-slide-up ${answerState === 'correct'
-                            ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border-green-500/30 shadow-2xl shadow-green-500/25'
-                            : 'bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-300 border-red-500/30 shadow-2xl shadow-red-500/25'
-                        }`}>
-                            <div className="flex items-center justify-center gap-3">
-                                <div className={`p-2 rounded-full ${answerState === 'correct' ? 'bg-green-500/30' : 'bg-red-500/30'}`}>
-                                    {answerState === 'correct' ? '✅' : '❌'}
-                                </div>
-                                <span className="text-xl font-semibold">
-                                    {answerState === 'correct' ? 'To\'g\'ri javob!' : 'Noto\'g\'ri javob!'}
-                                </span>
-                            </div>
-                            <div className="mt-2 text-sm text-gray-300">
-                                {answerState === 'correct' ? 'Davom eting!' : 'Yana urinib ko\'ring!'}
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => {
-                                const nextIndex = currentQuizIndex + 1;
-                                if (nextIndex < quizData.length && containerRef.current) {
-                                    containerRef.current.scrollTo({
-                                        top: nextIndex * window.innerHeight,
-                                        behavior: 'smooth'
-                                    });
-                                }
-                            }}
-                            className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-2xl font-semibold transition-all duration-300 shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-[0.98] flex items-center justify-center gap-2"
-                        >
-                            Keyingi savol
-                            <ChevronRight size={20} />
-                        </button>
-                    </div>
-                );
-            }
-
-            if (isMultipleChoice) {
-                const hasSelectedAnswers = selectedAnswers.length > 0;
-                return (
-                    <div className="mt-6">
-                        <button
-                            onClick={() => submitMultipleChoice(quiz.id)}
-                            disabled={!hasSelectedAnswers || isSubmitting}
-                            className={`w-full py-4 rounded-2xl font-semibold transition-all duration-300 shadow-xl ${hasSelectedAnswers && !isSubmitting
-                                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-[0.98]'
-                                : 'bg-white/5 text-gray-400 cursor-not-allowed border border-white/10'
-                            }`}
-                        >
-                            {isSubmitting ? (
-                                <div className="flex items-center justify-center gap-3">
-                                    <Loader2 size={20} className="animate-spin" />
-                                    <span>Tekshirilmoqda...</span>
-                                </div>
-                            ) : 'Javobni tekshirish'}
-                        </button>
-                    </div>
-                );
-            }
-
-            const hasSelectedAnswer = selectedAnswers.length > 0;
-            if (!hasSelectedAnswer) {
-                return (
-                    <div className="mt-6">
-                        <div className="w-full py-4 bg-gradient-to-r from-white/5 to-white/3 backdrop-blur-sm text-gray-400 rounded-2xl font-medium text-center border border-white/10 shadow-lg">
-                            Javob tanlang
-                        </div>
-                    </div>
-                );
-            }
-
-            return null;
-        };
-
-        return (
-            <div className="space-y-6">
-                {quiz.media && (
-                    <div className="relative rounded-3xl overflow-hidden mb-6 shadow-2xl group">
-                        {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                            <img
-                                src={quiz.media}
-                                alt="Question media"
-                                className="w-full h-auto max-h-80 object-cover rounded-3xl transition-transform duration-700 group-hover:scale-105"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                            />
-                        ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
-                            <video
-                                src={quiz.media}
-                                className="w-full h-auto max-h-80 rounded-3xl"
-                                controls
-                            />
-                        ) : null}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-3xl"></div>
-                    </div>
-                )}
-
-                <div className="space-y-4">
-                    {renderAnswers()}
-                </div>
-
-                {renderSubmitButton()}
-
-                {coinAnimation?.show && coinAnimation.quizId === quiz.id && (
-                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-                        <div className="text-6xl animate-coin-bounce">
-                            🪙
-                            <div className="absolute inset-0 animate-ping text-yellow-400 opacity-30">🪙</div>
-                        </div>
-                    </div>
-                )}
-
-                {correctAnimation === quiz.id && (
-                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-                        <div className="text-8xl animate-correct-pulse">
-                            <div className="relative">
-                                <div className="absolute inset-0 animate-ping text-green-400 opacity-30">✅</div>
-                                ✅
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
+    // ==================== REACTION MENU ====================
     const renderReactionsMenu = (quizId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
         if (!quiz) return null;
@@ -1797,7 +972,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                             >
                                 <span className="text-2xl">{reaction.emoji}</span>
                                 {reactionCount > 0 && (
-                                    <span className="absolute -top-2 -right-2 bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
+                                    <span className="absolute -top-2 -right-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
                                         {reactionCount}
                                     </span>
                                 )}
@@ -1812,6 +987,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         );
     };
 
+    // ==================== DROPDOWN MENU ====================
     const renderDropdownMenu = (quizId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
         if (!quiz) return null;
@@ -1857,19 +1033,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
 
                     <button
                         onClick={() => {
-                            setShowReactionStats(showReactionStats === quizId ? null : quizId);
-                            setShowDropdown(null);
-                        }}
-                        className="w-full px-4 py-3 text-left text-white hover:bg-white/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95"
-                    >
-                        <div className="p-2 bg-gradient-to-br from-green-500/20 to-green-600/20 rounded-lg group-hover:from-green-500/30 group-hover:to-green-600/30 transition-all duration-200">
-                            <BarChart3 size={18} className="text-green-400" />
-                        </div>
-                        <span>Statistikalar</span>
-                    </button>
-
-                    <button
-                        onClick={() => {
                             alert("Shikoyat yuborildi!");
                             setShowDropdown(null);
                         }}
@@ -1885,6 +1048,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         );
     };
 
+    // ==================== REACTION STATS ====================
     const renderReactionStats = (quizId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
         if (!quiz?.reactions_summary) return null;
@@ -1922,7 +1086,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                                 <div className="flex items-center gap-3">
                                     <div className="w-28 h-2 bg-gray-700 rounded-full overflow-hidden">
                                         <div
-                                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-700"
+                                            className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-700"
                                             style={{ width: `${percentage}%` }}
                                         ></div>
                                     </div>
@@ -1942,24 +1106,681 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
         );
     };
 
+    // ==================== HELPER FUNCTIONS ====================
+    const getFinalViewCount = useCallback((quizId: number): number => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (quiz?.view_count) return quiz.view_count;
+
+        const stats = quizStats.get(quizId);
+        if (stats?.views) return stats.views;
+
+        const viewStats = getStatistics(quizId);
+        return viewStats.totalViews || 0;
+    }, [quizData, quizStats, getStatistics]);
+
+    const getQuizUniqueViews = useCallback((quizId: number): number => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (quiz?.unique_viewers) return quiz.unique_viewers;
+
+        const stats = quizStats.get(quizId);
+        if (stats?.unique_views) return stats.unique_views;
+
+        const viewStats = getStatistics(quizId);
+        return viewStats.uniqueViews || 0;
+    }, [quizData, quizStats, getStatistics]);
+
+    const getCorrectCount = useCallback((quizId: number): number => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (quiz?.correct_count !== undefined && quiz.correct_count !== null) {
+            return quiz.correct_count;
+        }
+
+        const stats = quizStats.get(quizId);
+        if (stats?.correct_attempts !== undefined && stats.correct_attempts !== null) {
+            return stats.correct_attempts;
+        }
+
+        return 0;
+    }, [quizData, quizStats]);
+
+    const getWrongCount = useCallback((quizId: number): number => {
+        const quiz = quizData.find(q => q.id === quizId);
+        if (quiz?.wrong_count !== undefined && quiz.wrong_count !== null) {
+            return quiz.wrong_count;
+        }
+
+        const stats = quizStats.get(quizId);
+        if (stats?.wrong_attempts !== undefined && stats.wrong_attempts !== null) {
+            return stats.wrong_attempts;
+        }
+
+        return 0;
+    }, [quizData, quizStats]);
+
+    // ==================== INITIAL LOAD AND SETUP ====================
+    const loadCategories = useCallback(async () => {
+        try {
+            const res = await quizAPI.fetchCategories();
+            if (res && res.success && res.data) {
+                let data: Category[] = [];
+                if (Array.isArray(res.data)) {
+                    data = res.data;
+                } else if (res.data.results && Array.isArray(res.data.results)) {
+                    data = res.data.results;
+                }
+                setCategories(data);
+            } else {
+                setCategories([]);
+            }
+        } catch (err) {
+            console.error("❌ Load categories error:", err);
+            setCategories([]);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (initialLoadRef.current) return;
+        initialLoadRef.current = true;
+
+        let isMounted = true;
+
+        const fetchInitialData = async () => {
+            if (!isMounted) return;
+
+            setIsInitialLoading(true);
+            try {
+                await loadCategories();
+                await initializeViews();
+
+                if (questionId) {
+                    const id = Number(questionId);
+                    const quizRes = await quizAPI.fetchQuizById(id);
+
+                    if (quizRes.success && quizRes.data) {
+                        const quiz: any = quizRes.data;
+
+                        const formattedQuiz = {
+                            ...quiz,
+                            correct_count: quiz.correct_count || quiz.correct_attempts || 0,
+                            wrong_count: quiz.wrong_count || quiz.wrong_attempts || 0,
+                            view_count: quiz.view_count || quiz.total_views || 0,
+                            unique_viewers: quiz.unique_viewers || 0,
+                            stats: quiz.stats || {
+                                total_attempts: (quiz.correct_count || 0) + (quiz.wrong_count || 0),
+                                correct_attempts: quiz.correct_count || 0,
+                                wrong_attempts: quiz.wrong_count || 0,
+                                accuracy: quiz.accuracy || 0,
+                                average_time: quiz.average_time || 0,
+                            }
+                        };
+
+                        infiniteScrollManager.reset();
+                        infiniteScrollManager.addItem(formattedQuiz);
+                        setInfiniteScrollState(infiniteScrollManager.getState());
+
+                        setQuizData([formattedQuiz]);
+
+                        await recordView(id);
+                        setHasMore(false);
+                    } else {
+                        await loadQuizzes(true, true);
+                    }
+                } else {
+                    await loadQuizzes(true, true);
+                }
+            } catch (err) {
+                console.error("❌ Initial data fetch error:", err);
+            } finally {
+                if (isMounted) {
+                    setIsInitialLoading(false);
+                }
+            }
+        };
+
+        fetchInitialData();
+
+        return () => {
+            isMounted = false;
+            isLoadingRef.current = false;
+
+            if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
+            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+            if (headerTimeoutRef.current) clearTimeout(headerTimeoutRef.current);
+            if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
+            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+        };
+    }, [questionId, loadCategories, initializeViews, recordView, loadQuizzes]);
+
+    // Setup scroll listener for infinite scroll
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleScrollWithThrottle = () => {
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = setTimeout(() => {
+                handleScroll();
+            }, 100);
+        };
+
+        container.addEventListener('scroll', handleScrollWithThrottle);
+
+        return () => {
+            container.removeEventListener('scroll', handleScrollWithThrottle);
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+        };
+    }, [handleScroll]);
+
+    // ==================== FILTER MODAL ====================
+    const renderFilterModal = () => {
+        if (!showFilterModal) return null;
+
+        return (
+            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
+                {/* Instagram-style modal header */}
+                <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/95 to-transparent border-b border-white/10">
+                    <button
+                        onClick={() => setShowFilterModal(false)}
+                        className="p-2 text-white"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                    <div className="text-white font-semibold text-lg">Filterlar</div>
+                    <button
+                        onClick={resetFilters}
+                        className="px-4 py-1.5 bg-white/10 text-white text-sm rounded-lg hover:bg-white/20 transition-colors"
+                    >
+                        Tozalash
+                    </button>
+                </div>
+
+                {/* Instagram-style modal content */}
+                <div className="h-full pt-16 pb-20 overflow-y-auto">
+                    <div className="px-4 py-6">
+                        {/* Search bar - Instagram style */}
+                        <div className="mb-8">
+                            <div className="relative">
+                                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearch(e.target.value)}
+                                    placeholder="Savollarni qidiring..."
+                                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Categories - Instagram story style */}
+                        <div className="mb-8">
+                            <h3 className="text-white font-semibold text-lg mb-4">Kategoriyalar</h3>
+                            <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide">
+                                <button
+                                    onClick={() => handleCategorySelect("All")}
+                                    className={`flex-shrink-0 px-5 py-3 rounded-full transition-all duration-300 ${
+                                        activeCategory === "All"
+                                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
+                                            : "bg-white/10 text-white hover:bg-white/20"
+                                    }`}
+                                >
+                                    <span className="font-medium">Barchasi</span>
+                                </button>
+                                {categories.map((category) => (
+                                    <button
+                                        key={category.id}
+                                        onClick={() => handleCategorySelect(category.id)}
+                                        className={`flex-shrink-0 px-5 py-3 rounded-full transition-all duration-300 flex items-center gap-2 ${
+                                            activeCategory === category.id
+                                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
+                                                : "bg-white/10 text-white hover:bg-white/20"
+                                        }`}
+                                    >
+                                        <span className="text-lg">{category.emoji}</span>
+                                        <span className="font-medium">{category.title}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Sort options - Instagram settings style */}
+                        <div className="mb-8">
+                            <h3 className="text-white font-semibold text-lg mb-4">Tartiblash</h3>
+                            <div className="space-y-2">
+                                {[
+                                    { value: "-created_at", label: "Eng yangilari", icon: TrendingUp, desc: "Oxirgi qo'shilganlar" },
+                                    { value: "created_at", label: "Eng eskilari", icon: Clock, desc: "Birinchidan boshlab" },
+                                    { value: "-difficulty_percentage", label: "Qiyinlik bo'yicha", icon: Zap, desc: "Qiyindan osonlikka" },
+                                    { value: "difficulty_percentage", label: "Osonlik bo'yicha", icon: Target, desc: "Osondan qiyinlikka" },
+                                ].map((option) => (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => applyFilter({ ordering: option.value as any })}
+                                        className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
+                                            filterOptions.ordering === option.value
+                                                ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
+                                                : "bg-white/5 hover:bg-white/10 border border-white/10"
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2.5 rounded-xl ${
+                                                filterOptions.ordering === option.value
+                                                    ? "bg-gradient-to-r from-blue-500 to-purple-600"
+                                                    : "bg-white/10"
+                                            }`}>
+                                                <option.icon className="w-5 h-5 text-white" />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-white font-medium">{option.label}</div>
+                                                <div className="text-gray-400 text-sm">{option.desc}</div>
+                                            </div>
+                                        </div>
+                                        {filterOptions.ordering === option.value && (
+                                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Difficulty range - Instagram style */}
+                        <div className="mb-8">
+                            <h3 className="text-white font-semibold text-lg mb-6">Qiyinlik darajasi</h3>
+                            <div className="space-y-8">
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-gray-300">Minimal</span>
+                                        <span className="text-blue-400 font-bold text-lg">{filterOptions.difficulty_min || 0}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={filterOptions.difficulty_min || 0}
+                                        onChange={(e) => {
+                                            const value = parseInt(e.target.value);
+                                            setFilterOptions(prev => ({ ...prev, difficulty_min: value }));
+                                            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+                                            filterTimeoutRef.current = setTimeout(() => {
+                                                applyFilter({ difficulty_min: value });
+                                            }, 300);
+                                        }}
+                                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                    />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-gray-300">Maksimal</span>
+                                        <span className="text-purple-400 font-bold text-lg">{filterOptions.difficulty_max || 100}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={filterOptions.difficulty_max || 100}
+                                        onChange={(e) => {
+                                            const value = parseInt(e.target.value);
+                                            setFilterOptions(prev => ({ ...prev, difficulty_max: value }));
+                                            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+                                            filterTimeoutRef.current = setTimeout(() => {
+                                                applyFilter({ difficulty_max: value });
+                                            }, 300);
+                                        }}
+                                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Status filter - Instagram toggle style */}
+                        <div className="mb-8">
+                            <h3 className="text-white font-semibold text-lg mb-4">Holati</h3>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => applyFilter({ worked: !filterOptions.worked })}
+                                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
+                                        filterOptions.worked
+                                            ? "bg-gradient-to-r from-green-500/20 to-emerald-600/20 border border-green-500/30"
+                                            : "bg-white/5 hover:bg-white/10 border border-white/10"
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2.5 rounded-xl ${
+                                            filterOptions.worked
+                                                ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                                                : "bg-white/10"
+                                        }`}>
+                                            <Check className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-white font-medium">Ishlangan savollar</div>
+                                            <div className="text-gray-400 text-sm">Oldin ishlaganingiz</div>
+                                        </div>
+                                    </div>
+                                    <div className={`w-12 h-6 rounded-full transition-all duration-300 relative ${
+                                        filterOptions.worked ? 'bg-green-500' : 'bg-gray-600'
+                                    }`}>
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${
+                                            filterOptions.worked ? 'right-1' : 'left-1'
+                                        }`}></div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => applyFilter({ unworked: !filterOptions.unworked })}
+                                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
+                                        filterOptions.unworked
+                                            ? "bg-gradient-to-r from-red-500/20 to-rose-600/20 border border-red-500/30"
+                                            : "bg-white/5 hover:bg-white/10 border border-white/10"
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2.5 rounded-xl ${
+                                            filterOptions.unworked
+                                                ? "bg-gradient-to-r from-red-500 to-rose-600"
+                                                : "bg-white/10"
+                                        }`}>
+                                            <X className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-white font-medium">Ishlanmagan savollar</div>
+                                            <div className="text-gray-400 text-sm">Hali ishlamaganingiz</div>
+                                        </div>
+                                    </div>
+                                    <div className={`w-12 h-6 rounded-full transition-all duration-300 relative ${
+                                        filterOptions.unworked ? 'bg-red-500' : 'bg-gray-600'
+                                    }`}>
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${
+                                            filterOptions.unworked ? 'right-1' : 'left-1'
+                                        }`}></div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Apply button */}
+                        <div className="mt-10">
+                            <button
+                                onClick={() => setShowFilterModal(false)}
+                                className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-xl shadow-blue-500/25 active:scale-[0.98]"
+                            >
+                                Natijalarni ko'rish
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ==================== HEADER ====================
+    const renderHeader = () => {
+        return (
+            <div className="fixed top-0 left-0 right-0 z-40 max-w-2xl mx-auto bg-gradient-to-b from-black/95 to-transparent backdrop-blur-lg border-b border-white/10">
+                <div className="container mx-auto px-4 md:py-3 py-1">
+                    <div className="flex items-center justify-between">
+                        {/* Logo */}
+                        <div onClick={() => {navigate(`https://t.me/testabduz`)}} className="flex items-center gap-3 md:py-2 py-1 px-1 cursor-pointer md:h-auto" title={"Telegram Group"}>
+                            <img src={Logo} alt="logo" className="w-10 h-10 md:w-14 md:h-14 rounded-sm" />
+                            <div>
+                                <h1 className="text-white font-bold md:text-lg text-sm flex flex-row items-center">Telegram <img src={adsIcon} alt="ads" className={"flex w-12 h-10"}/></h1>
+                                <p className="text-gray-400 md:text-xs text-[11px]">TestAbd.uz rasmiy telegram kanali bu yerda siz TestAbd haqida to'liq bilib olasiz va uangiliklardan xabardor bo'lasiz.</p>
+                            </div>
+                        </div>
+
+                        {/* Filter and Actions */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setShowFilterModal(true)}
+                                className={`p-2.5 rounded-xl transition-all duration-200 ${
+                                    activeCategory !== "All" || searchQuery || filterOptions.worked || filterOptions.unworked
+                                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                                        : "bg-white/10 text-white hover:bg-white/20"
+                                }`}
+                            >
+                                <Filter className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ==================== QUESTION CONTENT RENDER ====================
+    const renderQuestionContent = (quiz: Quiz) => {
+        const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
+        const answerState = userInteractions.answerStates.get(quiz.id);
+        const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
+        const isMultipleChoice = quiz.question_type === 'multiple';
+        const isSubmitting = submittingQuestions.has(quiz.id);
+
+        const renderAnswers = () => {
+            if (!quiz.answers || quiz.answers.length === 0) {
+                return <div className="text-gray-400 text-center py-4">Javob variantlari mavjud emas</div>;
+            }
+
+            return quiz.answers.map((answer, idx) => {
+                const isSelected = selectedAnswers.includes(answer.id);
+                const isCorrect = answer.is_correct;
+                const isShaking = shakingAnswerId === answer.id;
+                const letter = answer.letter || String.fromCharCode(65 + idx);
+
+                let bgColor = 'bg-white/5';
+                let borderColor = 'border-white/10';
+                let textColor = 'text-white';
+
+                if (hasSubmitted) {
+                    if (isCorrect) {
+                        bgColor = 'bg-green-500/20';
+                        borderColor = 'border-green-500/50';
+                        textColor = 'text-green-100';
+                    } else if (isSelected && !isCorrect) {
+                        bgColor = 'bg-red-500/20';
+                        borderColor = 'border-red-500/50';
+                        textColor = 'text-red-100';
+                    }
+                } else if (isSelected) {
+                    bgColor = 'bg-blue-500/20';
+                    borderColor = 'border-blue-500/50';
+                }
+
+                return (
+                    <div
+                        key={answer.id}
+                        className={`p-4 w-[85%] rounded-2xl border transition-all duration-300 cursor-pointer ${bgColor} ${borderColor} ${
+                            isShaking ? 'animate-shake' : ''
+                        } ${!hasSubmitted ? 'hover:bg-white/10 active:scale-[0.98]' : ''}`}
+                        onClick={() => {
+                            if (!hasSubmitted && !isSubmitting) {
+                                if (isMultipleChoice) {
+                                    handleMultipleChoice(quiz.id, answer.id);
+                                } else {
+                                    selectAnswer(quiz.id, answer.id);
+                                }
+                            }
+                        }}
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                                isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white/10'
+                            } ${hasSubmitted && isCorrect ? 'bg-gradient-to-r from-green-500 to-emerald-600' : ''} ${
+                                hasSubmitted && isSelected && !isCorrect ? 'bg-gradient-to-r from-red-500 to-rose-600' : ''
+                            }`}>
+                                <span className="font-bold md:text-lg text-sm text-white">{letter}</span>
+                            </div>
+                            <div className="flex-1">
+                                <div className={textColor}>{answer.answer_text}</div>
+                            </div>
+                            {hasSubmitted && isCorrect && (
+                                <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg">
+                                    <Check className="w-5 h-5 text-white" />
+                                </div>
+                            )}
+                            {hasSubmitted && isSelected && !isCorrect && (
+                                <div className="p-2 bg-gradient-to-r from-red-500 to-rose-600 rounded-lg">
+                                    <X className="w-5 h-5 text-white" />
+                                </div>
+                            )}
+                            {isMultipleChoice && !hasSubmitted && (
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                    isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600 border-transparent' : 'border-white/30'
+                                }`}>
+                                    {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            });
+        };
+
+        const renderSubmitButton = () => {
+            if (hasSubmitted) {
+                return (
+                    <div className="mt-6 space-y-4">
+                    </div>
+                );
+            }
+
+            if (isMultipleChoice) {
+                const hasSelectedAnswers = selectedAnswers.length > 0;
+                return (
+                    <div className="mt-6">
+                        <button
+                            onClick={() => submitMultipleChoice(quiz.id)}
+                            disabled={!hasSelectedAnswers || isSubmitting}
+                            className={`w-full py-4 rounded-2xl font-semibold transition-all duration-300 shadow-xl ${hasSelectedAnswers && !isSubmitting
+                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-[0.98]'
+                                : 'bg-white/5 text-gray-400 cursor-not-allowed border border-white/10'
+                            }`}
+                        >
+                            {isSubmitting ? (
+                                <div className="flex items-center justify-center gap-3">
+                                    <Loader2 size={20} className="animate-spin" />
+                                    <span>Tekshirilmoqda...</span>
+                                </div>
+                            ) : 'Javobni tekshirish'}
+                        </button>
+                    </div>
+                );
+            }
+
+            const hasSelectedAnswer = selectedAnswers.length > 0;
+            if (!hasSelectedAnswer) {
+                return (
+                    <div className="mt-6">
+                        <div className="w-full py-4 bg-gradient-to-r from-white/5 to-white/3 backdrop-blur-sm text-gray-400 rounded-2xl font-medium text-center border border-white/10 shadow-lg">
+                            Javob tanlang
+                        </div>
+                    </div>
+                );
+            }
+
+            return null;
+        };
+
+        return (
+            <div className="space-y-6">
+                {quiz.media && (
+                    <div className="relative rounded-2xl overflow-hidden mb-6 shadow-xl group">
+                        {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img
+                                src={quiz.media}
+                                alt="Question media"
+                                className="w-full h-auto max-h-80 object-cover rounded-2xl transition-transform duration-700 group-hover:scale-105"
+                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                }}
+                            />
+                        ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
+                            <video
+                                src={quiz.media}
+                                className="w-full h-auto max-h-80 rounded-2xl"
+                                controls
+                            />
+                        ) : null}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-2xl"></div>
+                    </div>
+                )}
+
+                <div className="space-y-3">
+                    {renderAnswers()}
+                </div>
+
+                {renderSubmitButton()}
+
+                {coinAnimation?.show && coinAnimation.quizId === quiz.id && (
+                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                        <div className="text-6xl animate-coin-bounce">
+                            🪙
+                            <div className="absolute inset-0 animate-ping text-yellow-400 opacity-30">🪙</div>
+                        </div>
+                    </div>
+                )}
+
+                {correctAnimation === quiz.id && (
+                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                        <div className="text-8xl animate-correct-pulse">
+                            <div className="relative">
+                                <div className="absolute inset-0 animate-ping text-green-400 opacity-30">✅</div>
+                                ✅
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ==================== BOTTOM NAVIGATION ====================
+    const renderBottomNavigation = () => {
+        return (
+            <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-lg border-t border-white/10 z-40">
+            </div>
+        );
+    };
+
+    // ==================== BACKGROUND IMAGE FUNCTION ====================
+    const getBackgroundImageUrl = useCallback(() => {
+        // W-2xl = 42rem = 672px (Tailwind'da w-2xl max-width: 42rem)
+        // Height = 90vh
+        const width = 672;
+        const height = Math.floor(window.innerHeight * 0.9);
+
+        return `https://picsum.photos/seed/${bgSeed}/${width}/${height}`;
+    }, [bgSeed]);
+
     // ==================== MAIN RENDER ====================
     if (isInitialLoading && quizData.length === 0) {
         return (
             <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-950">
-                {renderCollapsedHeader()}
-                <QuizSkeletonLoader />
+                {renderHeader()}
+                <div className="h-[90vh] mt-16 overflow-y-auto">
+                    <QuizSkeletonLoader />
+                </div>
+                {renderBottomNavigation()}
             </div>
         );
     }
 
     if (loading && quizData.length === 0) {
         return (
-            <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-950 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-24 h-24 border-[4px] border-transparent border-t-blue-500 border-r-indigo-500 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-white text-xl font-semibold">Yuklanmoqda...</p>
-                    <p className="text-gray-400 mt-2">Testlar tayyorlanmoqda</p>
+            <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-950">
+                {renderHeader()}
+                <div className="h-[90vh] mt-16 flex flex-col items-center justify-center">
+                    <div className="text-center">
+                        <div className="w-20 h-20 border-[3px] border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin mx-auto mb-6"></div>
+                        <p className="text-white text-xl font-semibold">Yuklanmoqda...</p>
+                        <p className="text-gray-400 mt-2">Savollar tayyorlanmoqda</p>
+                    </div>
                 </div>
+                {renderBottomNavigation()}
             </div>
         );
     }
@@ -1967,30 +1788,22 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
     if (!loading && quizData.length === 0) {
         return (
             <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-950">
-                {renderCollapsedHeader()}
-                <div className="h-full flex items-center justify-center px-4">
+                {renderHeader()}
+                <div className="h-[90vh] mt-16 flex items-center justify-center px-4">
                     <div className="text-center max-w-md">
-                        <div className="text-8xl mb-6 animate-pulse">🔍</div>
-                        <h2 className="text-2xl text-white mb-3 font-semibold">Testlar topilmadi</h2>
-                        <p className="text-gray-400 mb-8">Boshqa filterlar bilan qayta urinib ko'ring yoki filterlarni tozalang</p>
+                        <div className="text-7xl mb-6 animate-pulse">🔍</div>
+                        <h2 className="text-2xl text-white mb-3 font-semibold">Savollar topilmadi</h2>
+                        <p className="text-gray-400 mb-8">Boshqa filterlar bilan qayta urinib ko'ring</p>
                         <button
-                            onClick={async () => {
-                                const defaultFilters: FilterOptions = {
-                                    category: "All",
-                                    ordering: "-created_at",
-                                    is_random: true
-                                };
-                                setFilterOptions(defaultFilters);
-                                setActiveCategory("All");
-                                await loadQuizzes(true, true, defaultFilters);
-                            }}
-                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-95 flex items-center gap-2 mx-auto"
+                            onClick={() => setShowFilterModal(true)}
+                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-95 flex items-center gap-2 mx-auto"
                         >
-                            <RefreshCw size={20} />
-                            Filterlarni tozalash
+                            <Filter size={20} />
+                            Filterlarni o'zgartirish
                         </button>
                     </div>
                 </div>
+                {renderBottomNavigation()}
             </div>
         );
     }
@@ -2036,7 +1849,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     width: 24px;
                     height: 24px;
                     border-radius: 50%;
-                    background: linear-gradient(135deg, #3b82f6, #6366f1);
+                    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
                     cursor: pointer;
                     border: 3px solid #ffffff;
                     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
@@ -2052,7 +1865,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                     width: 24px;
                     height: 24px;
                     border-radius: 50%;
-                    background: linear-gradient(135deg, #3b82f6, #6366f1);
+                    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
                     cursor: pointer;
                     border: 3px solid #ffffff;
                     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
@@ -2125,264 +1938,229 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }) => {
                 .animate-correct-pulse {
                     animation: correct-pulse 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
                 }
+
+                .instagram-scroll-container {
+                    scroll-snap-type: y proximity;
+                }
+                
+                .instagram-post {
+                    scroll-snap-align: start;
+                    min-height: 90vh;
+                }
             `}</style>
 
-            {renderCollapsedHeader()}
+            {renderHeader()}
+            {renderFilterModal()}
 
+            {/* Background image */}
+            <div
+                className="fixed inset-0 z-0 max-w-2xl mx-auto"
+                style={{
+                    backgroundImage: `url(${getBackgroundImageUrl()})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundAttachment: 'fixed',
+                    opacity: 0.3,
+                    filter: 'blur(4px)',
+                }}
+            />
+
+            {/* Main content with 90vh height and scroll - Instagram style */}
             <div
                 ref={containerRef}
-                className="h-full overflow-y-auto scrollbar-hide snap-y snap-mandatory pt-16 md:pt-20"
+                className="h-[90vh] mt-16 overflow-y-auto scrollbar-hide instagram-scroll-container relative z-10"
             >
-                {quizData.map((quiz, idx) => {
-                    const userReaction = userInteractions.reactions.get(quiz.id);
-                    const finalViewCount = getFinalViewCount(quiz.id);
-                    const uniqueViewCount = getQuizUniqueViews(quiz.id);
-                    const correctCount = getCorrectCount(quiz.id);
-                    const wrongCount = getWrongCount(quiz.id);
-                    const totalReactions = quiz.reactions_summary?.total || 0;
-                    const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
-                    const currentStats = quizStats.get(quiz.id);
-                    const accuracy = currentStats?.accuracy || quiz.stats?.accuracy || 0;
+                <div className="container mt-14 mx-auto max-w-2xl pb-24">
+                    {quizData.map((quiz, idx) => {
+                        const userReaction = userInteractions.reactions.get(quiz.id);
+                        const finalViewCount = getFinalViewCount(quiz.id);
+                        const uniqueViewCount = getQuizUniqueViews(quiz.id);
+                        const correctCount = getCorrectCount(quiz.id);
+                        const wrongCount = getWrongCount(quiz.id);
+                        const totalReactions = quiz.reactions_summary?.total || 0;
 
-                    return (
-                        <div
-                            key={`${quiz.id}-${idx}`}
-                            className="h-screen w-full snap-start flex justify-center items-center relative px-4 md:px-0"
-                            onClick={() => {
-                                if (showReactions === quiz.id) setShowReactions(null);
-                                if (showDropdown === quiz.id) setShowDropdown(null);
-                                if (showReactionStats === quiz.id) setShowReactionStats(null);
-                                if (showFilterDropdown) setShowFilterDropdown(false);
-                            }}
-                        >
-                            {/* Background Gradient */}
-                            <div className="absolute inset-0 max-w-2xl mx-auto">
-                                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-purple-500/10"></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/70 to-black/90"></div>
-                            </div>
+                        return (
+                            <div
+                                key={quiz.id}
+                                className="mb-4 min-h-[80vh] justify-center bg-gradient-to-br items-center w-2xl from-black/80 via-black/70 to-black/80 backdrop-blur-xl border border-white/10 overflow-hidden rounded-2xl instagram-post"
+                                style={{
+                                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
+                                    marginBottom: '24px'
+                                }}
+                            >
+                                {/* Post header - Instagram style */}
+                                <div className="flex flex-col justify-center my-auto h-full mt-28">
+                                    {/* Question content */}
+                                    <div className="px-4 my-auto h-auto absoute top-52">
+                                        <div className="text-white font-medium mb-3 md:text-2xl text-lg bg-black/50 backdrop-blur-sm p-4 rounded-2xl">
+                                            {quiz.question_text}
+                                        </div>
 
-                            <div className="relative w-full max-w-2xl mx-auto h-full px-4 md:px-6 flex flex-col justify-center rounded-3xl">
-                                {/* Telegram Ads - Collapsible */}
-                                <div className={`absolute top-4 left-0 right-0 z-20 px-4 transition-all duration-500 ${isHeaderCollapsed ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-                                    <div className="flex items-center justify-center">
-                                        <a
-                                            href="https://t.me/testabduz"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-4 bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-xl border border-white/10 p-4 hover:from-white/20 hover:to-white/10 transition-all duration-500 w-full rounded-2xl group max-w-lg mx-auto shadow-xl"
-                                        >
-                                            <div className="relative">
-                                                <img src={Logo} alt="logo" className="w-12 h-12 rounded-xl shadow-lg"/>
-                                                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
-                                            </div>
-                                            <div className="text-left flex-1 min-w-0">
-                                                <div className="text-xs text-gray-300 truncate">Telegram ads</div>
-                                                <div className="text-base text-white font-semibold truncate">TestAbd.uz</div>
-                                                <div className="text-xs bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent truncate">Bilim va daromad manbai</div>
-                                            </div>
-                                            <ChevronRight size={20} className="text-gray-400 group-hover:text-white transition-colors duration-300" />
-                                        </a>
-                                    </div>
-                                </div>
-
-                                {/* Question Card */}
-                                <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-3xl p-6 mb-6 shadow-2xl border border-white/10 mt-24">
-                                    <div className="text-lg leading-relaxed text-white font-medium">
-                                        {quiz.question_text}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-3 mt-4">
-                                        {quiz.has_worked && (
-                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-500/20 to-emerald-500/15 rounded-full border border-green-500/30 text-sm">
-                                                <Check size={14} className="text-green-400" />
-                                                <span className="text-green-300 font-medium">Ishlangan</span>
+                                        {quiz.media && (
+                                            <div className="rounded-xl overflow-hidden mb-4 shadow-lg">
+                                                {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                    <img
+                                                        src={quiz.media}
+                                                        alt="Question media"
+                                                        className="w-full h-auto max-h-96 object-cover"
+                                                        onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.style.display = 'none';
+                                                        }}
+                                                    />
+                                                ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
+                                                    <video
+                                                        src={quiz.media}
+                                                        className="w-full h-auto max-h-96"
+                                                        controls
+                                                    />
+                                                ) : null}
                                             </div>
                                         )}
-                                        {quiz.difficulty_percentage > 0 && (
-                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-yellow-500/20 to-amber-500/15 rounded-full border border-yellow-500/30 text-sm">
-                                                <Zap size={14} className="text-yellow-400" />
-                                                <span className="text-yellow-300 font-medium">{quiz.difficulty_percentage}% qiyin</span>
-                                            </div>
-                                        )}
-                                        {quiz.category && (
-                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-pink-500/15 rounded-full border border-purple-500/30 text-sm">
-                                                <span>{quiz.category.title}</span>
-                                            </div>
-                                        )}
+
+                                        {/* Category and difficulty badges */}
+                                        <div className="flex flex-wrap gap-2 mb-4">
+                                            {quiz.has_worked && (
+                                                <span className="px-3 py-1.5 bg-green-500/20 text-green-300 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
+                                                    <Check size={12} /> Ishlangan
+                                                </span>
+                                            )}
+                                            {quiz.difficulty_percentage > 0 && (
+                                                <span className="px-3 py-1.5 bg-yellow-500/20 text-yellow-300 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
+                                                    <Zap size={12} /> {quiz.difficulty_percentage}% qiyin
+                                                </span>
+                                            )}
+                                            {quiz.category && (
+                                                <span className="px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-full text-xs backdrop-blur-sm">
+                                                    {quiz.category.title}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Answers */}
+                                        <div className="space-y-3 mb-4">
+                                            {renderQuestionContent(quiz)}
+                                        </div>
                                     </div>
-                                </div>
 
-                                {/* Question Content */}
-                                <div className="mb-28">
-                                    {renderQuestionContent(quiz)}
-                                </div>
+                                    {/* Stats and actions - Instagram style */}
+                                    <div className="px-4 py-4 fixed bottom-52 right-0 flex-col flex w-auto border border-gray-800/50" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)", borderTopLeftRadius: "30px", borderBottomLeftRadius: "30px", backdropFilter: 'blur(10px)' }}>
+                                        <div className="flex items-center flex-col justify-between mb-3 gap-2">
+                                            <div className="flex items-center gap-4 flex-col">
+                                                <div className="text-center flex flex-col items-center gap-1">
+                                                    <div className="bg-green-600/80 backdrop-blur-sm md:w-10 md:h-10 w-7 h-7 p-2 rounded-full">
+                                                        <Check size={20} className={"text-white font-semibold"}/>
+                                                    </div>
+                                                    <div className="text-green-400 font-bold">{correctCount}</div>
+                                                </div>
+                                                <div className="text-center flex flex-col items-center gap-1">
+                                                    <div className="bg-red-600/80 backdrop-blur-sm md:w-10 md:h-10 w-7 h-7 p-2 rounded-full">
+                                                        <X size={20} className={"text-white font-semibold"}/>
+                                                    </div>
+                                                    <div className="text-red-400 font-bold">{wrongCount}</div>
+                                                </div>
+                                                <div className="text-center flex flex-col items-center gap-1">
+                                                    <div className="bg-blue-600/80 backdrop-blur-sm md:w-10 md:h-10 w-7 h-7 p-2 rounded-full">
+                                                        <Eye size={20} className={"text-white font-semibold"}/>
+                                                    </div>
+                                                    <div className="text-blue-400 font-bold">{finalViewCount}</div>
+                                                </div>
+                                            </div>
 
-                                {/* User Info Card - Fixed Bottom */}
-                                <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-auto md:max-w-2xl md:mx-auto z-10">
-                                    <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-2xl p-4 w-full border border-white/10 shadow-2xl">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                <div className="relative">
+                                            <div className="relative gap-3 flex-col flex">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowReactions(showReactions === quiz.id ? null : quiz.id);
+                                                    }}
+                                                    className={`p-2 rounded-full backdrop-blur-sm ${userReaction
+                                                        ? 'bg-gradient-to-r from-yellow-500/20 to-amber-500/15 border border-yellow-500/30 text-yellow-400'
+                                                        : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'
+                                                    }`}
+                                                >
+                                                    {isReacting.has(quiz.id) ? (
+                                                        <Loader2 size={18} className="animate-spin" />
+                                                    ) : (
+                                                        <Heart size={18} fill={userReaction ? "currentColor" : "none"} />
+                                                    )}
+                                                </button>
+                                                {showReactions === quiz.id && renderReactionsMenu(quiz.id)}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowDropdown(showDropdown === quiz.id ? null : quiz.id);
+                                                    }}
+                                                    className="p-2 text-gray-400 hover:text-white relative backdrop-blur-sm bg-white/5 rounded-full border border-white/10"
+                                                >
+                                                    <MoreVertical className="w-5 h-5" />
+                                                    {showDropdown === quiz.id && renderDropdownMenu(quiz.id)}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 fixed bottom-4 w-full max-w-2xl">
+                                        <div className="flex items-center justify-between backdrop-blur-lg bg-black/50 rounded-2xl p-3 border border-white/10">
+                                            <div
+                                                className="flex items-center gap-5 cursor-pointer hover:opacity-80 transition-opacity w-full justify-between"
+                                            >
+                                                <div className="flex items-center gap-2" onClick={() => navigateToUserProfile(quiz.user.id, quiz.user.username)}>
                                                     <img
                                                         src={quiz.user.profile_image || defaultAvatar}
                                                         alt={quiz.user.username}
-                                                        className="w-14 h-14 rounded-xl border-2 border-white/30 object-cover cursor-pointer hover:scale-105 transition-transform duration-300 shadow-lg"
-                                                        onClick={() => navigate(`/profile/${quiz.user.username}`)}
+                                                        className="w-10 h-10 rounded-full border-2 border-white/30"
                                                     />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 opacity-0 hover:opacity-20 transition-opacity duration-300"></div>
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-white font-semibold cursor-pointer hover:text-blue-400 transition-colors duration-300 truncate text-lg"
-                                                         onClick={() => navigate(`/profile/${quiz.user.username}`)}>
-                                                        @{quiz.user.username}
-                                                    </div>
-                                                    <div className="text-white/70 text-sm truncate">
-                                                        {quiz.test_title}
+                                                    <div>
+                                                        <div className="text-white font-semibold hover:text-blue-400 transition-colors">
+                                                            @{quiz.user.username}
+                                                        </div>
+                                                        <div className="text-gray-400 text-xs">{quiz.test_title}</div>
                                                     </div>
                                                 </div>
+                                                <button
+                                                    onClick={() => handleFollowToggle(quiz.id)}
+                                                    className="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 active:scale-95 backdrop-blur-sm"
+                                                >
+                                                    {quiz.user.is_following ? 'Following' : 'Follow'}
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleFollowToggle(quiz.id);
-                                                }}
-                                                className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 whitespace-nowrap ml-3 ${quiz.user.is_following
-                                                    ? "bg-gradient-to-r from-white/10 to-white/5 text-white border border-white/20 hover:from-white/20 hover:to-white/10 active:scale-95"
-                                                    : "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 active:scale-95 shadow-lg shadow-green-500/25"
-                                                }`}
-                                            >
-                                                {quiz.user.is_following ? "Following" : "Follow"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Stats and Action Buttons - Sidebar */}
-                                <div className="fixed right-6 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-20">
-                                    {/* Correct Answers */}
-                                    <div className="relative group">
-                                        <div className="w-14 h-14 bg-gradient-to-br from-green-500/20 to-emerald-500/15 rounded-2xl flex flex-col items-center justify-center border border-green-500/30 shadow-xl shadow-green-500/10 group-hover:shadow-green-500/20 transition-all duration-500 group-hover:scale-105">
-                                            <Check size={20} className="text-green-400" />
-                                            <span className="text-white font-bold text-sm mt-1">{correctCount}</span>
-                                        </div>
-                                        <div className="absolute right-full mr-3 top-1/2 transform -translate-y-1/2 bg-black/90 px-3 py-2 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                            To'g'ri javoblar
                                         </div>
                                     </div>
 
-                                    {/* Wrong Answers */}
-                                    <div className="relative group">
-                                        <div className="w-14 h-14 bg-gradient-to-br from-red-500/20 to-rose-500/15 rounded-2xl flex flex-col items-center justify-center border border-red-500/30 shadow-xl shadow-red-500/10 group-hover:shadow-red-500/20 transition-all duration-500 group-hover:scale-105">
-                                            <X size={20} className="text-red-400" />
-                                            <span className="text-white font-bold text-sm mt-1">{wrongCount}</span>
-                                        </div>
-                                        <div className="absolute right-full mr-3 top-1/2 transform -translate-y-1/2 bg-black/90 px-3 py-2 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                            Noto'g'ri javoblar
-                                        </div>
-                                    </div>
-
-                                    {/* Views */}
-                                    <div className="relative group">
-                                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/15 rounded-2xl flex flex-col items-center justify-center border border-blue-500/30 shadow-xl shadow-blue-500/10 group-hover:shadow-blue-500/20 transition-all duration-500 group-hover:scale-105">
-                                            <Eye size={20} className="text-blue-400" />
-                                            <span className="text-white font-bold text-sm mt-1">{finalViewCount}</span>
-                                        </div>
-                                        <div className="absolute right-full mr-3 top-1/2 transform -translate-y-1/2 bg-black/90 px-3 py-2 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                            Ko'rishlar
-                                            {uniqueViewCount > 0 && (
-                                                <div className="text-blue-300 text-xs">({uniqueViewCount} unique)</div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Reactions */}
-                                    <div className="relative">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setShowReactions(showReactions === quiz.id ? null : quiz.id);
-                                                setShowDropdown(null);
-                                                setShowReactionStats(null);
-                                                if (showFilterDropdown) setShowFilterDropdown(false);
-                                            }}
-                                            className={`w-14 h-14 rounded-2xl flex items-center justify-center hover:scale-105 transition-all duration-500 relative border shadow-xl active:scale-95 ${userReaction
-                                                ? 'bg-gradient-to-br from-yellow-500/20 to-amber-500/15 border-yellow-500/30 shadow-yellow-500/10 hover:shadow-yellow-500/20 text-yellow-400'
-                                                : 'bg-gradient-to-br from-purple-500/20 to-pink-500/15 border-purple-500/30 shadow-purple-500/10 hover:shadow-purple-500/20 text-white'
-                                            }`}
-                                        >
-                                            {isReacting.has(quiz.id) ? (
-                                                <Loader2 size={20} className="animate-spin" />
-                                            ) : (
-                                                <Heart size={20} fill={userReaction ? "currentColor" : "none"} />
-                                            )}
-                                            {totalReactions > 0 && (
-                                                <span className="absolute -top-2 -right-2 bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-lg font-bold">
-                                                    {totalReactions}
-                                                </span>
-                                            )}
-                                        </button>
-                                        {showReactions === quiz.id && renderReactionsMenu(quiz.id)}
-                                    </div>
-
-                                    {/* More Options */}
-                                    <div className="relative">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setShowDropdown(showDropdown === quiz.id ? null : quiz.id);
-                                                setShowReactions(null);
-                                                setShowReactionStats(null);
-                                                if (showFilterDropdown) setShowFilterDropdown(false);
-                                            }}
-                                            className="w-14 h-14 rounded-2xl flex items-center justify-center hover:scale-105 transition-all duration-500 bg-gradient-to-br from-gray-500/20 to-gray-600/15 border border-gray-500/30 shadow-xl shadow-gray-500/10 hover:shadow-gray-500/20 text-white active:scale-95"
-                                        >
-                                            <MoreVertical size={20} />
-                                        </button>
-                                        {showDropdown === quiz.id && renderDropdownMenu(quiz.id)}
-                                    </div>
-                                    {showReactionStats === quiz.id && totalReactions > 0 && (
-                                        <div className="relative">
-                                            {renderReactionStats(quiz.id)}
-                                        </div>
-                                    )}
+                                    {/* Reaction Stats */}
+                                    {showReactionStats === quiz.id && renderReactionStats(quiz.id)}
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
 
-                {loadingMore && (
-                    <div className="h-screen w-full flex justify-center items-center snap-start">
-                        <div className="flex flex-col items-center gap-5">
-                            <div className="w-16 h-16 border-[4px] border-transparent border-t-blue-500 border-r-indigo-500 border-b-purple-500 border-l-pink-500 rounded-full animate-spin shadow-xl"></div>
-                            <span className="text-white text-sm font-medium">Yangi savollar yuklanmoqda...</span>
+                    {/* Loading indicator - Instagram style */}
+                    {loadingMore && (
+                        <div className="py-8 flex justify-center backdrop-blur-sm bg-black/30 rounded-2xl mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 border-2 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
+                                <span className="text-gray-300">Yangi savollar yuklanmoqda...</span>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {!hasMore && !loading && !loadingMore && quizData.length > 0 && (
-                    <div className="h-screen w-full flex justify-center items-center snap-start">
-                        <div className="text-center px-4 max-w-md">
-                            <div className="text-7xl mb-6 animate-bounce">🎉</div>
-                            <h2 className="text-2xl text-white mb-3 font-bold">Barcha savollarni ko'rib chiqdingiz!</h2>
-                            <p className="text-gray-400 mb-8">Yangi savollar tez orada qo'shiladi. Yana o'qishni davom ettirish uchun boshiga qayting.</p>
+                    {!hasMore && quizData.length > 0 && !loadingMore && (
+                        <div className="py-8 text-center backdrop-blur-sm bg-black/30 rounded-2xl mb-24">
+                            <div className="text-gray-300 mb-2">Barcha savollarni ko'rib chiqdingiz 👏</div>
+                            <div className="text-gray-400 text-sm mb-4">Yangilarini ko'rish uchun filterni o'zgartiring</div>
                             <button
-                                onClick={() => {
-                                    if (containerRef.current) {
-                                        containerRef.current.scrollTo({
-                                            top: 0,
-                                            behavior: "smooth"
-                                        });
-                                    }
-                                }}
-                                className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-95 flex items-center gap-3 mx-auto"
+                                onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                                className="px-6 py-2.5 bg-gradient-to-r from-blue-500/20 to-purple-600/20 text-white rounded-full text-sm hover:from-blue-500/30 hover:to-purple-600/30 transition-colors border border-white/10"
                             >
-                                <ChevronUp size={20} />
                                 Boshiga qaytish
                             </button>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
+
+            {renderBottomNavigation()}
         </div>
     );
 };

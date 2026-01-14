@@ -255,7 +255,7 @@ const App: React.FC = () => {
 
                 <Route path="/create/test" element={
                     <ProtectedRoute>
-                        <TestCreator />
+                        <CreateNewBlock />
                         <BottomNavigation />
                     </ProtectedRoute>
                 } />
