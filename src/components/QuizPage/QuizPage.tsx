@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Share, Bookmark, X, Send, Check, ThumbsUp, ThumbsDown, Loader2, Filter, Eye, MoreVertical, Smile, BarChart3, RefreshCw, ChevronUp, Sparkles, Heart, Zap, Target, TrendingUp, Clock, Users, Award, ChevronRight, Search, Home, User, Compass, MessageCircle } from "lucide-react";
-import { quizAPI, accountsAPI, tokenManager, infiniteScrollManager } from "../../utils/api";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Share, Bookmark, X, Check, Loader2, Filter, Eye, MoreVertical, Heart, Zap, Target, TrendingUp, Clock, Search } from "lucide-react";
+import { quizAPI, accountsAPI, tokenManager } from "../../utils/api";
 import { useParams, useNavigate } from "react-router-dom";
 import Logo from "../assets/images/logo.jpg";
 import defaultAvatar from "../assets/images/defaultuseravatar.png";
@@ -109,10 +109,10 @@ const REACTION_CHOICES = [
     { id: 'insightful', emoji: '💡', label: 'Insightful', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
 ] as const;
 
-type ReactionType = typeof REACTION_CHOICES[number]['id'];
-
 const INFINITE_SCROLL_PAGE_SIZE = 10;
-const SCROLL_DEBOUNCE_DELAY = 100;
+const SCROLL_THRESHOLD = 10; // Faqat 10px qolganda load qilish (juda sezgir)
+const LOAD_DEBOUNCE = 50; // 50ms debounce (tezroq javob)
+const LOAD_THROTTLE = 300; // 300ms throttle
 
 const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) => {
     const navigate = useNavigate();
@@ -125,7 +125,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         getCurrentUserId
     } = useSimpleQuizViews();
 
-    const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
     const [quizData, setQuizData] = useState<Quiz[]>([]);
     const [userInteractions, setUserInteractions] = useState({
         selectedAnswers: new Map<number, number[]>(),
@@ -142,11 +141,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     const [filterOptions, setFilterOptions] = useState<FilterOptions>({
         category: "All",
         ordering: "-created_at",
-        is_random: true
+        is_random: false,
+        page_size: INFINITE_SCROLL_PAGE_SIZE
     });
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [isSearching, setIsSearching] = useState(false);
 
     const [submittingQuestions, setSubmittingQuestions] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(false);
@@ -154,7 +153,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     const [categories, setCategories] = useState<Category[]>([]);
     const [hasMore, setHasMore] = useState(true);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
-    const [quizReactions, setQuizReactions] = useState<Map<number, QuizReaction>>(new Map());
     const [isReacting, setIsReacting] = useState<Set<number>>(new Set());
 
     const [showReactions, setShowReactions] = useState<number | null>(null);
@@ -170,43 +168,38 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         accuracy: number;
     }>>(new Map());
 
-    // Filter state tracking
     const [activeCategory, setActiveCategory] = useState<number | "All">("All");
     const [applyingFilter, setApplyingFilter] = useState(false);
-
-    // Bookmark state
     const [bookmarking, setBookmarking] = useState<Set<number>>(new Set());
 
-    // Instagram-like bottom navigation
-    const [activeNav, setActiveNav] = useState<'home' | 'search' | 'add' | 'reels' | 'profile'>('home');
-
+    // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const headerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Infinite scroll refs - OPTIMIZED
     const isLoadingRef = useRef(false);
-    const lastScrollTopRef = useRef<number>(0);
+    const isThrottledRef = useRef(false);
     const viewedQuizzesRef = useRef<Set<number>>(new Set());
     const initialLoadRef = useRef(false);
-    const lastLoadTimeRef = useRef<number>(0);
+    const pageRef = useRef(1);
+    const hasMoreRef = useRef(true);
+    const lastScrollYRef = useRef(0);
+    const lastLoadTimeRef = useRef(0);
+    const scrollDirectionRef = useRef<'up' | 'down'>('down');
+    const scrollCountRef = useRef(0);
+    const isScrollingRef = useRef(false);
 
-    // Infinite scroll state
-    const [infiniteScrollState, setInfiniteScrollState] = useState(() => infiniteScrollManager.getState());
-
-    // Background seed uchun
     const [bgSeed, setBgSeed] = useState<number>(Date.now());
 
     // ==================== STATISTICS FUNCTIONS ====================
     const fetchQuizStats = useCallback(async (quizId: number): Promise<void> => {
         try {
             const statsResponse = await quizAPI.getQuestionStats(quizId);
-            console.log(`📊 Stats response for quiz ${quizId}:`, statsResponse);
-
             if (statsResponse.success && statsResponse.data) {
-                const stats = statsResponse.data as any;
+                const stats = statsResponse.data;
 
                 setQuizStats(prev => {
                     const newMap = new Map(prev);
@@ -252,16 +245,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     const recordView = useCallback(async (quizId: number): Promise<void> => {
         if (viewedQuizzesRef.current.has(quizId)) return;
 
-        console.log(`👁️ Recording view for quiz ${quizId}`);
-
         try {
             const result = await recordQuizView(quizId);
-
             if (result.success) {
                 viewedQuizzesRef.current.add(quizId);
-                console.log(`✅ View recorded for quiz ${quizId}`);
-
-                // Fetch stats separately without waiting
                 setTimeout(() => {
                     fetchQuizStats(quizId);
                 }, 100);
@@ -269,18 +256,33 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         } catch (err) {
             console.error(`❌ Error recording view for quiz ${quizId}:`, err);
         }
-    }, [recordQuizView]); // Only depends on recordQuizView
+    }, [recordQuizView, fetchQuizStats]);
 
-    // ==================== INFINITE SCROLL FUNCTIONS ====================
-    const loadQuizzes = useCallback(async (isInitialLoad: boolean = false, resetData: boolean = false, customFilters?: Partial<FilterOptions>) => {
+    // ==================== ULTRA SENSITIVE INFINITE SCROLL FUNCTIONS ====================
+    const loadQuizzes = useCallback(async (
+        isInitialLoad: boolean = false,
+        resetData: boolean = false,
+        customFilters?: Partial<FilterOptions>
+    ) => {
         if (isLoadingRef.current) {
-            console.log(`🚫 loadQuizzes skipped: already loading`);
+            console.log(`🚫 Skipping load - already loading`);
             return;
         }
 
+        // Throttle check
         const now = Date.now();
-        if (now - lastLoadTimeRef.current < 1000 && !isInitialLoad) {
-            console.log(`⏱️ Load throttled`);
+        if (now - lastLoadTimeRef.current < LOAD_THROTTLE) {
+            console.log(`⏱️ Throttled - too frequent loads`);
+            return;
+        }
+
+        if (isInitialLoad || resetData) {
+            pageRef.current = 1;
+            hasMoreRef.current = true;
+        }
+
+        if (!hasMoreRef.current && !isInitialLoad && !resetData) {
+            console.log(`⏹️ No more quizzes to load`);
             return;
         }
 
@@ -293,6 +295,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         }
 
         isLoadingRef.current = true;
+        lastLoadTimeRef.current = now;
 
         if (isInitialLoad) {
             setLoading(true);
@@ -301,49 +304,42 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             setLoadingMore(true);
         }
 
-        console.log(`🔄 loadQuizzes called: isInitialLoad=${isInitialLoad}, resetData=${resetData}`);
-
         try {
-            let result;
+            const filtersToUse = {
+                ...filterOptions,
+                ...customFilters,
+                page: pageRef.current,
+                page_size: INFINITE_SCROLL_PAGE_SIZE
+            };
 
-            if (resetData) {
-                infiniteScrollManager.reset();
+            if (filtersToUse.category === "All") {
+                delete filtersToUse.category;
             }
 
-            const filtersToUse = customFilters || filterOptions;
-
-            if (isInitialLoad || resetData) {
-                const filtersForInfinite: any = { ...filtersToUse };
-
-                if (filtersForInfinite.category === "All") {
-                    delete filtersForInfinite.category;
-                }
-
-                if (filtersForInfinite.search) {
-                    filtersForInfinite.search = filtersForInfinite.search.trim();
-                }
-
-                if (filtersForInfinite.is_random) {
-                    filtersForInfinite.ordering = '?';
-                }
-
-                console.log("🎯 Initializing infinite scroll with filters:", filtersForInfinite);
-                const initState = infiniteScrollManager.init(filtersForInfinite);
-                setInfiniteScrollState(initState);
-
-                result = await infiniteScrollManager.loadMore();
-            } else {
-                result = await infiniteScrollManager.loadMore();
+            if (filtersToUse.search === "") {
+                delete filtersToUse.search;
             }
 
-            console.log("📥 Infinite scroll result:", {
-                success: result.success,
-                hasMore: result.hasMore,
-                loadedItems: result.results?.length || 0
-            });
+            if (filtersToUse.is_random) {
+                filtersToUse.ordering = '?';
+            }
 
-            if (result.success && result.results) {
-                const newQuizzes: Quiz[] = result.results.map((quiz: any) => ({
+            console.log(`📥 Loading page ${pageRef.current}`);
+
+            const result = await quizAPI.fetchQuizzes(filtersToUse);
+
+            if (result.success && result.data) {
+                let newQuizzes: Quiz[] = [];
+
+                if (result.data.results && Array.isArray(result.data.results)) {
+                    newQuizzes = result.data.results;
+                    hasMoreRef.current = !!result.data.next;
+                } else if (Array.isArray(result.data)) {
+                    newQuizzes = result.data;
+                    hasMoreRef.current = newQuizzes.length === INFINITE_SCROLL_PAGE_SIZE;
+                }
+
+                const formattedQuizzes: Quiz[] = newQuizzes.map((quiz: any) => ({
                     ...quiz,
                     id: quiz.id || Date.now() + Math.random(),
                     category: quiz.category || undefined,
@@ -365,34 +361,43 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
                 setQuizData(prev => {
                     if (resetData || isInitialLoad) {
-                        return newQuizzes;
+                        return formattedQuizzes;
                     }
                     const existingIds = new Set(prev.map(q => q.id));
-                    const uniqueNewQuizzes = newQuizzes.filter(q => !existingIds.has(q.id));
+                    const uniqueNewQuizzes = formattedQuizzes.filter(q => !existingIds.has(q.id));
                     return [...prev, ...uniqueNewQuizzes];
                 });
 
-                setHasMore(result.hasMore || false);
-                lastLoadTimeRef.current = now;
+                // Update hasMore state
+                setHasMore(hasMoreRef.current);
 
-                // Record views for loaded quizzes without waiting
-                const quizzesToRecord = newQuizzes;
-                quizzesToRecord.forEach((quiz) => {
+                if (formattedQuizzes.length > 0) {
+                    pageRef.current += 1;
+                }
+
+                // Record views
+                const quizzesToRecord = resetData || isInitialLoad ? formattedQuizzes :
+                    formattedQuizzes.filter(q => !viewedQuizzesRef.current.has(q.id));
+
+                // Use Promise.all for parallel view recording
+                const viewPromises = quizzesToRecord.map((quiz) =>
                     recordView(quiz.id).catch(error => {
                         console.error(`❌ Error recording view for quiz ${quiz.id}:`, error);
-                    });
-                });
+                    })
+                );
 
-                console.log(`✅ Loaded ${newQuizzes.length} quizzes, hasMore: ${result.hasMore}`);
+                await Promise.all(viewPromises);
+
+                console.log(`✅ Loaded ${formattedQuizzes.length} quizzes, hasMore: ${hasMoreRef.current}`);
             } else {
                 console.error("❌ Failed to load quizzes:", result.error);
+                hasMoreRef.current = false;
                 setHasMore(false);
             }
 
-            setInfiniteScrollState(infiniteScrollManager.getState());
-
         } catch (err: any) {
             console.error("❌ Load quizzes error:", err);
+            hasMoreRef.current = false;
             setHasMore(false);
         } finally {
             isLoadingRef.current = false;
@@ -402,33 +407,82 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             } else {
                 setLoadingMore(false);
             }
-            console.log(`✅ loadQuizzes completed: isInitialLoad=${isInitialLoad}`);
         }
     }, [filterOptions, navigate, recordView]);
 
-    // Instagram style infinite scroll handler
+    // ==================== ULTRA SENSITIVE SCROLL HANDLER ====================
     const handleScroll = useCallback(() => {
-        if (!containerRef.current || isLoadingRef.current || !hasMore) return;
+        if (!containerRef.current || isLoadingRef.current || !hasMoreRef.current) return;
 
         const container = containerRef.current;
         const { scrollTop, scrollHeight, clientHeight } = container;
+        const currentScrollY = scrollTop;
 
-        // Instagram usulida - 100px qolganda yuklash
-        const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+        // Scroll direction tracking
+        scrollDirectionRef.current = currentScrollY > lastScrollYRef.current ? 'down' : 'up';
+        lastScrollYRef.current = currentScrollY;
 
-        if (isAtBottom) {
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
+        // Faqat pastga scroll qilganda load qilish
+        if (scrollDirectionRef.current !== 'down') {
+            return;
+        }
+
+        // Calculate scroll position
+        const scrollPosition = scrollTop + clientHeight;
+        const totalHeight = scrollHeight;
+        const remaining = totalHeight - scrollPosition;
+
+        // ULTRA SENSITIVE: Agar faqat 10px qolganda (juda sezgir)
+        const shouldLoad = remaining <= SCROLL_THRESHOLD;
+
+        if (shouldLoad) {
+            scrollCountRef.current++;
+
+            // Clear any existing timeout
+            if (loadTimeoutRef.current) {
+                clearTimeout(loadTimeoutRef.current);
             }
 
-            scrollTimeoutRef.current = setTimeout(async () => {
-                if (!isLoadingRef.current && hasMore) {
-                    console.log("🔄 Instagram style: Loading more quizzes...");
-                    await loadQuizzes(false, false);
+            // Minimal debounce for ultra sensitive scrolling
+            loadTimeoutRef.current = setTimeout(() => {
+                if (!isLoadingRef.current && hasMoreRef.current) {
+                    console.log(`🔄 Ultra sensitive scroll triggered (${scrollCountRef.current})`);
+                    loadQuizzes(false, false);
                 }
-            }, 300);
+            }, LOAD_DEBOUNCE);
         }
-    }, [hasMore, loadQuizzes]);
+    }, [loadQuizzes]);
+
+    // ==================== OPTIMIZED SCROLL EVENT LISTENER ====================
+    const setupScrollListener = useCallback(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        let ticking = false;
+        let lastScrollTime = 0;
+
+        const handleScrollEvent = () => {
+            if (!ticking) {
+                const now = Date.now();
+                // Throttle scroll events for performance
+                if (now - lastScrollTime > 16) { // ~60fps
+                    requestAnimationFrame(() => {
+                        handleScroll();
+                        ticking = false;
+                    });
+                    ticking = true;
+                    lastScrollTime = now;
+                }
+            }
+        };
+
+        // Use passive scroll listener for better performance
+        container.addEventListener('scroll', handleScrollEvent, { passive: true });
+
+        return () => {
+            container.removeEventListener('scroll', handleScrollEvent);
+        };
+    }, [handleScroll]);
 
     // ==================== FILTER FUNCTIONS ====================
     const applyFilter = useCallback(async (newFilters: Partial<FilterOptions>) => {
@@ -437,7 +491,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         const updatedFilters = {
             ...filterOptions,
             ...newFilters,
-            page: 1
+            page: 1,
+            page_size: INFINITE_SCROLL_PAGE_SIZE
         };
 
         setFilterOptions(updatedFilters);
@@ -447,21 +502,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             setActiveCategory(newFilters.category);
         }
 
-        setCurrentQuizIndex(0);
-        setQuizData([]);
-        setHasMore(true);
-        setUserInteractions({
-            selectedAnswers: new Map(),
-            textAnswers: new Map(),
-            answerStates: new Map(),
-            reactions: new Map(),
-            submittedQuizzes: new Set(),
-        });
+        // Reset states
         viewedQuizzesRef.current.clear();
         setQuizStats(new Map());
+        isLoadingRef.current = false;
         setShowFilterModal(false);
-
-        // Background seedni yangilash
         setBgSeed(Date.now());
 
         try {
@@ -472,19 +517,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             setApplyingFilter(false);
         }
 
+        // Scroll to top
         if (containerRef.current) {
             containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
     }, [filterOptions, loadQuizzes]);
 
     const handleCategorySelect = useCallback((categoryId: number | "All") => {
-        console.log("🎯 Category selected:", categoryId);
-
-        if (activeCategory === categoryId) {
-            console.log("Same category selected, skipping...");
-            return;
-        }
-
+        if (activeCategory === categoryId) return;
         setActiveCategory(categoryId);
         applyFilter({
             category: categoryId,
@@ -494,11 +534,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
     const handleSearch = useCallback((query: string) => {
         setSearchQuery(query);
-
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
         }
-
         searchTimeoutRef.current = setTimeout(() => {
             applyFilter({ search: query.trim() });
         }, 500);
@@ -508,7 +546,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         const defaultFilters: FilterOptions = {
             category: "All",
             ordering: "-created_at",
-            is_random: true
+            is_random: false,
+            page_size: INFINITE_SCROLL_PAGE_SIZE
         };
 
         setFilterOptions(defaultFilters);
@@ -516,15 +555,19 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         setSearchQuery("");
         setBgSeed(Date.now());
 
+        // Reset scroll states
+        pageRef.current = 1;
+        hasMoreRef.current = true;
+        viewedQuizzesRef.current.clear();
+        isLoadingRef.current = false;
+
         await loadQuizzes(true, true, defaultFilters);
     }, [loadQuizzes]);
 
     // ==================== ANSWER SELECTION FUNCTIONS ====================
     const selectAnswer = async (quizId: number, answerId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
-        if (!quiz) return;
-
-        if (userInteractions.submittedQuizzes.has(quizId)) return;
+        if (!quiz || userInteractions.submittedQuizzes.has(quizId)) return;
 
         if (quiz.question_type === 'multiple') {
             handleMultipleChoice(quizId, answerId);
@@ -533,14 +576,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
         if (submittingQuestions.has(quizId) || userInteractions.submittedQuizzes.has(quizId)) return;
 
-        setUserInteractions(prev => {
-            const newSelectedAnswers = new Map(prev.selectedAnswers);
-            newSelectedAnswers.set(quizId, [answerId]);
-            return {
-                ...prev,
-                selectedAnswers: newSelectedAnswers
-            };
-        });
+        setUserInteractions(prev => ({
+            ...prev,
+            selectedAnswers: new Map(prev.selectedAnswers).set(quizId, [answerId])
+        }));
 
         setSubmittingQuestions(prev => new Set(prev).add(quizId));
         try {
@@ -592,7 +631,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             if (isCorrect) {
                 setCorrectAnimation(quizId);
                 setTimeout(() => setCorrectAnimation(null), 2000);
-
                 setCoinAnimation({ quizId, answerId, show: true });
                 setTimeout(() => setCoinAnimation(null), 2000);
             } else {
@@ -607,7 +645,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                     } else {
                         await quizAPI.incrementWrongCount(quizId);
                     }
-
                     fetchQuizStats(quizId);
                 } catch (error) {
                     console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
@@ -726,7 +763,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                     } else {
                         await quizAPI.incrementWrongCount(quizId);
                     }
-
                     fetchQuizStats(quizId);
                 } catch (error) {
                     console.error(`❌ Error updating stats for quiz ${quizId}:`, error);
@@ -844,23 +880,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             const result = await quizAPI.addOrUpdateReaction(quizId, reactionType);
             if (result.success && result.data) {
                 if (result.data.removed) {
-                    setQuizReactions(prev => {
-                        const newMap = new Map(prev);
-                        newMap.delete(quizId);
-                        return newMap;
-                    });
+                    // No need to set quizReactions since we don't use it
                 } else {
-                    setQuizReactions(prev => {
-                        const newMap = new Map(prev);
-                        newMap.set(quizId, {
-                            id: result.data.id || Date.now(),
-                            quiz: quizId,
-                            user: getCurrentUserId() || 0,
-                            reaction_type: reactionType,
-                            created_at: new Date().toISOString()
-                        });
-                        return newMap;
-                    });
+                    // No need to set quizReactions since we don't use it
                 }
             } else {
                 await loadQuizReactions(quizId);
@@ -905,8 +927,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                         }
                         : q
                 ));
-
-                console.log(`✅ Follow toggled: ${response.data.is_following ? 'Following' : 'Unfollowed'}`);
             }
         } catch (err) {
             console.error("❌ Toggle follow error:", err);
@@ -920,15 +940,12 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         setBookmarking(prev => new Set(prev).add(quizId));
         try {
             const response = await quizAPI.bookmarkQuestion(quizId);
-            console.log("📌 Bookmark response:", response);
-
             if (response.success) {
                 setQuizData(prev => prev.map(q =>
                     q.id === quizId
                         ? { ...q, is_bookmarked: response.data?.is_bookmarked ?? !q.is_bookmarked }
                         : q
                 ));
-
                 setShowDropdown(null);
             }
         } catch (err) {
@@ -1048,64 +1065,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         );
     };
 
-    // ==================== REACTION STATS ====================
-    const renderReactionStats = (quizId: number) => {
-        const quiz = quizData.find(q => q.id === quizId);
-        if (!quiz?.reactions_summary) return null;
-
-        const stats = quiz.reactions_summary;
-        const total = stats.total;
-
-        return (
-            <div
-                className="absolute bottom-full right-0 mb-3 p-5 bg-gradient-to-b from-gray-900 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl z-50 min-w-[320px]"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-xl">
-                        <BarChart3 size={20} className="text-blue-400" />
-                    </div>
-                    <h4 className="text-white font-semibold text-lg">Reaksiya statistikasi</h4>
-                </div>
-                <div className="space-y-4">
-                    {REACTION_CHOICES.map((reaction) => {
-                        const count = stats[reaction.id as keyof typeof stats] || 0;
-                        const percentage = total > 0 ? (count / total * 100).toFixed(1) : 0;
-
-                        return (
-                            <div key={reaction.id} className="flex items-center justify-between group">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${reaction.bgColor}`}>
-                                        <span className="text-xl">{reaction.emoji}</span>
-                                    </div>
-                                    <div>
-                                        <div className="text-white font-medium">{reaction.label}</div>
-                                        <div className="text-gray-400 text-sm">{percentage}%</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-28 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-700"
-                                            style={{ width: `${percentage}%` }}
-                                        ></div>
-                                    </div>
-                                    <span className="text-white font-semibold w-8 text-right">{count}</span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="mt-6 pt-4 border-t border-white/10">
-                    <div className="flex justify-between items-center">
-                        <span className="text-white font-medium">Jami reaksiyalar:</span>
-                        <span className="text-blue-400 font-bold text-xl">{total}</span>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     // ==================== HELPER FUNCTIONS ====================
     const getFinalViewCount = useCallback((quizId: number): number => {
         const quiz = quizData.find(q => q.id === quizId);
@@ -1214,14 +1173,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                             }
                         };
 
-                        infiniteScrollManager.reset();
-                        infiniteScrollManager.addItem(formattedQuiz);
-                        setInfiniteScrollState(infiniteScrollManager.getState());
-
                         setQuizData([formattedQuiz]);
+                        setHasMore(false);
+                        hasMoreRef.current = false;
 
                         await recordView(id);
-                        setHasMore(false);
                     } else {
                         await loadQuizzes(true, true);
                     }
@@ -1242,47 +1198,25 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         return () => {
             isMounted = false;
             isLoadingRef.current = false;
-
-            if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
+            if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
             if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
             if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-            if (headerTimeoutRef.current) clearTimeout(headerTimeoutRef.current);
-            if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
             if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
         };
     }, [questionId, loadCategories, initializeViews, recordView, loadQuizzes]);
 
-    // Setup scroll listener for infinite scroll
+    // Setup scroll listener for ultra sensitive infinite scroll
     useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const handleScrollWithThrottle = () => {
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-            }
-            scrollTimeoutRef.current = setTimeout(() => {
-                handleScroll();
-            }, 100);
-        };
-
-        container.addEventListener('scroll', handleScrollWithThrottle);
-
-        return () => {
-            container.removeEventListener('scroll', handleScrollWithThrottle);
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-            }
-        };
-    }, [handleScroll]);
+        const cleanup = setupScrollListener();
+        return cleanup;
+    }, [setupScrollListener]);
 
     // ==================== FILTER MODAL ====================
     const renderFilterModal = () => {
         if (!showFilterModal) return null;
 
         return (
-            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
-                {/* Instagram-style modal header */}
+            <div className="fixed inset-0 max-w-2xl mx-auto z-50 bg-black/90 backdrop-blur-sm">
                 <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/95 to-transparent border-b border-white/10">
                     <button
                         onClick={() => setShowFilterModal(false)}
@@ -1299,10 +1233,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                     </button>
                 </div>
 
-                {/* Instagram-style modal content */}
                 <div className="h-full pt-16 pb-20 overflow-y-auto">
                     <div className="px-4 py-6">
-                        {/* Search bar - Instagram style */}
                         <div className="mb-8">
                             <div className="relative">
                                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1316,16 +1248,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                             </div>
                         </div>
 
-                        {/* Categories - Instagram story style */}
                         <div className="mb-8">
                             <h3 className="text-white font-semibold text-lg mb-4">Kategoriyalar</h3>
-                            <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide">
+                            <div className="flex space-x-3 overflow-y-auto pb-2 scrollbar-hide flex-col">
                                 <button
                                     onClick={() => handleCategorySelect("All")}
-                                    className={`flex-shrink-0 px-5 py-3 rounded-full transition-all duration-300 ${
-                                        activeCategory === "All"
-                                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                                            : "bg-white/10 text-white hover:bg-white/20"
+                                    className={`flex-shrink-0 px-5 py-3 rounded-full transition-all duration-300 ${activeCategory === "All"
+                                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
+                                        : "bg-white/10 text-white hover:bg-white/20"
                                     }`}
                                 >
                                     <span className="font-medium">Barchasi</span>
@@ -1334,10 +1264,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                     <button
                                         key={category.id}
                                         onClick={() => handleCategorySelect(category.id)}
-                                        className={`flex-shrink-0 px-5 py-3 rounded-full transition-all duration-300 flex items-center gap-2 ${
-                                            activeCategory === category.id
-                                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                                                : "bg-white/10 text-white hover:bg-white/20"
+                                        className={`flex-shrink-0 px-5 py-3 rounded-full transition-all duration-300 flex items-center gap-2 ${activeCategory === category.id
+                                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
+                                            : "bg-white/10 text-white hover:bg-white/20"
                                         }`}
                                     >
                                         <span className="text-lg">{category.emoji}</span>
@@ -1347,162 +1276,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                             </div>
                         </div>
 
-                        {/* Sort options - Instagram settings style */}
-                        <div className="mb-8">
-                            <h3 className="text-white font-semibold text-lg mb-4">Tartiblash</h3>
-                            <div className="space-y-2">
-                                {[
-                                    { value: "-created_at", label: "Eng yangilari", icon: TrendingUp, desc: "Oxirgi qo'shilganlar" },
-                                    { value: "created_at", label: "Eng eskilari", icon: Clock, desc: "Birinchidan boshlab" },
-                                    { value: "-difficulty_percentage", label: "Qiyinlik bo'yicha", icon: Zap, desc: "Qiyindan osonlikka" },
-                                    { value: "difficulty_percentage", label: "Osonlik bo'yicha", icon: Target, desc: "Osondan qiyinlikka" },
-                                ].map((option) => (
-                                    <button
-                                        key={option.value}
-                                        onClick={() => applyFilter({ ordering: option.value as any })}
-                                        className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
-                                            filterOptions.ordering === option.value
-                                                ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
-                                                : "bg-white/5 hover:bg-white/10 border border-white/10"
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2.5 rounded-xl ${
-                                                filterOptions.ordering === option.value
-                                                    ? "bg-gradient-to-r from-blue-500 to-purple-600"
-                                                    : "bg-white/10"
-                                            }`}>
-                                                <option.icon className="w-5 h-5 text-white" />
-                                            </div>
-                                            <div className="text-left">
-                                                <div className="text-white font-medium">{option.label}</div>
-                                                <div className="text-gray-400 text-sm">{option.desc}</div>
-                                            </div>
-                                        </div>
-                                        {filterOptions.ordering === option.value && (
-                                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Difficulty range - Instagram style */}
-                        <div className="mb-8">
-                            <h3 className="text-white font-semibold text-lg mb-6">Qiyinlik darajasi</h3>
-                            <div className="space-y-8">
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <span className="text-gray-300">Minimal</span>
-                                        <span className="text-blue-400 font-bold text-lg">{filterOptions.difficulty_min || 0}%</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        value={filterOptions.difficulty_min || 0}
-                                        onChange={(e) => {
-                                            const value = parseInt(e.target.value);
-                                            setFilterOptions(prev => ({ ...prev, difficulty_min: value }));
-                                            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
-                                            filterTimeoutRef.current = setTimeout(() => {
-                                                applyFilter({ difficulty_min: value });
-                                            }, 300);
-                                        }}
-                                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-                                    />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <span className="text-gray-300">Maksimal</span>
-                                        <span className="text-purple-400 font-bold text-lg">{filterOptions.difficulty_max || 100}%</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        value={filterOptions.difficulty_max || 100}
-                                        onChange={(e) => {
-                                            const value = parseInt(e.target.value);
-                                            setFilterOptions(prev => ({ ...prev, difficulty_max: value }));
-                                            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
-                                            filterTimeoutRef.current = setTimeout(() => {
-                                                applyFilter({ difficulty_max: value });
-                                            }, 300);
-                                        }}
-                                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Status filter - Instagram toggle style */}
-                        <div className="mb-8">
-                            <h3 className="text-white font-semibold text-lg mb-4">Holati</h3>
-                            <div className="space-y-3">
-                                <button
-                                    onClick={() => applyFilter({ worked: !filterOptions.worked })}
-                                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
-                                        filterOptions.worked
-                                            ? "bg-gradient-to-r from-green-500/20 to-emerald-600/20 border border-green-500/30"
-                                            : "bg-white/5 hover:bg-white/10 border border-white/10"
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2.5 rounded-xl ${
-                                            filterOptions.worked
-                                                ? "bg-gradient-to-r from-green-500 to-emerald-600"
-                                                : "bg-white/10"
-                                        }`}>
-                                            <Check className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="text-white font-medium">Ishlangan savollar</div>
-                                            <div className="text-gray-400 text-sm">Oldin ishlaganingiz</div>
-                                        </div>
-                                    </div>
-                                    <div className={`w-12 h-6 rounded-full transition-all duration-300 relative ${
-                                        filterOptions.worked ? 'bg-green-500' : 'bg-gray-600'
-                                    }`}>
-                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${
-                                            filterOptions.worked ? 'right-1' : 'left-1'
-                                        }`}></div>
-                                    </div>
-                                </button>
-
-                                <button
-                                    onClick={() => applyFilter({ unworked: !filterOptions.unworked })}
-                                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
-                                        filterOptions.unworked
-                                            ? "bg-gradient-to-r from-red-500/20 to-rose-600/20 border border-red-500/30"
-                                            : "bg-white/5 hover:bg-white/10 border border-white/10"
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2.5 rounded-xl ${
-                                            filterOptions.unworked
-                                                ? "bg-gradient-to-r from-red-500 to-rose-600"
-                                                : "bg-white/10"
-                                        }`}>
-                                            <X className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="text-white font-medium">Ishlanmagan savollar</div>
-                                            <div className="text-gray-400 text-sm">Hali ishlamaganingiz</div>
-                                        </div>
-                                    </div>
-                                    <div className={`w-12 h-6 rounded-full transition-all duration-300 relative ${
-                                        filterOptions.unworked ? 'bg-red-500' : 'bg-gray-600'
-                                    }`}>
-                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${
-                                            filterOptions.unworked ? 'right-1' : 'left-1'
-                                        }`}></div>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Apply button */}
                         <div className="mt-10">
                             <button
                                 onClick={() => setShowFilterModal(false)}
@@ -1523,23 +1296,20 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             <div className="fixed top-0 left-0 right-0 z-40 max-w-2xl mx-auto bg-gradient-to-b from-black/95 to-transparent backdrop-blur-lg border-b border-white/10">
                 <div className="container mx-auto px-4 md:py-3 py-1">
                     <div className="flex items-center justify-between">
-                        {/* Logo */}
-                        <div onClick={() => {navigate(`https://t.me/testabduz`)}} className="flex items-center gap-3 md:py-2 py-1 px-1 cursor-pointer md:h-auto" title={"Telegram Group"}>
+                        <div onClick={() => { navigate(`https://t.me/testabduz`) }} className="flex items-center gap-3 md:py-2 py-1 px-1 cursor-pointer md:h-auto" title={"Telegram Group"}>
                             <img src={Logo} alt="logo" className="w-10 h-10 md:w-14 md:h-14 rounded-sm" />
                             <div>
-                                <h1 className="text-white font-bold md:text-lg text-sm flex flex-row items-center">Telegram <img src={adsIcon} alt="ads" className={"flex w-12 h-10"}/></h1>
+                                <h1 className="text-white font-bold md:text-lg text-sm flex flex-row items-center">Telegram <img src={adsIcon} alt="ads" className={"flex w-12 h-10"} /></h1>
                                 <p className="text-gray-400 md:text-xs text-[11px]">TestAbd.uz rasmiy telegram kanali bu yerda siz TestAbd haqida to'liq bilib olasiz va uangiliklardan xabardor bo'lasiz.</p>
                             </div>
                         </div>
 
-                        {/* Filter and Actions */}
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setShowFilterModal(true)}
-                                className={`p-2.5 rounded-xl transition-all duration-200 ${
-                                    activeCategory !== "All" || searchQuery || filterOptions.worked || filterOptions.unworked
-                                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                                        : "bg-white/10 text-white hover:bg-white/20"
+                                className={`md:p-3 p-2 rounded-full transition-all duration-200 ${activeCategory !== "All" || searchQuery || filterOptions.worked || filterOptions.unworked
+                                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                                    : "bg-white/10 text-white hover:bg-white/20"
                                 }`}
                             >
                                 <Filter className="w-5 h-5" />
@@ -1554,7 +1324,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     // ==================== QUESTION CONTENT RENDER ====================
     const renderQuestionContent = (quiz: Quiz) => {
         const selectedAnswers = userInteractions.selectedAnswers.get(quiz.id) || [];
-        const answerState = userInteractions.answerStates.get(quiz.id);
         const hasSubmitted = userInteractions.submittedQuizzes.has(quiz.id);
         const isMultipleChoice = quiz.question_type === 'multiple';
         const isSubmitting = submittingQuestions.has(quiz.id);
@@ -1592,8 +1361,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 return (
                     <div
                         key={answer.id}
-                        className={`p-4 w-[85%] rounded-2xl border transition-all duration-300 cursor-pointer ${bgColor} ${borderColor} ${
-                            isShaking ? 'animate-shake' : ''
+                        className={`md:p-3 p-2 w-[85%] rounded-2xl border transition-all duration-300 cursor-pointer ${bgColor} ${borderColor} ${isShaking ? 'animate-shake' : ''
                         } ${!hasSubmitted ? 'hover:bg-white/10 active:scale-[0.98]' : ''}`}
                         onClick={() => {
                             if (!hasSubmitted && !isSubmitting) {
@@ -1606,29 +1374,26 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                         }}
                     >
                         <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
-                                isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white/10'
-                            } ${hasSubmitted && isCorrect ? 'bg-gradient-to-r from-green-500 to-emerald-600' : ''} ${
-                                hasSubmitted && isSelected && !isCorrect ? 'bg-gradient-to-r from-red-500 to-rose-600' : ''
+                            <div className={`md:w-12 md:h-12 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white/10'
+                            } ${hasSubmitted && isCorrect ? 'bg-gradient-to-r from-green-500 to-emerald-600' : ''} ${hasSubmitted && isSelected && !isCorrect ? 'bg-gradient-to-r from-red-500 to-rose-600' : ''
                             }`}>
                                 <span className="font-bold md:text-lg text-sm text-white">{letter}</span>
                             </div>
                             <div className="flex-1">
-                                <div className={textColor}>{answer.answer_text}</div>
+                                <div className={`${textColor} md:text-xl text-xs`}>{answer.answer_text}</div>
                             </div>
                             {hasSubmitted && isCorrect && (
-                                <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg">
-                                    <Check className="w-5 h-5 text-white" />
+                                <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full">
+                                    <Check className="md:w-5 md:h-5 w-2 h-2 text-white" />
                                 </div>
                             )}
                             {hasSubmitted && isSelected && !isCorrect && (
-                                <div className="p-2 bg-gradient-to-r from-red-500 to-rose-600 rounded-lg">
-                                    <X className="w-5 h-5 text-white" />
+                                <div className="p-2 bg-gradient-to-r from-red-500 to-rose-600 rounded-full">
+                                    <X className="md:w-5 md:h-5 w-2 h-2 text-white" />
                                 </div>
                             )}
                             {isMultipleChoice && !hasSubmitted && (
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                    isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600 border-transparent' : 'border-white/30'
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600 border-transparent' : 'border-white/30'
                                 }`}>
                                     {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
                                 </div>
@@ -1641,10 +1406,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
         const renderSubmitButton = () => {
             if (hasSubmitted) {
-                return (
-                    <div className="mt-6 space-y-4">
-                    </div>
-                );
+                return null;
             }
 
             if (isMultipleChoice) {
@@ -1673,10 +1435,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             const hasSelectedAnswer = selectedAnswers.length > 0;
             if (!hasSelectedAnswer) {
                 return (
-                    <div className="mt-6">
-                        <div className="w-full py-4 bg-gradient-to-r from-white/5 to-white/3 backdrop-blur-sm text-gray-400 rounded-2xl font-medium text-center border border-white/10 shadow-lg">
-                            Javob tanlang
-                        </div>
+                    <div>
                     </div>
                 );
             }
@@ -1738,21 +1497,10 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         );
     };
 
-    // ==================== BOTTOM NAVIGATION ====================
-    const renderBottomNavigation = () => {
-        return (
-            <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-lg border-t border-white/10 z-40">
-            </div>
-        );
-    };
-
     // ==================== BACKGROUND IMAGE FUNCTION ====================
     const getBackgroundImageUrl = useCallback(() => {
-        // W-2xl = 42rem = 672px (Tailwind'da w-2xl max-width: 42rem)
-        // Height = 90vh
         const width = 672;
         const height = Math.floor(window.innerHeight * 0.9);
-
         return `https://picsum.photos/seed/${bgSeed}/${width}/${height}`;
     }, [bgSeed]);
 
@@ -1764,7 +1512,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 <div className="h-[90vh] mt-16 overflow-y-auto">
                     <QuizSkeletonLoader />
                 </div>
-                {renderBottomNavigation()}
             </div>
         );
     }
@@ -1780,7 +1527,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                         <p className="text-gray-400 mt-2">Savollar tayyorlanmoqda</p>
                     </div>
                 </div>
-                {renderBottomNavigation()}
             </div>
         );
     }
@@ -1803,7 +1549,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                         </button>
                     </div>
                 </div>
-                {renderBottomNavigation()}
             </div>
         );
     }
@@ -1818,30 +1563,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 
                 .scrollbar-hide::-webkit-scrollbar {
                     display: none;
-                }
-                
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-20px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                
-                .animate-fade-in {
-                    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-                }
-                
-                @keyframes slide-up {
-                    from { 
-                        opacity: 0; 
-                        transform: translateY(20px); 
-                    }
-                    to { 
-                        opacity: 1; 
-                        transform: translateY(0); 
-                    }
-                }
-                
-                .animate-slide-up {
-                    animation: slide-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
                 }
                 
                 .slider-thumb::-webkit-slider-thumb {
@@ -1966,19 +1687,17 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 }}
             />
 
-            {/* Main content with 90vh height and scroll - Instagram style */}
+            {/* Main content with ULTRA SENSITIVE infinite scroll */}
             <div
                 ref={containerRef}
                 className="h-[90vh] mt-16 overflow-y-auto scrollbar-hide instagram-scroll-container relative z-10"
             >
                 <div className="container mt-14 mx-auto max-w-2xl pb-24">
-                    {quizData.map((quiz, idx) => {
+                    {quizData.map((quiz) => {
                         const userReaction = userInteractions.reactions.get(quiz.id);
                         const finalViewCount = getFinalViewCount(quiz.id);
-                        const uniqueViewCount = getQuizUniqueViews(quiz.id);
                         const correctCount = getCorrectCount(quiz.id);
                         const wrongCount = getWrongCount(quiz.id);
-                        const totalReactions = quiz.reactions_summary?.total || 0;
 
                         return (
                             <div
@@ -1989,11 +1708,9 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                     marginBottom: '24px'
                                 }}
                             >
-                                {/* Post header - Instagram style */}
-                                <div className="flex flex-col justify-center my-auto h-full mt-28">
-                                    {/* Question content */}
-                                    <div className="px-4 my-auto h-auto absoute top-52">
-                                        <div className="text-white font-medium mb-3 md:text-2xl text-lg bg-black/50 backdrop-blur-sm p-4 rounded-2xl">
+                                <div className="flex flex-col justify-center my-auto h-full md:mt-36 mt-20">
+                                    <div className="px-4 my-auto h-auto absoute top-50">
+                                        <div className="text-white font-medium mb-3 md:text-2xl text-md bg-black/50 backdrop-blur-sm p-4 rounded-2xl">
                                             {quiz.question_text}
                                         </div>
 
@@ -2019,7 +1736,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                             </div>
                                         )}
 
-                                        {/* Category and difficulty badges */}
                                         <div className="flex flex-wrap gap-2 mb-4">
                                             {quiz.has_worked && (
                                                 <span className="px-3 py-1.5 bg-green-500/20 text-green-300 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
@@ -2032,39 +1748,37 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                                 </span>
                                             )}
                                             {quiz.category && (
-                                                <span className="px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-full text-xs backdrop-blur-sm">
+                                                <span className="md:px-3 px-2 md:py-1.5 py-1 bg-purple-500/20 text-purple-300 rounded-full md:text-xs text-[11px] backdrop-blur-sm">
                                                     {quiz.category.title}
                                                 </span>
                                             )}
                                         </div>
 
-                                        {/* Answers */}
                                         <div className="space-y-3 mb-4">
                                             {renderQuestionContent(quiz)}
                                         </div>
                                     </div>
 
-                                    {/* Stats and actions - Instagram style */}
-                                    <div className="px-4 py-4 fixed bottom-52 right-0 flex-col flex w-auto border border-gray-800/50" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)", borderTopLeftRadius: "30px", borderBottomLeftRadius: "30px", backdropFilter: 'blur(10px)' }}>
+                                    <div className="md:px-4 px-1 md:py-4 py-2 fixed bottom-52 right-0 flex-col flex w-auto border border-gray-800/50" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)", borderTopLeftRadius: "30px", borderBottomLeftRadius: "30px", backdropFilter: 'blur(10px)' }}>
                                         <div className="flex items-center flex-col justify-between mb-3 gap-2">
                                             <div className="flex items-center gap-4 flex-col">
                                                 <div className="text-center flex flex-col items-center gap-1">
-                                                    <div className="bg-green-600/80 backdrop-blur-sm md:w-10 md:h-10 w-7 h-7 p-2 rounded-full">
-                                                        <Check size={20} className={"text-white font-semibold"}/>
+                                                    <div className="bg-green-600/80 backdrop-blur-sm md:w-10 md:h-10 w-6 h-6 p-1.5 rounded-full flex items-center justify-center">
+                                                        <Check size={20} className={"text-white font-semibold"} />
                                                     </div>
-                                                    <div className="text-green-400 font-bold">{correctCount}</div>
+                                                    <div className="text-green-400 font-bold md:text-md text-xs">{correctCount}</div>
                                                 </div>
                                                 <div className="text-center flex flex-col items-center gap-1">
-                                                    <div className="bg-red-600/80 backdrop-blur-sm md:w-10 md:h-10 w-7 h-7 p-2 rounded-full">
-                                                        <X size={20} className={"text-white font-semibold"}/>
+                                                    <div className="bg-red-600/80 backdrop-blur-sm md:w-10 md:h-10 w-6 h-6 p-1.5 rounded-full flex items-center justify-center">
+                                                        <X size={20} className={"text-white font-semibold"} />
                                                     </div>
-                                                    <div className="text-red-400 font-bold">{wrongCount}</div>
+                                                    <div className="text-red-400 font-bold md:text-md text-xs">{wrongCount}</div>
                                                 </div>
                                                 <div className="text-center flex flex-col items-center gap-1">
-                                                    <div className="bg-blue-600/80 backdrop-blur-sm md:w-10 md:h-10 w-7 h-7 p-2 rounded-full">
-                                                        <Eye size={20} className={"text-white font-semibold"}/>
+                                                    <div className="bg-blue-600/80 backdrop-blur-sm md:w-10 md:h-10 w-6 h-6 p-1.5 rounded-full flex items-center justify-center">
+                                                        <Eye size={20} className={"text-white font-semibold"} />
                                                     </div>
-                                                    <div className="text-blue-400 font-bold">{finalViewCount}</div>
+                                                    <div className="text-blue-400 font-bold md:text-md text-xs">{finalViewCount}</div>
                                                 </div>
                                             </div>
 
@@ -2100,7 +1814,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                         </div>
                                     </div>
 
-                                    <div className="p-4 fixed bottom-4 w-full max-w-2xl">
+                                    <div className="p-4 fixed bottom-14 w-full max-w-2xl">
                                         <div className="flex items-center justify-between backdrop-blur-lg bg-black/50 rounded-2xl p-3 border border-white/10">
                                             <div
                                                 className="flex items-center gap-5 cursor-pointer hover:opacity-80 transition-opacity w-full justify-between"
@@ -2112,7 +1826,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                                         className="w-10 h-10 rounded-full border-2 border-white/30"
                                                     />
                                                     <div>
-                                                        <div className="text-white font-semibold hover:text-blue-400 transition-colors">
+                                                        <div className="text-white font-semibold md:text-md text-sm hover:text-blue-400 transition-colors">
                                                             @{quiz.user.username}
                                                         </div>
                                                         <div className="text-gray-400 text-xs">{quiz.test_title}</div>
@@ -2120,22 +1834,19 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                                 </div>
                                                 <button
                                                     onClick={() => handleFollowToggle(quiz.id)}
-                                                    className="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 active:scale-95 backdrop-blur-sm"
+                                                    className="px-4 py-1.5 md:text-sm text-xs font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 active:scale-95 backdrop-blur-sm"
                                                 >
                                                     {quiz.user.is_following ? 'Following' : 'Follow'}
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Reaction Stats */}
-                                    {showReactionStats === quiz.id && renderReactionStats(quiz.id)}
                                 </div>
                             </div>
                         );
                     })}
 
-                    {/* Loading indicator - Instagram style */}
+                    {/* Loading indicator */}
                     {loadingMore && (
                         <div className="py-8 flex justify-center backdrop-blur-sm bg-black/30 rounded-2xl mb-4">
                             <div className="flex items-center gap-3">
@@ -2159,8 +1870,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                     )}
                 </div>
             </div>
-
-            {renderBottomNavigation()}
         </div>
     );
 };

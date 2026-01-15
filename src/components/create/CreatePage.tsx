@@ -67,7 +67,7 @@ function CreateNewBlock(props: {
                                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                 >
                                     <ArrowLeft className="w-5 h-5 text-theme-secondary hover:text-gray-900"
-                                               onClick={() => navigate("/create")}/>
+                                               onClick={() => navigate("/profile")}/>
                                 </button>
                                 <div>
                                     <h1 className="text-2xl font-bold text-gray-200">Yangi blok yaratish</h1>
