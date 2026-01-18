@@ -9,7 +9,6 @@ import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import AdminPanel from './components/admin/AdminPanel';
-import TestCreator from './components/create/TestCreator';
 import TestsPage from './components/TestPage';
 import QuestionCreator from './components/create/QuestionCreator';
 import RealTimeQuizPage from './pages/RealTimeQuizPage';
