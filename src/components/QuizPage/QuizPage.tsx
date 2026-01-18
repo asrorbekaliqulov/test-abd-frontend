@@ -102,8 +102,8 @@ const REACTION_CHOICES = [
 ] as const;
 
 const INFINITE_SCROLL_PAGE_SIZE = 10;
-const LOAD_DEBOUNCE = 50; // 50ms debounce (oldingidan tezroq)
-const LOAD_THROTTLE = 300; // 300ms throttle (oldingidan tezroq)
+const SCROLL_THRESHOLD = 100;
+const DEBOUNCE_DELAY = 300;
 
 const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) => {
     const navigate = useNavigate();
@@ -163,8 +163,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
     const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Infinite scroll refs
@@ -173,15 +172,13 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     const initialLoadRef = useRef(false);
     const pageRef = useRef(1);
     const hasMoreRef = useRef(true);
-    const lastScrollYRef = useRef(0);
     const lastLoadTimeRef = useRef(0);
-    const scrollDirectionRef = useRef<'up' | 'down'>('down');
-    const scrollCountRef = useRef(0);
-    const loadAttemptsRef = useRef(0);
-    const scrollPositionHistoryRef = useRef<number[]>([]);
-    const scrollEventCountRef = useRef(0);
-    const scrollVelocityRef = useRef(0);
-    const lastScrollTimeRef = useRef(0);
+    
+    // Scroll uchun state'lar
+    const currentQuizIndexRef = useRef(0);
+    const isScrollingRef = useRef(false);
+    const lastScrollYRef = useRef(0);
+    const touchStartYRef = useRef(0);
 
     const [bgSeed, setBgSeed] = useState<number>(Date.now());
 
@@ -249,7 +246,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         }
     }, [recordQuizView, fetchQuizStats]);
 
-    // ==================== LOAD RANDOM QUIZZES ====================
+    // ==================== LOAD RANDOM QUIZZES (quiz/random) ====================
     const loadRandomQuizzes = useCallback(async (
         isInitialLoad: boolean = false,
         resetData: boolean = false
@@ -257,14 +254,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         if (isLoadingRef.current) return;
 
         const now = Date.now();
-        if (now - lastLoadTimeRef.current < LOAD_THROTTLE) {
+        if (now - lastLoadTimeRef.current < 1000) {
             return;
         }
 
         if (isInitialLoad || resetData) {
             pageRef.current = 1;
             hasMoreRef.current = true;
-            loadAttemptsRef.current = 0;
+            currentQuizIndexRef.current = 0;
         }
 
         if (!hasMoreRef.current && !isInitialLoad && !resetData) {
@@ -290,6 +287,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         }
 
         try {
+            // FAQQAT quiz/random API dan yuklaymiz
             const result = await quizAPI.fetchRandomQuizzes({
                 page: pageRef.current,
                 page_size: INFINITE_SCROLL_PAGE_SIZE,
@@ -354,8 +352,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
                 await Promise.all(viewPromises);
 
-                loadAttemptsRef.current++;
-
             } else {
                 hasMoreRef.current = false;
                 setHasMore(false);
@@ -376,22 +372,23 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         }
     }, [navigate, recordView]);
 
-    // ==================== LOAD FILTERED QUIZZES ====================
+    // ==================== LOAD FILTERED QUIZZES (quiz/qs/category=?) ====================
     const loadFilteredQuizzes = useCallback(async (
+        categoryId: number,
         isInitialLoad: boolean = false,
         resetData: boolean = false
     ) => {
         if (isLoadingRef.current) return;
 
         const now = Date.now();
-        if (now - lastLoadTimeRef.current < LOAD_THROTTLE) {
+        if (now - lastLoadTimeRef.current < 1000) {
             return;
         }
 
         if (isInitialLoad || resetData) {
             pageRef.current = 1;
             hasMoreRef.current = true;
-            loadAttemptsRef.current = 0;
+            currentQuizIndexRef.current = 0;
         }
 
         if (!hasMoreRef.current && !isInitialLoad && !resetData) {
@@ -417,21 +414,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         }
 
         try {
-            const categoryId = filterOptions.category !== "All" ? filterOptions.category : undefined;
-
-            let result;
-
-            if (categoryId) {
-                result = await quizAPI.fetchQuizzesByCategory(categoryId, {
-                    page: pageRef.current,
-                    page_size: INFINITE_SCROLL_PAGE_SIZE,
-                });
-            } else {
-                result = await quizAPI.fetchRandomQuizzes({
-                    page: pageRef.current,
-                    page_size: INFINITE_SCROLL_PAGE_SIZE,
-                });
-            }
+            // FAQQAT quiz/qs/category=? API dan yuklaymiz
+            const result = await quizAPI.fetchQuizzesByCategory(categoryId, {
+                page: pageRef.current,
+                page_size: INFINITE_SCROLL_PAGE_SIZE,
+            });
 
             if (result.success && result.data) {
                 let newQuizzes: Quiz[] = [];
@@ -491,15 +478,13 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
                 await Promise.all(viewPromises);
 
-                loadAttemptsRef.current++;
-
             } else {
                 hasMoreRef.current = false;
                 setHasMore(false);
             }
 
         } catch (err: any) {
-            console.error("❌ Load quizzes error:", err);
+            console.error("❌ Load filtered quizzes error:", err);
             hasMoreRef.current = false;
             setHasMore(false);
         } finally {
@@ -511,213 +496,195 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 setLoadingMore(false);
             }
         }
-    }, [navigate, recordView, filterOptions.category]);
+    }, [navigate, recordView]);
 
     // ==================== MAIN LOAD FUNCTION ====================
     const loadQuizzes = useCallback(async (
         isInitialLoad: boolean = false,
         resetData: boolean = false
     ) => {
-        const isRandomMode = filterOptions.category === "All" || !filterOptions.category;
+        const isRandomMode = activeCategory === "All";
 
         if (isRandomMode) {
             await loadRandomQuizzes(isInitialLoad, resetData);
         } else {
-            await loadFilteredQuizzes(isInitialLoad, resetData);
+            await loadFilteredQuizzes(activeCategory as number, isInitialLoad, resetData);
         }
-    }, [loadRandomQuizzes, loadFilteredQuizzes, filterOptions.category]);
+    }, [loadRandomQuizzes, loadFilteredQuizzes, activeCategory]);
 
-    // ==================== JUIDA SEZGIR SCROLL HANDLER ====================
+    // ==================== INSTAGRAM-STYLE INFINITE SCROLL ====================
     const handleScroll = useCallback(() => {
-        if (!containerRef.current || isLoadingRef.current || !hasMoreRef.current) {
-            return;
-        }
+        if (!containerRef.current || isScrollingRef.current) return;
 
         const container = containerRef.current;
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const currentScrollY = scrollTop;
-        const currentTime = Date.now();
+        const currentScrollY = container.scrollTop;
+        const scrollDelta = currentScrollY - lastScrollYRef.current;
 
-        // Scroll velocity ni hisoblash
-        const deltaY = currentScrollY - lastScrollYRef.current;
-        const deltaTime = currentTime - lastScrollTimeRef.current;
-
-        if (deltaTime > 0) {
-            scrollVelocityRef.current = Math.abs(deltaY / deltaTime);
+        // Pastga scroll qilish (positive delta)
+        if (scrollDelta > SCROLL_THRESHOLD) {
+            // Keyingi quizga o'tish
+            moveToNextQuiz();
+        }
+        // Yuqoriga scroll qilish (negative delta)
+        else if (scrollDelta < -SCROLL_THRESHOLD) {
+            // Oldingi quizga o'tish
+            moveToPrevQuiz();
         }
 
-        // Scroll yo'nalishi
-        scrollDirectionRef.current = currentScrollY > lastScrollYRef.current ? 'down' : 'up';
         lastScrollYRef.current = currentScrollY;
-        lastScrollTimeRef.current = currentTime;
 
-        // Faqat pastga scroll qilganda load qilish
-        if (scrollDirectionRef.current !== 'down') {
-            return;
+        // Agar oxirgi quizga yetib borgan bo'lsa, yangi quizlar yuklash
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        const scrollBottom = scrollHeight - (currentScrollY + clientHeight);
+
+        // 8-raqamli quizga yetganda yangi 10ta yuklash (faqat random mode uchun)
+        if (activeCategory === "All" && 
+            currentQuizIndexRef.current >= quizData.length - 2 && 
+            !isLoadingRef.current && 
+            hasMoreRef.current) {
+            loadMoreQuizzes();
         }
-
-        // Calculate scroll position
-        const scrollPosition = scrollTop + clientHeight;
-        const totalHeight = scrollHeight;
-        const distanceFromBottom = totalHeight - scrollPosition;
-
-        // JUIDA SEZGIR: Scroll tezligiga qarab dynamic threshold
-        let dynamicThreshold: number;
-
-        if (scrollVelocityRef.current > 5) { // Juda tez scroll
-            dynamicThreshold = clientHeight * 2; // 2x viewport oldindan load qilish
-        } else if (scrollVelocityRef.current > 2) { // Tez scroll
-            dynamicThreshold = clientHeight * 1.5; // 1.5x viewport oldindan
-        } else { // Sekin scroll
-            dynamicThreshold = clientHeight * 0.8; // 0.8x viewport oldindan
+        // Filter mode uchun ham oxirgi 2tasida yuklash
+        else if (activeCategory !== "All" && 
+                 currentQuizIndexRef.current >= quizData.length - 2 && 
+                 !isLoadingRef.current && 
+                 hasMoreRef.current) {
+            loadMoreQuizzes();
         }
+    }, [quizData.length, activeCategory]);
 
-        // JUIDA SEZGIR: Scroll history orqali trendni aniqlash
-        scrollPositionHistoryRef.current.push(scrollTop);
-        if (scrollPositionHistoryRef.current.length > 10) {
-            scrollPositionHistoryRef.current.shift();
-        }
+    const moveToNextQuiz = useCallback(() => {
+        if (isScrollingRef.current || !containerRef.current) return;
 
-        // Scroll intensivligini hisoblash
-        scrollEventCountRef.current++;
+        isScrollingRef.current = true;
+        currentQuizIndexRef.current = Math.min(
+            currentQuizIndexRef.current + 1,
+            quizData.length - 1
+        );
 
-        // JUIDA SEZGIR: Qachon load qilish kerakligini aniqlash
-        const shouldLoad = distanceFromBottom <= dynamicThreshold;
+        scrollToQuiz(currentQuizIndexRef.current);
 
-        if (shouldLoad) {
-            scrollCountRef.current++;
+        setTimeout(() => {
+            isScrollingRef.current = false;
+        }, DEBOUNCE_DELAY);
+    }, [quizData.length]);
 
-            // Clear any existing timeout
-            if (loadTimeoutRef.current) {
-                clearTimeout(loadTimeoutRef.current);
-            }
+    const moveToPrevQuiz = useCallback(() => {
+        if (isScrollingRef.current || !containerRef.current) return;
 
-            // JUIDA SEZGIR: Scroll tezligiga qarab debounce vaqti
-            let debounceTime = LOAD_DEBOUNCE;
-            if (scrollVelocityRef.current > 5) {
-                debounceTime = 10; // Juda tez scroll qilganda 10ms
-            } else if (scrollVelocityRef.current > 2) {
-                debounceTime = 30; // Tez scroll qilganda 30ms
-            }
+        isScrollingRef.current = true;
+        currentQuizIndexRef.current = Math.max(currentQuizIndexRef.current - 1, 0);
+        scrollToQuiz(currentQuizIndexRef.current);
 
-            loadTimeoutRef.current = setTimeout(() => {
-                if (!isLoadingRef.current && hasMoreRef.current) {
-                    loadQuizzes(false, false);
-                }
-            }, debounceTime);
-        }
-
-    }, [loadQuizzes]);
-
-    // ==================== TOUCH HANDLERS ====================
-    const handleTouchStart = useCallback((e: React.TouchEvent) => {
-        scrollVelocityRef.current = 0;
-        scrollEventCountRef.current = 0;
+        setTimeout(() => {
+            isScrollingRef.current = false;
+        }, DEBOUNCE_DELAY);
     }, []);
 
-    const handleTouchMove = useCallback((e: React.TouchEvent) => {
-        // Touch harakatini sezgir qilish
-        if (!containerRef.current || isLoadingRef.current || !hasMoreRef.current) {
-            return;
+    const scrollToQuiz = useCallback((index: number) => {
+        if (!containerRef.current) return;
+
+        const quizHeight = window.innerHeight * 0.9; // 90vh
+        const targetScroll = index * quizHeight;
+
+        containerRef.current.scrollTo({
+            top: targetScroll,
+            behavior: 'smooth'
+        });
+    }, []);
+
+    const loadMoreQuizzes = useCallback(() => {
+        if (isLoadingRef.current || !hasMoreRef.current) return;
+
+        if (loadTimeoutRef.current) {
+            clearTimeout(loadTimeoutRef.current);
         }
 
-        const container = containerRef.current;
-        const { scrollTop, scrollHeight, clientHeight } = container;
-
-        // Calculate scroll position
-        const scrollPosition = scrollTop + clientHeight;
-        const totalHeight = scrollHeight;
-        const distanceFromBottom = totalHeight - scrollPosition;
-
-        // JUIDA SEZGIR TOUCH: Touch harakatida ham load qilish
-        const touchThreshold = clientHeight * 0.5; // 0.5x viewport oldindan
-
-        if (distanceFromBottom <= touchThreshold) {
-            if (loadTimeoutRef.current) {
-                clearTimeout(loadTimeoutRef.current);
-            }
-
-            loadTimeoutRef.current = setTimeout(() => {
-                if (!isLoadingRef.current && hasMoreRef.current) {
-                    loadQuizzes(false, false);
-                }
-            }, 100);
-        }
+        loadTimeoutRef.current = setTimeout(() => {
+            loadQuizzes(false, false);
+        }, 500);
     }, [loadQuizzes]);
 
-    // ==================== ULTRA SEZGIR SCROLL EVENT LISTENER ====================
+    // ==================== TOUCH HANDLERS FOR MOBILE ====================
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        if (!containerRef.current) return;
+        touchStartYRef.current = e.touches[0].clientY;
+    }, []);
+
+    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+        if (!containerRef.current || isScrollingRef.current) return;
+        
+        const touchEndY = e.changedTouches[0].clientY;
+        const deltaY = touchStartYRef.current - touchEndY;
+        
+        if (Math.abs(deltaY) < 50) return; // Minimal swipe uchun
+        
+        isScrollingRef.current = true;
+
+        if (deltaY > 0) {
+            // Pastga swipe (keyingi quiz)
+            moveToNextQuiz();
+        } else {
+            // Yuqoriga swipe (oldingi quiz)
+            moveToPrevQuiz();
+        }
+
+        setTimeout(() => {
+            isScrollingRef.current = false;
+        }, DEBOUNCE_DELAY);
+    }, [moveToNextQuiz, moveToPrevQuiz]);
+
+    // ==================== SETUP SCROLL LISTENER ====================
     const setupScrollListener = useCallback(() => {
         const container = containerRef.current;
-        if (!container) return () => {};
-
-        let rafId: number;
-        let lastScrollTime = 0;
-        const SCROLL_UPDATE_INTERVAL = 16; // ~60fps
+        if (!container) return () => { };
 
         const handleScrollEvent = () => {
-            const now = Date.now();
-
-            // High frequency updates
-            if (now - lastScrollTime >= SCROLL_UPDATE_INTERVAL) {
-                if (rafId) {
-                    cancelAnimationFrame(rafId);
-                }
-
-                rafId = requestAnimationFrame(() => {
-                    handleScroll();
-                    lastScrollTime = now;
-                });
+            if (scrollDebounceRef.current) {
+                clearTimeout(scrollDebounceRef.current);
             }
+
+            scrollDebounceRef.current = setTimeout(() => {
+                handleScroll();
+            }, 50);
         };
 
-        // Passiv scroll listener bilan juda tez ishlaydi
         container.addEventListener('scroll', handleScrollEvent, { passive: true });
-        container.addEventListener('touchstart', handleTouchStart as any, { passive: true });
-        container.addEventListener('touchmove', handleTouchMove as any, { passive: true });
-
+        
         return () => {
             container.removeEventListener('scroll', handleScrollEvent);
-            container.removeEventListener('touchstart', handleTouchStart as any);
-            container.removeEventListener('touchmove', handleTouchMove as any);
-            if (rafId) {
-                cancelAnimationFrame(rafId);
+            if (scrollDebounceRef.current) {
+                clearTimeout(scrollDebounceRef.current);
             }
             if (loadTimeoutRef.current) {
                 clearTimeout(loadTimeoutRef.current);
             }
         };
-    }, [handleScroll, handleTouchStart, handleTouchMove]);
+    }, [handleScroll]);
 
     // ==================== FILTER FUNCTIONS ====================
-    const applyFilter = useCallback(async (newFilters: Partial<FilterOptions>) => {
-        const updatedFilters = {
-            ...filterOptions,
-            ...newFilters,
-            page_size: INFINITE_SCROLL_PAGE_SIZE
-        };
-
-        setFilterOptions(updatedFilters);
+    const applyFilter = useCallback(async (categoryId: number | "All") => {
+        setActiveCategory(categoryId);
         setApplyingFilter(true);
-
-        if (newFilters.category !== undefined) {
-            setActiveCategory(newFilters.category);
-        }
 
         // Reset states
         viewedQuizzesRef.current.clear();
         setQuizStats(new Map());
         isLoadingRef.current = false;
+        currentQuizIndexRef.current = 0;
+        lastScrollYRef.current = 0;
         setShowFilterModal(false);
         setBgSeed(Date.now());
 
-        // Reset scroll metrics
-        scrollVelocityRef.current = 0;
-        scrollEventCountRef.current = 0;
-        scrollPositionHistoryRef.current = [];
-        loadAttemptsRef.current = 0;
-
         try {
-            await loadQuizzes(true, true);
+            if (categoryId === "All") {
+                // Random mode - quiz/random API dan yuklash
+                await loadRandomQuizzes(true, true);
+            } else {
+                // Filter mode - quiz/qs/category=? API dan yuklash
+                await loadFilteredQuizzes(categoryId, true, true);
+            }
         } catch (error) {
             console.error("❌ Error applying filter:", error);
         } finally {
@@ -728,14 +695,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         if (containerRef.current) {
             containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
-    }, [filterOptions, loadQuizzes]);
+    }, [loadRandomQuizzes, loadFilteredQuizzes]);
 
     const handleCategorySelect = useCallback((categoryId: number | "All") => {
         if (activeCategory === categoryId) return;
-        setActiveCategory(categoryId);
-        applyFilter({
-            category: categoryId,
-        });
+        applyFilter(categoryId);
     }, [activeCategory, applyFilter]);
 
     const handleSearch = useCallback((query: string) => {
@@ -749,12 +713,6 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     }, []);
 
     const resetFilters = useCallback(async () => {
-        const defaultFilters: FilterOptions = {
-            category: "All",
-            page_size: INFINITE_SCROLL_PAGE_SIZE
-        };
-
-        setFilterOptions(defaultFilters);
         setActiveCategory("All");
         setSearchQuery("");
         setBgSeed(Date.now());
@@ -764,15 +722,11 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         hasMoreRef.current = true;
         viewedQuizzesRef.current.clear();
         isLoadingRef.current = false;
-        loadAttemptsRef.current = 0;
+        currentQuizIndexRef.current = 0;
+        lastScrollYRef.current = 0;
 
-        // Reset scroll metrics
-        scrollVelocityRef.current = 0;
-        scrollEventCountRef.current = 0;
-        scrollPositionHistoryRef.current = [];
-
-        await loadQuizzes(true, true);
-    }, [loadQuizzes]);
+        await loadRandomQuizzes(true, true);
+    }, [loadRandomQuizzes]);
 
     // ==================== ANSWER SELECTION FUNCTIONS ====================
     const selectAnswer = async (quizId: number, answerId: number) => {
@@ -1139,7 +1093,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
         }
     };
 
-    // ==================== REACTION MENU ====================
+    // ==================== REACTION MENU (MARKAZGA) ====================
     const renderReactionsMenu = (quizId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
         if (!quiz) return null;
@@ -1148,98 +1102,114 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
         return (
             <div
-                className="absolute bottom-full right-0 mb-3 p-4 bg-gradient-to-b from-gray-900 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl z-50"
-                onClick={(e) => e.stopPropagation()}
+                className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setShowReactions(null);
+                }}
             >
-                <div className="flex gap-3">
-                    {REACTION_CHOICES.map((reaction) => {
-                        const isActive = currentReaction === reaction.id;
-                        const reactionCount = quiz.reactions_summary?.[reaction.id as keyof typeof quiz.reactions_summary] || 0;
+                <div
+                    className="pointer-events-auto p-4 bg-gradient-to-b from-gray-900 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl transform -translate-y-16"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex gap-3">
+                        {REACTION_CHOICES.map((reaction) => {
+                            const isActive = currentReaction === reaction.id;
+                            const reactionCount = quiz.reactions_summary?.[reaction.id as keyof typeof quiz.reactions_summary] || 0;
 
-                        return (
-                            <button
-                                key={reaction.id}
-                                onClick={() => handleReaction(quizId, reaction.id)}
-                                disabled={isReacting.has(quizId)}
-                                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all duration-300 relative group
-                                    ${isActive ? 'scale-110 ring-2 ring-white/30' : 'hover:scale-105'}
-                                    ${isReacting.has(quizId) ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-                                    ${reaction.bgColor}
-                                `}
-                            >
-                                <span className="text-2xl">{reaction.emoji}</span>
-                                {reactionCount > 0 && (
-                                    <span className="absolute -top-2 -right-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
-                                        {reactionCount}
-                                    </span>
-                                )}
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black/90 rounded-lg text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                    {reaction.label}
-                                </div>
-                            </button>
-                        );
-                    })}
+                            return (
+                                <button
+                                    key={reaction.id}
+                                    onClick={() => handleReaction(quizId, reaction.id)}
+                                    disabled={isReacting.has(quizId)}
+                                    className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center transition-all duration-300 relative group
+                                        ${isActive ? 'scale-110 ring-2 ring-white/30' : 'hover:scale-105'}
+                                        ${isReacting.has(quizId) ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
+                                        ${reaction.bgColor}
+                                    `}
+                                >
+                                    <span className="text-2xl">{reaction.emoji}</span>
+                                    {reactionCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
+                                            {reactionCount}
+                                        </span>
+                                    )}
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black/90 rounded-lg text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                                        {reaction.label}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         );
     };
 
-    // ==================== DROPDOWN MENU ====================
+    // ==================== DROPDOWN MENU (MARKAZGA) ====================
     const renderDropdownMenu = (quizId: number) => {
         const quiz = quizData.find(q => q.id === quizId);
         if (!quiz) return null;
 
         return (
             <div
-                className="absolute bottom-full right-0 mb-3 p-4 bg-gradient-to-b from-gray-900 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl z-50 min-w-[240px]"
-                onClick={(e) => e.stopPropagation()}
+                className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDropdown(null);
+                }}
             >
-                <div className="space-y-2">
-                    <button
-                        onClick={() => {
-                            navigator.clipboard.writeText(window.location.href);
-                            alert("Link nusxalandi!");
-                            setShowDropdown(null);
-                        }}
-                        className="w-full px-4 py-3 text-left text-white hover:bg-white/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95"
-                    >
-                        <div className="p-2 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-lg group-hover:from-blue-500/30 group-hover:to-blue-600/30 transition-all duration-200">
-                            <Share size={18} className="text-blue-400" />
-                        </div>
-                        <span>Ulashish</span>
-                    </button>
+                <div
+                    className="pointer-events-auto p-4 bg-gradient-to-b from-gray-900 to-black/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl min-w-[200px] transform -translate-y-12 md:translate-x-[72%] translate-x-[12%]"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="space-y-2">
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(window.location.href);
+                                alert("Link nusxalandi!");
+                                setShowDropdown(null);
+                            }}
+                            className="w-full px-4 py-3 text-left text-white hover:bg-white/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95"
+                        >
+                            <div className="p-2 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-lg group-hover:from-blue-500/30 group-hover:to-blue-600/30 transition-all duration-200">
+                                <Share size={18} className="text-blue-400" />
+                            </div>
+                            <span>Ulashish</span>
+                        </button>
 
-                    <button
-                        onClick={() => handleBookmarkToggle(quizId)}
-                        disabled={bookmarking.has(quizId)}
-                        className={`w-full px-4 py-3 text-left text-white hover:bg-white/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95 ${bookmarking.has(quizId) ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                    >
-                        <div className={`p-2 rounded-lg transition-all duration-200 ${quiz.is_bookmarked
-                            ? 'bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 group-hover:from-yellow-500/30 group-hover:to-yellow-600/30'
-                            : 'bg-gradient-to-br from-gray-500/20 to-gray-600/20 group-hover:from-gray-500/30 group-hover:to-gray-600/20'
-                        }`}>
-                            {bookmarking.has(quizId) ? (
-                                <Loader2 size={18} className="animate-spin text-gray-400" />
-                            ) : (
-                                <Bookmark size={18} className={quiz.is_bookmarked ? "text-yellow-400" : "text-gray-400"} />
-                            )}
-                        </div>
-                        <span>{quiz.is_bookmarked ? "Bookmarkdan o'chirish" : "Bookmark qilish"}</span>
-                    </button>
+                        <button
+                            onClick={() => handleBookmarkToggle(quizId)}
+                            disabled={bookmarking.has(quizId)}
+                            className={`w-full px-4 py-3 text-left text-white hover:bg-white/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95 ${bookmarking.has(quizId) ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                        >
+                            <div className={`p-2 rounded-lg transition-all duration-200 ${quiz.is_bookmarked
+                                ? 'bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 group-hover:from-yellow-500/30 group-hover:to-yellow-600/30'
+                                : 'bg-gradient-to-br from-gray-500/20 to-gray-600/20 group-hover:from-gray-500/30 group-hover:to-gray-600/20'
+                                }`}>
+                                {bookmarking.has(quizId) ? (
+                                    <Loader2 size={18} className="animate-spin text-gray-400" />
+                                ) : (
+                                    <Bookmark size={18} className={quiz.is_bookmarked ? "text-yellow-400" : "text-gray-400"} />
+                                )}
+                            </div>
+                            <span>{quiz.is_bookmarked ? "Bookmarkdan o'chirish" : "Bookmark qilish"}</span>
+                        </button>
 
-                    <button
-                        onClick={() => {
-                            alert("Shikoyat yuborildi!");
-                            setShowDropdown(null);
-                        }}
-                        className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95"
-                    >
-                        <div className="p-2 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-lg group-hover:from-red-500/30 group-hover:to-red-600/30 transition-all duration-200">
-                            <X size={18} />
-                        </div>
-                        <span>Shikoyat qilish</span>
-                    </button>
+                        <button
+                            onClick={() => {
+                                alert("Shikoyat yuborildi!");
+                                setShowDropdown(null);
+                            }}
+                            className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 flex items-center gap-3 group active:scale-95"
+                        >
+                            <div className="p-2 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-lg group-hover:from-red-500/30 group-hover:to-red-600/30 transition-all duration-200">
+                                <X size={18} />
+                            </div>
+                            <span>Shikoyat qilish</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -1295,6 +1265,48 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
         return 0;
     }, [quizData, quizStats]);
+
+    // ==================== USER PROFILE SECTION (PASTGA) ====================
+    const renderUserProfileSection = (quiz: Quiz) => (
+        <div className="fixed bottom-16 border-t border-white/10 w-full">
+            <div 
+                className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-3 rounded-xl transition-colors w-[95%]"
+                onClick={() => navigateToUserProfile(quiz.user.id, quiz.user.username)}
+            >
+                <img
+                    src={quiz.user.profile_image || defaultAvatar}
+                    alt={quiz.user.username}
+                    className="md:w-10 md:h-10 h-7 w-7 rounded-full border-2 border-white/30"
+                />
+                <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-white font-semibold hover:text-blue-400 transition-colors">
+                            @{quiz.user.username}
+                        </h3>
+                        {quiz.user.is_following && (
+                            <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-xs rounded-full">
+                                Following
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-gray-400 md:text-sm text-xs">{quiz.test_title}</p>
+                </div>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleFollowToggle(quiz.id);
+                    }}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all duration-300 active:scale-95 backdrop-blur-sm ${
+                        quiz.user.is_following 
+                            ? 'bg-white/10 text-white hover:bg-white/20' 
+                            : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700'
+                    }`}
+                >
+                    {quiz.user.is_following ? 'Following' : 'Follow'}
+                </button>
+            </div>
+        </div>
+    );
 
     // ==================== INITIAL LOAD AND SETUP ====================
     const loadCategories = useCallback(async () => {
@@ -1359,10 +1371,12 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
                         await recordView(id);
                     } else {
-                        await loadQuizzes(true, true);
+                        // Boshida random quizlarni yuklash
+                        await loadRandomQuizzes(true, true);
                     }
                 } else {
-                    await loadQuizzes(true, true);
+                    // Boshida random quizlarni yuklash
+                    await loadRandomQuizzes(true, true);
                 }
             } catch (err) {
                 console.error("❌ Initial data fetch error:", err);
@@ -1379,13 +1393,12 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             isMounted = false;
             isLoadingRef.current = false;
             if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
             if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-            if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+            if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
         };
-    }, [questionId, loadCategories, initializeViews, recordView, loadQuizzes]);
+    }, [questionId, loadCategories, initializeViews, recordView, loadRandomQuizzes]);
 
-    // Setup scroll listener for ultra sensitive infinite scroll
+    // Setup scroll listener
     useEffect(() => {
         const cleanup = setupScrollListener();
         return cleanup;
@@ -1397,7 +1410,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
         return (
             <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
-                <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/95 to-transparent border-b border-white/10">
+                <div className="absolute max-w-2xl mx-auto top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/95 to-transparent border-b border-white/10">
                     <button
                         onClick={() => setShowFilterModal(false)}
                         className="p-2 text-white"
@@ -1413,7 +1426,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                     </button>
                 </div>
 
-                <div className="h-full pt-16 pb-20 overflow-y-auto">
+                <div className="h-full max-w-2xl mx-auto pt-16 pb-20 overflow-y-auto">
                     <div className="px-4 py-6">
                         <div className="mb-8">
                             <h3 className="text-white font-semibold text-lg mb-4">Kategoriyalar</h3>
@@ -1423,13 +1436,13 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                     className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${activeCategory === "All"
                                         ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
                                         : "bg-white/5 hover:bg-white/10 border border-white/10"
-                                    }`}
+                                        }`}
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2.5 rounded-xl ${activeCategory === "All"
                                             ? "bg-gradient-to-r from-blue-500 to-purple-600"
                                             : "bg-white/10"
-                                        }`}>
+                                            }`}>
                                             <Filter className="w-5 h-5 text-white" />
                                         </div>
                                         <div className="text-left">
@@ -1452,13 +1465,13 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                                     className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${activeCategory === category.id
                                         ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
                                         : "bg-white/5 hover:bg-white/10 border border-white/10"
-                                    }`}
+                                        }`}
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2.5 rounded-xl ${activeCategory === category.id
                                             ? "bg-gradient-to-r from-blue-500 to-purple-600"
                                             : "bg-white/10"
-                                        }`}>
+                                            }`}>
                                             <span className="text-lg">{category.emoji}</span>
                                         </div>
                                         <div className="text-left">
@@ -1491,24 +1504,24 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
     const renderHeader = () => {
         return (
             <div className="fixed top-0 left-0 right-0 z-40 max-w-2xl mx-auto bg-gradient-to-b from-black/95 to-transparent backdrop-blur-lg border-b border-white/10">
-                <div className="container mx-auto px-4 md:py-3 py-1">
+                <div className="container mx-auto px-4 py-2">
                     <div className="flex items-center justify-between">
-                        <div onClick={() => { navigate(`https://t.me/testabduz`) }} className="flex items-center gap-3 md:py-2 py-1 px-1 cursor-pointer md:h-auto" title={"Telegram Group"}>
-                            <img src={Logo} alt="logo" className="w-10 h-10 md:w-14 md:h-14 rounded-sm" />
-                            <div>
-                                <h1 className="text-white font-bold md:text-lg text-sm flex flex-row items-center">Telegram <img src={adsIcon} alt="ads" className={"flex w-12 h-10"} /></h1>
-                                <p className="text-gray-400 md:text-xs text-[11px]">TestAbd.uz rasmiy telegram kanali bu yerda siz TestAbd haqida to'liq bilib olasiz va uangiliklardan xabardor bo'lasiz.</p>
+                        <div onClick={() => { navigate(`https://t.me/testabduz`) }} className="flex items-center gap-2 cursor-pointer" title={"Telegram Group"}>
+                            <img src={Logo} alt="logo" className="w-10 h-10 rounded-sm" />
+                            <div className="flex flex-col">
+                                <h1 className="text-white font-bold text-sm flex flex-row items-center">Telegram <img src={adsIcon} alt="ads" className={"flex w-10 h-8"} /></h1>
+                                <p className="text-gray-400 text-xs">TestAbd.uz rasmiy telegram kanali</p>
                             </div>
                         </div>
 
                         <button
                             onClick={() => setShowFilterModal(true)}
-                            className={`p-2.5 rounded-xl transition-all duration-200 ${activeCategory !== "All"
+                            className={`p-2 rounded-full transition-all duration-200 ${activeCategory !== "All"
                                 ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
                                 : "bg-white/10 text-white hover:bg-white/20"
-                            }`}
+                                }`}
                         >
-                            <Filter className="w-5 h-5" />
+                            <Filter className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
@@ -1525,7 +1538,7 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
         const renderAnswers = () => {
             if (!quiz.answers || quiz.answers.length === 0) {
-                return <div className="text-gray-400 text-center py-4">Javob variantlari mavjud emas</div>;
+                return <div className="text-gray-400 text-center py-2 text-sm">Javob variantlari mavjud emas</div>;
             }
 
             return quiz.answers.map((answer, idx) => {
@@ -1556,8 +1569,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 return (
                     <div
                         key={answer.id}
-                        className={`md:p-3 p-2 w-[85%] rounded-2xl border transition-all duration-300 cursor-pointer ${bgColor} ${borderColor} ${isShaking ? 'animate-shake' : ''
-                        } ${!hasSubmitted ? 'hover:bg-white/10 active:scale-[0.98]' : ''}`}
+                        className={`p-2.5 w-[85%] rounded-xl border transition-all duration-300 cursor-pointer ${bgColor} ${borderColor} ${isShaking ? 'animate-shake' : ''
+                            } ${!hasSubmitted ? 'hover:bg-white/10 active:scale-[0.98]' : ''}`}
                         onClick={() => {
                             if (!hasSubmitted && !isSubmitting) {
                                 if (isMultipleChoice) {
@@ -1568,29 +1581,29 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                             }
                         }}
                     >
-                        <div className="flex items-center gap-4">
-                            <div className={`md:w-12 md:h-12 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white/10'
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white/10'
                             } ${hasSubmitted && isCorrect ? 'bg-gradient-to-r from-green-500 to-emerald-600' : ''} ${hasSubmitted && isSelected && !isCorrect ? 'bg-gradient-to-r from-red-500 to-rose-600' : ''
                             }`}>
-                                <span className="font-bold md:text-lg text-sm text-white">{letter}</span>
+                                <span className="font-bold text-sm text-white">{letter}</span>
                             </div>
                             <div className="flex-1">
-                                <div className={`${textColor} md:text-xl text-xs`}>{answer.answer_text}</div>
+                                <div className={`${textColor} text-sm`}>{answer.answer_text}</div>
                             </div>
                             {hasSubmitted && isCorrect && (
-                                <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full">
-                                    <Check className="md:w-5 md:h-5 w-2 h-2 text-white" />
+                                <div className="p-1.5 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full">
+                                    <Check className="w-3 h-3 text-white" />
                                 </div>
                             )}
                             {hasSubmitted && isSelected && !isCorrect && (
-                                <div className="p-2 bg-gradient-to-r from-red-500 to-rose-600 rounded-full">
-                                    <X className="md:w-5 md:h-5 w-2 h-2 text-white" />
+                                <div className="p-1.5 bg-gradient-to-r from-red-500 to-rose-600 rounded-full">
+                                    <X className="w-3 h-3 text-white" />
                                 </div>
                             )}
                             {isMultipleChoice && !hasSubmitted && (
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600 border-transparent' : 'border-white/30'
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-gradient-to-r from-blue-500 to-purple-600 border-transparent' : 'border-white/30'
                                 }`}>
-                                    {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                    {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
                                 </div>
                             )}
                         </div>
@@ -1607,19 +1620,19 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
             if (isMultipleChoice) {
                 const hasSelectedAnswers = selectedAnswers.length > 0;
                 return (
-                    <div className="mt-6">
+                    <div className="mt-4">
                         <button
                             onClick={() => submitMultipleChoice(quiz.id)}
                             disabled={!hasSelectedAnswers || isSubmitting}
-                            className={`w-full py-4 rounded-2xl font-semibold transition-all duration-300 shadow-xl ${hasSelectedAnswers && !isSubmitting
-                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-[0.98]'
+                            className={`w-full py-3 rounded-xl font-semibold transition-all duration-300 ${hasSelectedAnswers && !isSubmitting
+                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-2xl active:scale-[0.98]'
                                 : 'bg-white/5 text-gray-400 cursor-not-allowed border border-white/10'
-                            }`}
+                                }`}
                         >
                             {isSubmitting ? (
-                                <div className="flex items-center justify-center gap-3">
-                                    <Loader2 size={20} className="animate-spin" />
-                                    <span>Tekshirilmoqda...</span>
+                                <div className="flex items-center justify-center gap-2">
+                                    <Loader2 size={16} className="animate-spin" />
+                                    <span className="text-sm">Tekshirilmoqda...</span>
                                 </div>
                             ) : 'Javobni tekshirish'}
                         </button>
@@ -1629,24 +1642,21 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
 
             const hasSelectedAnswer = selectedAnswers.length > 0;
             if (!hasSelectedAnswer) {
-                return (
-                    <div>
-                    </div>
-                );
+                return null;
             }
 
             return null;
         };
 
         return (
-            <div className="space-y-6">
+            <div className="space-y-4">
                 {quiz.media && (
-                    <div className="relative rounded-2xl overflow-hidden mb-6 shadow-xl group">
+                    <div className="relative rounded-xl overflow-hidden mb-4 group">
                         {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <img
                                 src={quiz.media}
                                 alt="Question media"
-                                className="w-full h-auto max-h-80 object-cover rounded-2xl transition-transform duration-700 group-hover:scale-105"
+                                className="w-full h-auto max-h-48 object-cover rounded-xl transition-transform duration-500 group-hover:scale-105"
                                 onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = 'none';
@@ -1655,39 +1665,19 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                         ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
                             <video
                                 src={quiz.media}
-                                className="w-full h-auto max-h-80 rounded-2xl"
+                                className="w-full h-auto max-h-48 rounded-xl"
                                 controls
                             />
                         ) : null}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-2xl"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent rounded-xl"></div>
                     </div>
                 )}
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                     {renderAnswers()}
                 </div>
 
                 {renderSubmitButton()}
-
-                {coinAnimation?.show && coinAnimation.quizId === quiz.id && (
-                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-                        <div className="text-6xl animate-coin-bounce">
-                            🪙
-                            <div className="absolute inset-0 animate-ping text-yellow-400 opacity-30">🪙</div>
-                        </div>
-                    </div>
-                )}
-
-                {correctAnimation === quiz.id && (
-                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-                        <div className="text-8xl animate-correct-pulse">
-                            <div className="relative">
-                                <div className="absolute inset-0 animate-ping text-green-400 opacity-30">✅</div>
-                                ✅
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         );
     };
@@ -1717,9 +1707,8 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 {renderHeader()}
                 <div className="h-[90vh] mt-16 flex flex-col items-center justify-center">
                     <div className="text-center">
-                        <div className="w-20 h-20 border-[3px] border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin mx-auto mb-6"></div>
-                        <p className="text-white text-xl font-semibold">Yuklanmoqda...</p>
-                        <p className="text-gray-400 mt-2">Savollar tayyorlanmoqda</p>
+                        <div className="w-16 h-16 border-2 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-white font-semibold">Yuklanmoqda...</p>
                     </div>
                 </div>
             </div>
@@ -1732,14 +1721,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 {renderHeader()}
                 <div className="h-[90vh] mt-16 flex items-center justify-center px-4">
                     <div className="text-center max-w-md">
-                        <div className="text-7xl mb-6 animate-pulse">🔍</div>
-                        <h2 className="text-2xl text-white mb-3 font-semibold">Savollar topilmadi</h2>
-                        <p className="text-gray-400 mb-8">Boshqa kategoriyalarni tanlab ko'ring</p>
+                        <div className="text-6xl mb-4 animate-pulse">🔍</div>
+                        <h2 className="text-xl text-white mb-2 font-semibold">Savollar topilmadi</h2>
+                        <p className="text-gray-400 mb-6">Boshqa kategoriyalarni tanlab ko'ring</p>
                         <button
                             onClick={() => setShowFilterModal(true)}
-                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 active:scale-95 flex items-center gap-2 mx-auto"
+                            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 active:scale-95 flex items-center gap-2 mx-auto"
                         >
-                            <Filter size={20} />
+                            <Filter size={18} />
                             Kategoriya tanlash
                         </button>
                     </div>
@@ -1823,20 +1812,16 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 }
 
                 .instagram-scroll-container {
-                    scroll-snap-type: y proximity;
-                    scroll-behavior: smooth;
+                    scroll-snap-type: y mandatory;
                 }
                 
                 .instagram-post {
                     scroll-snap-align: start;
-                    min-height: 90vh;
+                    scroll-snap-stop: always;
+                    height: 90vh;
+                    flex-shrink: 0;
                 }
-                
-                /* Ultra smooth scrolling */
-                .scroll-smooth {
-                    scroll-behavior: smooth;
-                }
-                
+
                 /* Loading animation */
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateY(20px); }
@@ -1865,14 +1850,14 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                 }}
             />
 
-            {/* Main content with ULTRA SEZGIR infinite scroll */}
+            {/* Instagram-style scroll container */}
             <div
                 ref={containerRef}
-                className="h-[90vh] mt-16 overflow-y-auto scrollbar-hide instagram-scroll-container scroll-smooth relative z-10"
+                className="h-[90vh] mt-14 overflow-y-auto scrollbar-hide instagram-scroll-container relative z-10"
                 onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
             >
-                <div className="container mt-14 mx-auto max-w-2xl pb-24">
+                <div className="flex flex-col"> 
                     {quizData.map((quiz, index) => {
                         const userReaction = userInteractions.reactions.get(quiz.id);
                         const finalViewCount = getFinalViewCount(quiz.id);
@@ -1882,176 +1867,190 @@ const QuizPage: React.FC<QuizPageProps> = ({ theme = "dark" }: QuizPageProps) =>
                         return (
                             <div
                                 key={quiz.id}
-                                className="mb-4 min-h-[80vh] justify-center bg-gradient-to-br items-center w-2xl from-black/80 via-black/70 to-black/80 backdrop-blur-xl border border-white/10 overflow-hidden rounded-2xl instagram-post animate-fadeIn"
+                                className="mx-auto md:max-w-2xl w-full py-4 px-3 instagram-post backdrop-blur-xl overflow-hidden animate-fadeIn relative"
                                 style={{
-                                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
-                                    marginBottom: '24px',
                                     animationDelay: `${index * 0.05}s`
                                 }}
                             >
-                                <div className="flex flex-col justify-center my-auto h-full md:mt-36 mt-20">
-                                    <div className="px-4 my-auto h-auto absoute top-50">
-                                        <div className="text-white font-medium mb-3 md:text-2xl text-md bg-black/50 backdrop-blur-sm p-4 rounded-2xl">
-                                            {quiz.question_text}
-                                        </div>
-
-                                        {quiz.media && (
-                                            <div className="rounded-xl overflow-hidden mb-4 shadow-lg">
-                                                {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                    <img
-                                                        src={quiz.media}
-                                                        alt="Question media"
-                                                        className="w-full h-auto max-h-96 object-cover"
-                                                        onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                                                            const target = e.target as HTMLImageElement;
-                                                            target.style.display = 'none';
-                                                        }}
-                                                    />
-                                                ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
-                                                    <video
-                                                        src={quiz.media}
-                                                        className="w-full h-auto max-h-96"
-                                                        controls
-                                                    />
-                                                ) : null}
-                                            </div>
+                                <div className="h-full flex flex-col">
+                                    {/* Tags */}
+                                    <div className="flex flex-wrap gap-1 mb-3">
+                                        {quiz.has_worked && (
+                                            <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full md:text-xs text-[10px] flex items-center gap-1 backdrop-blur-sm">
+                                                <Check size={10} /> Ishlangan
+                                            </span>
                                         )}
-
-                                        <div className="flex flex-wrap gap-2 mb-4">
-                                            {quiz.has_worked && (
-                                                <span className="px-3 py-1.5 bg-green-500/20 text-green-300 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
-                                                    <Check size={12} /> Ishlangan
-                                                </span>
-                                            )}
-                                            {quiz.difficulty_percentage > 0 && (
-                                                <span className="px-3 py-1.5 bg-yellow-500/20 text-yellow-300 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
-                                                    <Zap size={12} /> {quiz.difficulty_percentage}% qiyin
-                                                </span>
-                                            )}
-                                            {quiz.category && (
-                                                <span className="md:px-3 px-2 md:py-1.5 py-1 bg-purple-500/20 text-purple-300 rounded-full md:text-xs text-[11px] backdrop-blur-sm">
-                                                    {quiz.category.title}
-                                                </span>
-                                            )}
-                                            {activeCategory === "All" && (
-                                                <span className="px-3 py-1.5 bg-green-500/20 text-green-300 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
-                                                    <Zap size={12} /> Random
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-3 mb-4">
-                                            {renderQuestionContent(quiz)}
-                                        </div>
+                                        {quiz.difficulty_percentage > 0 && (
+                                            <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded-full md:text-xs text-[10px] flex items-center gap-1 backdrop-blur-sm">
+                                                <Zap size={10} /> {quiz.difficulty_percentage}% qiyin
+                                            </span>
+                                        )}
+                                        {quiz.category && (
+                                            <span className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded-full md:text-xs text-[10px] backdrop-blur-sm">
+                                                {quiz.category.title}
+                                            </span>
+                                        )}
+                                        {activeCategory === "All" && (
+                                            <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full md:text-xs text-[10px] flex items-center gap-1 backdrop-blur-sm">
+                                                <Zap size={10} /> Random
+                                            </span>
+                                        )}
                                     </div>
 
-                                    <div className="md:px-4 px-1 md:py-4 py-2 fixed bottom-52 right-0 flex-col flex w-auto border border-gray-800/50" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)", borderTopLeftRadius: "30px", borderBottomLeftRadius: "30px", backdropFilter: 'blur(10px)' }}>
-                                        <div className="flex items-center flex-col justify-between mb-3 gap-2">
-                                            <div className="flex items-center gap-4 flex-col">
-                                                <div className="text-center flex flex-col items-center gap-1">
-                                                    <div className="bg-green-600/80 backdrop-blur-sm md:w-10 md:h-10 w-6 h-6 p-1.5 rounded-full flex items-center justify-center">
-                                                        <Check size={20} className={"text-white font-semibold"} />
+                                    {/* Question text */}
+                                    <div className="text-white font-medium mb-4 md:text-lg text-md bg-transparent backdrop-blur-sm p-4 rounded-xl">
+                                        {quiz.question_text}
+                                    </div>
+
+                                    {quiz.media && (
+                                        <div className="rounded-xl overflow-hidden mb-4 shadow-lg">
+                                            {quiz.media.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                <img
+                                                    src={quiz.media}
+                                                    alt="Question media"
+                                                    className="w-full h-auto max-h-48 object-cover"
+                                                    onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                                        const target = e.target as HTMLImageElement;
+                                                        target.style.display = 'none';
+                                                    }}
+                                                />
+                                            ) : quiz.media.match(/\.(mp4|webm|ogg)$/i) ? (
+                                                <video
+                                                    src={quiz.media}
+                                                    className="w-full h-auto max-h-48"
+                                                    controls
+                                                />
+                                            ) : null}
+                                        </div>
+                                    )}
+
+                                    {/* Question content */}
+                                    {renderQuestionContent(quiz)}
+
+                                    {/* USER PROFILE SECTION (PASTGA) */}
+                                    {renderUserProfileSection(quiz)}
+
+                                    {/* Action buttons (ONG TOMON, MARKAZDA) */}
+                                    <div className="absolute right-4 top-[40%] transform -translate-y-1/2 z-20">
+                                        <div className="flex flex-col gap-2">
+                                            {/* Reaction button */}
+                                            
+                                            <div className="mt-4 flex flex-col items-center justify-center gap-2 bg-transparent w-auto backdrop-blur-sm rounded-xl">
+                                                <div className="text-center flex flex-col items-center">
+                                                    <div className="bg-green-600/80 backdrop-blur-sm md:w-8 md:h-8 w-6 h-6 rounded-full flex items-center justify-center">
+                                                        <Check className="text-white flex md:w-6 md:h-6 w-4 h-4" />
                                                     </div>
-                                                    <div className="text-green-400 font-bold md:text-md text-xs">{correctCount}</div>
+                                                    <div className="text-green-400 font-bold md:text-sm text-xs md:mt-1 mt-0">{correctCount}</div>
                                                 </div>
-                                                <div className="text-center flex flex-col items-center gap-1">
-                                                    <div className="bg-red-600/80 backdrop-blur-sm md:w-10 md:h-10 w-6 h-6 p-1.5 rounded-full flex items-center justify-center">
-                                                        <X size={20} className={"text-white font-semibold"} />
+                                                <div className="text-center flex flex-col items-center">
+                                                    <div className="bg-red-600/80 backdrop-blur-sm md:w-8 md:h-8 w-6 h-6 rounded-full flex items-center justify-center">
+                                                        <X className="text-white flex md:w-6 md:h-6 w-4 h-4" />
                                                     </div>
-                                                    <div className="text-red-400 font-bold md:text-md text-xs">{wrongCount}</div>
+                                                    <div className="text-red-400 font-bold text-xs md:mt-1 mt-0">{wrongCount}</div>
                                                 </div>
-                                                <div className="text-center flex flex-col items-center gap-1">
-                                                    <div className="bg-blue-600/80 backdrop-blur-sm md:w-10 md:h-10 w-6 h-6 p-1.5 rounded-full flex items-center justify-center">
-                                                        <Eye size={20} className={"text-white font-semibold"} />
+                                                <div className="text-center flex flex-col items-center">
+                                                    <div className="bg-blue-600/80 backdrop-blur-sm md:w-8 md:h-8 w-6 h-6 rounded-full flex items-center justify-center">
+                                                        <Eye className="text-white flex md:w-6 md:h-6 w-4 h-4" />
                                                     </div>
-                                                    <div className="text-blue-400 font-bold md:text-md text-xs">{finalViewCount}</div>
+                                                    <div className="text-blue-400 font-bold text-xs md:mt-1 mt-0">{finalViewCount}</div>
                                                 </div>
                                             </div>
-
-                                            <div className="relative gap-3 flex-col flex">
+                                            <div className="relative">
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setShowReactions(showReactions === quiz.id ? null : quiz.id);
+                                                        setShowDropdown(null);
                                                     }}
-                                                    className={`p-2 rounded-full backdrop-blur-sm ${userReaction
-                                                        ? 'bg-gradient-to-r from-yellow-500/20 to-amber-500/15 border border-yellow-500/30 text-yellow-400'
-                                                        : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'
+                                                    className={`md:p-2 p-1 rounded-full backdrop-blur-sm shadow-lg ${
+                                                        userReaction
+                                                            ? 'bg-gradient-to-r from-yellow-500/20 to-amber-500/15 border border-yellow-500/30 text-yellow-400'
+                                                            : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'
                                                     }`}
                                                 >
                                                     {isReacting.has(quiz.id) ? (
-                                                        <Loader2 size={18} className="animate-spin" />
+                                                        <Loader2 className="animate-spin w-4 h-4" />
                                                     ) : (
-                                                        <Heart size={18} fill={userReaction ? "currentColor" : "none"} />
+                                                        <Heart fill={userReaction ? "currentColor" : "none"} className="w-4 h-4" />
                                                     )}
                                                 </button>
-                                                {showReactions === quiz.id && renderReactionsMenu(quiz.id)}
+                                            </div>
+                                            
+                                            {/* More options button */}
+                                            <div className="relative">
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setShowDropdown(showDropdown === quiz.id ? null : quiz.id);
+                                                        setShowReactions(null);
                                                     }}
-                                                    className="p-2 text-gray-400 hover:text-white relative backdrop-blur-sm bg-white/5 rounded-full border border-white/10"
+                                                    className="md:p-2 p-1 text-white hover:text-white relative backdrop-blur-sm bg-white/5 rounded-full border border-white/10 shadow-lg"
                                                 >
-                                                    <MoreVertical className="w-5 h-5" />
-                                                    {showDropdown === quiz.id && renderDropdownMenu(quiz.id)}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-4 fixed bottom-14 w-full max-w-2xl">
-                                        <div className="flex items-center justify-between backdrop-blur-lg bg-black/50 rounded-2xl p-3 border border-white/10">
-                                            <div
-                                                className="flex items-center gap-5 cursor-pointer hover:opacity-80 transition-opacity w-full justify-between"
-                                            >
-                                                <div className="flex items-center gap-2" onClick={() => navigateToUserProfile(quiz.user.id, quiz.user.username)}>
-                                                    <img
-                                                        src={quiz.user.profile_image || defaultAvatar}
-                                                        alt={quiz.user.username}
-                                                        className="w-10 h-10 rounded-full border-2 border-white/30"
-                                                    />
-                                                    <div>
-                                                        <div className="text-white font-semibold md:text-md text-sm hover:text-blue-400 transition-colors">
-                                                            @{quiz.user.username}
-                                                        </div>
-                                                        <div className="text-gray-400 text-xs">{quiz.test_title}</div>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleFollowToggle(quiz.id)}
-                                                    className="px-4 py-1.5 md:text-sm text-xs font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 active:scale-95 backdrop-blur-sm"
-                                                >
-                                                    {quiz.user.is_following ? 'Following' : 'Follow'}
+                                                    <MoreVertical className=" w-4 h-4" />
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Reactions menu (MARKAZGA) */}
+                                {showReactions === quiz.id && renderReactionsMenu(quiz.id)}
+                                
+                                {/* Dropdown menu (MARKAZGA) */}
+                                {showDropdown === quiz.id && renderDropdownMenu(quiz.id)}
+                                
+                                {/* Animations */}
+                                {coinAnimation?.show && coinAnimation.quizId === quiz.id && (
+                                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                                        <div className="text-5xl animate-coin-bounce">
+                                            🪙
+                                            <div className="absolute inset-0 animate-ping text-yellow-400 opacity-30">🪙</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {correctAnimation === quiz.id && (
+                                    <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+                                        <div className="text-6xl animate-correct-pulse">
+                                            <div className="relative">
+                                                <div className="absolute inset-0 animate-ping text-green-400 opacity-30">✅</div>
+                                                ✅
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
 
                     {/* Loading indicator */}
                     {loadingMore && (
-                        <div className="py-8 flex justify-center backdrop-blur-sm bg-black/30 rounded-2xl mb-4 animate-fadeIn">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 border-2 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
-                                <span className="text-gray-300">Yangi savollar yuklanmoqda...</span>
+                        <div className="instagram-post flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="w-10 h-10 border-2 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
+                                <span className="text-gray-300 text-sm">Yangi savollar yuklanmoqda...</span>
                             </div>
                         </div>
                     )}
 
                     {!hasMore && quizData.length > 0 && !loadingMore && (
-                        <div className="py-8 text-center backdrop-blur-sm bg-black/30 rounded-2xl mb-24 animate-fadeIn">
-                            <div className="text-gray-300 mb-2">Barcha savollarni ko'rib chiqdingiz 👏</div>
-                            <div className="text-gray-400 text-sm mb-4">Yangilarini ko'rish uchun filterni o'zgartiring</div>
-                            <button
-                                onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-                                className="px-6 py-2.5 bg-gradient-to-r from-blue-500/20 to-purple-600/20 text-white rounded-full text-sm hover:from-blue-500/30 hover:to-purple-600/30 transition-colors border border-white/10"
-                            >
-                                Boshiga qaytish
-                            </button>
+                        <div className="instagram-post flex flex-col items-center justify-center bg-black/30 backdrop-blur-sm">
+                            <div className="text-center px-4">
+                                <div className="text-5xl mb-3">👏</div>
+                                <div className="text-gray-300 text-base mb-2">Barcha savollarni ko'rib chiqdingiz!</div>
+                                <div className="text-gray-400 text-xs mb-4">Yangilarini ko'rish uchun filterni o'zgartiring</div>
+                                <button
+                                    onClick={() => {
+                                        currentQuizIndexRef.current = 0;
+                                        if (containerRef.current) {
+                                            containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                    }}
+                                    className="px-5 py-2 bg-gradient-to-r from-blue-500/20 to-purple-600/20 text-white rounded-lg text-xs hover:from-blue-500/30 hover:to-purple-600/30 transition-colors border border-white/10"
+                                >
+                                    Boshiga qaytish
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
