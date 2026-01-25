@@ -8,10 +8,10 @@ import {
     Crown,
     UserPlus,
     UserMinus,
-    User,
+    BookOpen,
     BarChart3,
     Edit,
-    Upload,
+    Play,
     ExternalLink,
     Sparkles,
     Zap,
@@ -21,12 +21,7 @@ import {
     HelpCircle,
     Users,
     Gift,
-    Copy,
-    Share2,
     TrendingUp,
-    Award,
-    Target,
-    LogOut,
     Trash2,
     Eye,
     Clock,
@@ -34,9 +29,7 @@ import {
     RefreshCw,
     Bookmark,
     Star,
-    ChevronRight,
-    ChevronLeft,
-    AlertCircle, Plus
+Plus, Library
 } from "lucide-react"
 import {quizAPI, authAPI, accountsAPI} from "../../utils/api.ts"
 import correctImg from "../assets/images/correct.png";
@@ -228,12 +221,41 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
     const [updatingTest, setUpdatingTest] = useState(false);
     const [updatingQuestion, setUpdatingQuestion] = useState(false);
     const [loadingQuestions, setLoadingQuestions] = useState(false);
+    const [overallStats, setOverallStats] = useState<any>(null);
+    const [recentActivity, setRecentActivity] = useState<any[]>([]);
+    const [loadingLibrary, setLoadingLibrary] = useState(false);
 
     const navigate = useNavigate();
 
     const showToast = (message: string, type: "success" | "error") => {
         setToast({message, type})
     }
+    const fetchLibraryData = async () => {
+    setLoadingLibrary(true);
+    try {
+        const token = localStorage.getItem('access_token'); // Yoki sizda token qayerda saqlansa
+        const response = await fetch('http://127.0.0.1:8000/books/library-stat/', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const data = await response.json();
+
+        // API-dan kelgan ma'lumotlarni state-ga saqlaymiz
+        setOverallStats(data.overall);
+        setRecentActivity(data.recent_activity);
+    } catch (error) {
+        console.error("Kutubxona ma'lumotlarini yuklashda xato:", error);
+    } finally {
+        setLoadingLibrary(false);
+    }
+
+    };
+    useEffect(() => {
+        if (activeTabs === "library") {
+            fetchLibraryData();
+        }
+    }, [activeTabs]);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -929,9 +951,10 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                 <div className="mb-6">
                     <div className="flex flex-row border-b border-gray-700 overflow-x-auto">
                         {[
-                            {id: "test", label: "Test", icon: FileText},
-                            {id: "question", label: "Question", icon: HelpCircle},
-                            {id: "savedQuestion", label: "Saved", icon: Bookmark}
+                            {id: "test", label: "Block", icon: FileText},
+                            {id: "question", label: "Savollar", icon: HelpCircle},
+                            {id: "savedQuestion", label: "Saqlangan", icon: Bookmark},
+                            {id: "library", label: "Kutubxona", icon: Library}
                         ].map((tab) => {
                             return (
                                 <button
@@ -1527,6 +1550,142 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {activeTabs === "library" && (
+                        <div className="space-y-6">
+                            {/* Header qismi */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                                <div>
+                                    <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                                        <BookOpen className="text-blue-500" />
+                                        Mening Kutubxonam
+                                    </h3>
+                                    <p className="text-gray-400 text-sm">Mutolaa jarayonidagi kitoblar va shaxsiy natijalaringiz</p>
+                                </div>
+                                {/*<button*/}
+                                {/*    onClick={() => navigate('/books')}*/}
+                                {/*    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-blue-500/20"*/}
+                                {/*>*/}
+                                {/*    <Plus size={18} />*/}
+                                {/*    Yangi kitob qo'shish*/}
+                                {/*</button>*/}
+                            </div>
+
+                            {/* Umumiy statistika paneli (Dashboard API dan) */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800 p-4 rounded-2xl">
+                                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Jami o'qildi</p>
+                                    <div className="flex items-end gap-2">
+                                        <span className="text-2xl font-bold text-white">{overallStats?.total_words_read || 0}</span>
+                                        <span className="text-gray-400 text-xs mb-1">so'z</span>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800 p-4 rounded-2xl">
+                                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">O'rtacha tezlik</p>
+                                    <div className="flex items-end gap-2">
+                                        <span className="text-2xl font-bold text-blue-400">{overallStats?.average_speed_wpm || 0}</span>
+                                        <span className="text-gray-400 text-xs mb-1">wpm</span>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800 p-4 rounded-2xl">
+                                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Mutolaa vaqti</p>
+                                    <div className="flex items-end gap-2">
+                                        <span className="text-2xl font-bold text-green-400">{overallStats?.total_reading_time_hours || 0}</span>
+                                        <span className="text-gray-400 text-xs mb-1">soat</span>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800 p-4 rounded-2xl">
+                                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Tugallash ko'rsatkichi</p>
+                                    <div className="flex items-end gap-2">
+                                        <span className="text-2xl font-bold text-purple-400">{overallStats?.average_completion_rate || 0}%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Kitoblar ro'yxati (Recent Activity API dan) */}
+                            {recentActivity.length === 0 ? (
+                                <div className="text-center py-20 bg-gray-900/20 rounded-3xl border border-dashed border-gray-800">
+                                    <BookOpen className="h-16 w-16 text-gray-700 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-white mb-2">Kutubxona bo'sh</h3>
+                                    <p className="text-gray-400 mb-6">Siz hali birorta ham kitobni o'qishni boshlamagansiz.</p>
+                                    <button className="text-blue-500 hover:underline font-medium">Kitoblar katalogiga o'tish</button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+                                    {recentActivity.map((item, index) => (
+                                        <div key={index} className="group relative rounded-3xl border border-gray-800 bg-gray-900/50 p-6 hover:border-blue-500/50 transition-all duration-300">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="flex gap-4">
+                                                    <div className="w-14 h-20 rounded-lg bg-gray-800 border border-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center group-hover:border-blue-500/30 transition-colors">
+                                                        <FileText className="text-gray-600 group-hover:text-blue-500 transition-colors" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">
+                                                            {item.book_title}
+                                                        </h4>
+                                                        <p className="text-gray-400 text-sm flex items-center gap-2">
+                                                            <Clock size={14} />
+                                                            Oxirgi faollik: {formatDate(item.updated_at)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                                                    item.reading_percent === 100 
+                                                    ? "bg-green-500/20 text-green-400 border-green-500/30" 
+                                                    : "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                                                }`}>
+                                                    {item.reading_percent === 100 ? "Tugallandi" : "O'qilmoqda"}
+                                                </div>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            <div className="mb-6">
+                                                <div className="flex justify-between text-sm mb-2">
+                                                    <span className="text-gray-400">Progress</span>
+                                                    <span className="text-blue-400 font-bold">{item.reading_percent?.toFixed(2)}%</span>
+                                                </div>
+                                                <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-1000"
+                                                        style={{ width: `${item.reading_percent}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Mini Stats Grid */}
+                                            <div className="grid grid-cols-3 gap-2 mb-6">
+                                                <div className="p-3 rounded-2xl bg-gray-800/50 border border-gray-700 text-center">
+                                                    <Zap size={14} className="text-amber-400 mx-auto mb-1" />
+                                                    <p className="text-[10px] text-gray-500 uppercase tracking-tighter">Tezlik</p>
+                                                    <p className="text-sm font-bold text-white">{item.words_per_minute}</p>
+                                                </div>
+                                                <div className="p-3 rounded-2xl bg-gray-800/50 border border-gray-700 text-center">
+                                                    <FileText size={14} className="text-blue-400 mx-auto mb-1" />
+                                                    <p className="text-[10px] text-gray-500 uppercase tracking-tighter">So'zlar</p>
+                                                    <p className="text-sm font-bold text-white">{item.unique_words_read}</p>
+                                                </div>
+                                                <div className="p-3 rounded-2xl bg-gray-800/50 border border-gray-700 text-center">
+                                                    <Users size={14} className="text-purple-400 mx-auto mb-1" />
+                                                    <p className="text-[10px] text-gray-500 uppercase tracking-tighter">Hajm</p>
+                                                    <p className="text-sm font-bold text-white">{item.total_words_in_book}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex gap-2">
+                                                 <button
+                                                    onClick={() => navigate(`/reader/`)} // Kitob ID-siga qarab o'tadi
+                                                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <Play size={16} fill="currentColor" />
+                                                    Mutolaani davom ettirish
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>

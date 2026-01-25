@@ -23,7 +23,7 @@ import CreateLiveQuiz from './components/live_quiz/live_quiz.tsx';
 import ChatApp from "./pages/ChatApp";
 import NotFound from "./pages/not-found";
 import CreateNewBlock from "./components/create/CreatePage.tsx";
-import CardsMarket from "./components/CardsMarket";
+import { AIReader } from './components/CardsMarket';
 import Leaderboard from "./components/LeaderBoard";
 import SettingsPage from "./components/my-profile/SettingsPage.tsx";
 
@@ -238,9 +238,9 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                 } />
 
-                <Route path="/cards-market" element={
+                <Route path="/reader" element={
                     <ProtectedRoute>
-                        <CardsMarket />
+                        <AIReader />
                         <BottomNavigation />
                     </ProtectedRoute>
                 } />
@@ -287,9 +287,9 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                 } />
 
-                <Route path="/cards-market" element={
+                <Route path="/reader" element={
                     <ProtectedRoute>
-                        <CardsMarket />
+                        <AIReader />
                         <BottomNavigation />
                     </ProtectedRoute>
                 } />
