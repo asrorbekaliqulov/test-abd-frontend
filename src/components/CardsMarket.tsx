@@ -40,7 +40,7 @@ export function AIReader() {
       return;
     }
 
-    const wsUrl = `ws://127.0.0.1:8001/ws/read/${accessToken}`;
+    const wsUrl = `wss://reader.testabd.uz/ws/read/${accessToken}`;
     socketRef.current = new WebSocket(wsUrl);
 
     socketRef.current.onopen = () => {

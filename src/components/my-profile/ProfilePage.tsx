@@ -234,7 +234,7 @@ const ProfilePage = ({onShowSettings}: ProfilePageProps) => {
     setLoadingLibrary(true);
     try {
         const token = localStorage.getItem('access_token'); // Yoki sizda token qayerda saqlansa
-        const response = await fetch('http://127.0.0.1:8000/books/library-stat/', {
+        const response = await fetch('https://backend.testabd.uz/books/library-stat/', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
