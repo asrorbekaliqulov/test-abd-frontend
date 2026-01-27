@@ -1408,7 +1408,7 @@ export const fetchQuizzesWithFilters = async (filters: any = {}): Promise<APIRes
       cleanFilters.ordering = filters.ordering;
     }
 
-    cleanFilters.page_size = filters.page_size || 10;
+    cleanFilters.page_size = filters.page_size || 20;
 
     if (filters.page) {
       cleanFilters.page = filters.page;
@@ -3289,7 +3289,7 @@ export const accountsAPI = {
     }
   },
 
-  // ==================== TO'LIQ TUG'IRLANGAN FOLLOW FUNCTIONS ====================
+
   toggleFollow: async (userId: number): Promise<APIResponse<any>> => {
     try {
       await tokenManager.requireAuth();
@@ -3502,7 +3502,7 @@ export const accountsAPI = {
       const response = await axios.get(`${API_BASE_URL}/accounts/search/`, {
         params: { q: query },
         headers: getAuthHeaders(),
-        timeout: 15000,
+        timeout: 30000,
       });
       return { success: true, data: response.data };
     } catch (error: any) {

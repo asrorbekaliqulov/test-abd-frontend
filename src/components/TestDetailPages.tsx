@@ -100,26 +100,27 @@ const TestDetailPage: React.FC<TestDetailPageProps> = ({ theme }) => {
             fetchRelatedTests()
         }
     }, [testId])
-
     const fetchTestDetail = async () => {
         if (!testId) return
-
+      
         setLoading(true)
+      
         try {
-            const response = await quizAPI.fetchTestById(Number.parseInt(testId))
-
-            // Mock questions data since API might not include them
-    
-
-            setTest({
-                ...response.data,
-            })
+          const response = await quizAPI.fetchTestById(Number.parseInt(testId))
+          if (!response?.data) {
+            setTest(null)
+            return
+          }
+      
+          setTest(response.data)
         } catch (error) {
-            console.error("Test detaillarini yuklashda xatolik:", error)
+          console.error("Test detaillarini yuklashda xatolik:", error)
+          setTest(null) 
         } finally {
-            setLoading(false)
+          setLoading(false)
         }
-    }
+      }
+      
 
     const fetchRelatedTests = async () => {
         try {
