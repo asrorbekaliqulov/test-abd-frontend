@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, User, BookMarked } from 'lucide-react';
+import { Home, Search, User, AtomIcon } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const LogoImage: React.FC = () => (
@@ -35,9 +35,9 @@ const BottomNavigation: React.FC = () => {
     },
     {
       id: 'library',
-      label: 'Library',
-      icon: BookMarked,
-      path: '/cards-market',
+      label: 'AI Reader',
+      icon: AtomIcon,
+      path: '/reader',
       isSpecial: false
     },
     {
