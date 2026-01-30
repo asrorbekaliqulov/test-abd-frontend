@@ -1,24 +1,25 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Mic, X } from 'lucide-react';
+import { Mic, X, AlertCircle, Volume2 } from 'lucide-react';
 import { ReaderHelpModal } from './reader-help-modal';
 
 interface ServerData {
-  status: 'searching' | 'ready' | 'reading' | 'error';
+  status: 'searching' | 'ready' | 'reading' | 'lost' | 'error';
   msg?: string;
   page?: number;
   hint?: string;
   percent?: number;
   book_title?: string;
+  recovery_hint?: string;
 }
-
 
 export function AIReader() {
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState('Kutish...');
   const [subStatus, setSubStatus] = useState('Mikrofonni yoqing va kitob nomini ayting');
   const [hint, setHint] = useState("O'qilayotgan joydan keyingi so'zlar bu yerda chiqadi...");
+  const [recoveryHint, setRecoveryHint] = useState('');
   const [progress, setProgress] = useState(0);
   const [bookTitle, setBookTitle] = useState('');
   const [statusColor, setStatusColor] = useState('text-blue-400');
@@ -29,6 +30,22 @@ export function AIReader() {
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const isRecordingRef = useRef(false);
+  
+  // "Ting" ovozi uchun ref
+  const tingSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  // Ovoz faylini yuklash
+  useEffect(() => {
+    // Bu yerdagi linkni o'zingizdagi mahalliy faylga o'zgartirishingiz mumkin
+    tingSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
+  }, []);
+
+  const playTing = () => {
+    if (tingSoundRef.current) {
+      tingSoundRef.current.currentTime = 0;
+      tingSoundRef.current.play().catch(e => console.error("Audio error:", e));
+    }
+  };
 
   // WebSocket ulanishi
   const connectWebSocket = () => {
@@ -76,22 +93,39 @@ export function AIReader() {
         setStatusColor('text-blue-400');
         setSubStatus(data.msg || '');
         break;
+        
       case 'ready':
         setStatus('Tayyor!');
         setStatusColor('text-emerald-400');
         if (data.book_title) {
           setBookTitle(data.book_title);
         }
-        setSubStatus(data.msg || '');
+        setSubStatus("O'qishni boshlashingiz mumkin");
         break;
+        
       case 'reading':
-        setStatus(`Sahifa: ${data.page}`);
+        // O'ZGARISH: Sahifa o'rniga foiz ko'rsatiladi
+        const percentDisplay = data.percent !== undefined ? `${data.percent}%` : '0%';
+        setStatus(percentDisplay);
         setStatusColor('text-blue-400');
+        
         setHint(`... ${data.hint} ...`);
+        setRecoveryHint(''); // Lost holatidan chiqqan bo'lsa tozalaymiz
+        
         if (data.percent) {
           setProgress(data.percent);
         }
         break;
+        
+      case 'lost':
+        // YANGI: Lost holati
+        setStatus("To'xtab qoldingiz");
+        setStatusColor('text-amber-400');
+        setSubStatus(data.msg || "Matndan chetlashdingiz");
+        setRecoveryHint(data.recovery_hint || '');
+        playTing(); // Ovozli signal
+        break;
+        
       case 'error':
         setStatus('Xatolik');
         setStatusColor('text-red-400');
@@ -148,7 +182,8 @@ export function AIReader() {
     setIsRecording(false);
     setStatus('Sessiya to\'xtatildi');
     setStatusColor('text-blue-400');
-    setBookTitle('');
+    // BookTitleni o'chirmaymiz, user qayta davom ettirishi mumkin
+    // setBookTitle(''); 
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -213,130 +248,125 @@ export function AIReader() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-950 to-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
-      {/* Animated background glow */}
+      
+      {/* Animated background glow - Katta ekranlar uchun optimallashtirilgan */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-600 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600 rounded-full mix-blend-multiply filter blur-[100px] opacity-10 animate-pulse" />
       </div>
 
       {/* Progress Bar */}
-      <div className="fixed top-0 left-0 h-1 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+      <div className="fixed top-0 left-0 h-1.5 bg-white/5 w-full z-50">
+         <div className="h-full bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-600 transition-all duration-700 shadow-[0_0_15px_rgba(56,189,248,0.5)]" style={{ width: `${progress}%` }} />
+      </div>
 
       {/* Book Title Header */}
       {bookTitle && (
-        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-slate-900/80 to-transparent backdrop-blur-md border-b border-blue-500/20 p-4 sm:p-6">
-          <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-300 truncate">
-              📖 {bookTitle}
+        <div className="absolute top-0 left-0 right-0 bg-slate-900/50 backdrop-blur-md border-b border-blue-500/10 p-4 z-40">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+            <h2 className="text-lg md:text-2xl font-bold text-blue-200 truncate flex items-center gap-2">
+              <span className="text-2xl">📖</span> {bookTitle}
             </h2>
             <button
-              onClick={stopRecording}
+              onClick={() => window.location.reload()}
               className="p-2 hover:bg-red-500/20 rounded-full transition-colors text-red-400"
               aria-label="Sessiyani yopish"
             >
-              <X className="w-5 h-5 sm:w-6 sm:h-6" />
+              <X className="w-6 h-6" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Status Container */}
-      <div className={`w-full max-w-md mb-8 sm:mb-10 lg:mb-12 text-center ${bookTitle ? 'mt-24' : ''} relative z-10`}>
-        <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 transition-colors duration-300 ${statusColor}`}>
-          {status}
-        </h1>
-        <p className="text-sm sm:text-base lg:text-lg text-blue-200/70">{subStatus}</p>
-      </div>
+      {/* Main Container - Responsive width */}
+      <div className={`w-full max-w-5xl flex flex-col items-center z-10 space-y-10 transition-all duration-500 ${bookTitle ? 'mt-20' : ''}`}>
 
-      {/* Microphone Button with Shazam Animation */}
-      <button
-        onClick={toggleRecording}
-        className={`relative mb-8 sm:mb-10 lg:mb-12 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-full ${
-          isRecording ? 'scale-100' : 'scale-95 hover:scale-100'
-        }`}
-        aria-label={isRecording ? 'Mikrofonni to\'xtatish' : 'Mikrofonni yoqish'}
-        type="button"
-      >
-        {/* Shazam Wave Animation */}
-        {isRecording && (
-          <>
-            <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-shazam-wave" />
-            <div className="absolute inset-0 rounded-full bg-blue-400/20 animate-shazam-wave" style={{ animationDelay: '0.3s' }} />
-            <div className="absolute inset-0 rounded-full bg-cyan-400/10 animate-shazam-wave" style={{ animationDelay: '0.6s' }} />
-          </>
-        )}
+        {/* Status Display - Foizni katta qilib ko'rsatish */}
+        <div className="text-center space-y-2">
+          <h1 className={`text-5xl md:text-7xl lg:text-8xl font-black tracking-tight transition-colors duration-300 ${statusColor}`}>
+            {status}
+          </h1>
+          <p className="text-base md:text-xl text-blue-200/60 font-medium">{subStatus}</p>
+        </div>
 
-        {/* Shazam Bars Background */}
-        {isRecording && (
-          <div className="absolute inset-0 flex items-center justify-center gap-1.5">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="w-1.5 bg-gradient-to-t from-cyan-400 to-blue-500 rounded-full animate-shazam-bar"
-                style={{
-                  animationDelay: `${i * 0.1}s`,
-                  height: '60px',
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Main Button */}
-        <div
-          className={`relative w-56 h-56 sm:w-64 sm:h-64 lg:w-72 lg:h-72 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 z-10 ${
-            isRecording
-              ? 'bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 shadow-blue-600/60'
-              : 'bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-500 shadow-blue-500/40 hover:shadow-blue-400/60'
+        {/* Microphone Button */}
+        <button
+          onClick={toggleRecording}
+          className={`relative transition-all duration-300 focus:outline-none rounded-full ${
+            isRecording ? 'scale-100' : 'scale-95 hover:scale-100'
           }`}
         >
-          {isRecording ? (
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
-                <Mic className="w-12 h-12 sm:w-14 sm:h-14 text-white" strokeWidth={1.5} />
-              </div>
-              <span className="text-sm sm:text-base font-semibold text-white">Stop</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              <Mic className="w-16 h-16 sm:w-20 sm:h-20 text-white" strokeWidth={1} />
-              <span className="text-sm sm:text-base font-semibold text-white">Boshlash</span>
-            </div>
+          {isRecording && (
+            <>
+              <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-shazam-wave" />
+              <div className="absolute inset-0 rounded-full bg-blue-400/20 animate-shazam-wave" style={{ animationDelay: '0.3s' }} />
+            </>
           )}
-        </div>
-      </button>
 
-      {/* Hint Box */}
-      <div className="w-full max-w-3xl px-4 sm:px-6 py-6 sm:py-8 bg-blue-950/40 border border-blue-400/30 rounded-2xl backdrop-blur-lg relative z-10">
-        <p className="text-lg sm:text-xl lg:text-2xl text-blue-100/80 italic text-center leading-relaxed font-light">
-          {hint}
-        </p>
+          <div
+            className={`relative w-48 h-48 md:w-64 md:h-64 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 z-10 border-4
+             ${isRecording 
+                ? 'bg-blue-600 border-blue-400 shadow-blue-500/50' 
+                : 'bg-slate-900 border-white/10 hover:border-blue-500/50 shadow-blue-900/20'
+             }
+            `}
+          >
+            {isRecording ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-1 h-12">
+                     {[1,2,3,4,3,2,1].map((h, i) => (
+                        <div key={i} className="w-1.5 bg-white rounded-full animate-shazam-bar" style={{height: `${h*100}%`, animationDelay: `${i*0.1}s`}} />
+                     ))}
+                </div>
+                <span className="text-white font-bold uppercase tracking-widest text-sm">Stop</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                <Mic className="w-16 h-16 text-white/90" strokeWidth={1} />
+                <span className="text-blue-200/50 font-bold uppercase tracking-widest text-sm">Boshlash</span>
+              </div>
+            )}
+          </div>
+        </button>
+
+        {/* Dynamic Hint Box - Responsive o'lcham va Lost logic */}
+        <div className="w-full px-4">
+            <div className={`w-full p-8 md:p-12 rounded-[2rem] border backdrop-blur-xl transition-all duration-500 flex flex-col items-center text-center space-y-4
+                ${recoveryHint 
+                    ? 'bg-red-500/10 border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.15)]' 
+                    : 'bg-blue-950/30 border-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.1)]'
+                }
+            `}>
+                
+                {recoveryHint ? (
+                    // Lost State UI
+                    <>
+                        <div className="flex items-center gap-2 text-red-400 font-bold uppercase tracking-widest text-xs animate-pulse">
+                            <AlertCircle size={18} /> Yo'nalish
+                        </div>
+                        <p className="text-2xl md:text-4xl font-bold text-white leading-tight">
+                            "{recoveryHint}"
+                        </p>
+                        <p className="text-red-300/60 text-sm md:text-base">
+                            Shu so'zdan davom eting, men sizni qayta topib olaman.
+                        </p>
+                    </>
+                ) : (
+                    // Normal Reading UI
+                    <>
+                        <div className="flex items-center gap-2 text-blue-400/50 font-bold uppercase tracking-widest text-xs">
+                            <Volume2 size={18} /> Keyingi qatorlar
+                        </div>
+                        <p className="text-2xl md:text-4xl text-blue-100/90 italic font-light leading-relaxed">
+                            {hint}
+                        </p>
+                    </>
+                )}
+            </div>
+        </div>
+
       </div>
 
-      {/* Status Indicator Dots */}
-      <div className="mt-10 sm:mt-12 flex gap-3 justify-center relative z-10">
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-3 h-3 rounded-full transition-all duration-300 ${
-              isRecording ? 'bg-blue-400 scale-125 shadow-lg shadow-blue-400' : 'bg-blue-600'
-            }`}
-          />
-          <span className="text-xs sm:text-sm text-blue-300">
-            {isRecording ? 'Eshityapman' : 'Tayyor'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-3 h-3 rounded-full transition-all duration-300 ${
-              socketRef.current?.readyState === WebSocket.OPEN ? 'bg-emerald-400 shadow-lg shadow-emerald-400' : 'bg-slate-600'
-            }`}
-          />
-          <span className="text-xs sm:text-sm text-blue-300">
-            {socketRef.current?.readyState === WebSocket.OPEN ? 'Ulanib' : 'Disconnected'}
-          </span>
-        </div>
-      </div>
-     <ReaderHelpModal />
+      <div className="mt-8 relative z-10"><ReaderHelpModal /></div>
     </div>
   );
 }
